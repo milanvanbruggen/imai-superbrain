@@ -3,6 +3,8 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource'] as const
+
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
   const stem = path.split('/').pop()!.replace(/\.md$/, '')
@@ -23,7 +25,7 @@ export function parseNote(path: string, raw: string): VaultNote {
     path,
     stem,
     title: data.title ?? stem,
-    type: data.type ?? 'note',
+    type: VALID_TYPES.includes(data.type) ? data.type : 'note',
     tags: data.tags ?? [],
     date: data.date
       ? data.date instanceof Date

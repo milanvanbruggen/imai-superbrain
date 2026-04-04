@@ -44,6 +44,12 @@ describe('parseNote', () => {
     const note = parseNote('notes/quick-idea.md', 'just some text')
     expect(note.type).toBe('note')
   })
+
+  it('formats YAML date as YYYY-MM-DD string', () => {
+    const note = parseNote('notes/dated.md', '---\ntitle: Dated\ndate: 2026-01-15\n---\nHello')
+    expect(note.date).toBe('2026-01-15')
+    expect(typeof note.date).toBe('string')
+  })
 })
 
 describe('resolveWikilink', () => {
