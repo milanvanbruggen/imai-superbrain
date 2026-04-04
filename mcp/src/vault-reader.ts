@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs'
-import { join, relative } from 'path'
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'fs'
+import { join, relative, normalize, dirname } from 'path'
 import { parseMarkdown, ParsedNote } from './parser.js'
 
 export class VaultReader {
@@ -53,6 +53,13 @@ export class VaultReader {
 
   writeNote(path: string, content: string): void {
     const fullPath = join(this.vaultPath, path)
+    // Prevent path traversal
+    if (!normalize(fullPath).startsWith(normalize(this.vaultPath) + '/') &&
+        normalize(fullPath) !== normalize(this.vaultPath)) {
+      throw new Error(`Path traversal detected: ${path}`)
+    }
+    // Create parent directories if needed
+    mkdirSync(dirname(fullPath), { recursive: true })
     writeFileSync(fullPath, content, 'utf-8')
     this.reload()
   }

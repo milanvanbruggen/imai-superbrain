@@ -2,6 +2,7 @@ interface GitHubClientConfig {
   pat: string
   owner: string
   repo: string
+  branch?: string
 }
 
 interface TreeFile {
@@ -28,10 +29,11 @@ export class GitHubVaultClient {
   }
 
   async getMarkdownTree(): Promise<TreeFile[]> {
-    const branchRes = await fetch(`${this.base}/branches/main`, { headers: this.headers })
+    const branch = this.config.branch ?? 'main'
+    const branchRes = await fetch(`${this.base}/branches/${branch}`, { headers: this.headers })
     if (!branchRes.ok) throw new Error(`Failed to get branch: ${branchRes.status}`)
-    const branch = await branchRes.json()
-    const treeSha = branch.commit.sha
+    const branchData = await branchRes.json()
+    const treeSha = branchData.commit.sha
 
     const treeRes = await fetch(`${this.base}/git/trees/${treeSha}?recursive=1`, { headers: this.headers })
     if (!treeRes.ok) throw new Error(`Failed to get tree: ${treeRes.status}`)
@@ -76,5 +78,10 @@ export function getVaultClient(): GitHubVaultClient {
   if (!pat || !owner || !repo) {
     throw new Error('Missing GITHUB_PAT, GITHUB_VAULT_OWNER, or GITHUB_VAULT_REPO env vars')
   }
-  return new GitHubVaultClient({ pat, owner, repo })
+  return new GitHubVaultClient({
+    pat,
+    owner,
+    repo,
+    branch: process.env.GITHUB_VAULT_BRANCH, // optional, defaults to 'main'
+  })
 }

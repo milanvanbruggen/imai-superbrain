@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/github'
 import { invalidateCache } from '@/lib/graph-cache'
 
@@ -6,7 +8,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  // TODO: add auth check in Task 7
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { path: pathSegments } = await params
   const filePath = pathSegments.join('/')
   const client = getVaultClient()
@@ -22,7 +26,9 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
-  // TODO: add auth check in Task 7
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { path: pathSegments } = await params
   const filePath = pathSegments.join('/')
   const { content, sha } = await req.json()

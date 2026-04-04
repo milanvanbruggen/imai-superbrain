@@ -1,28 +1,45 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/github'
 import { buildGraph } from '@/lib/vault-parser'
 import { getCachedGraph, setCachedGraph } from '@/lib/graph-cache'
 
+let buildInFlight: Promise<void> | null = null
+
 export async function GET() {
-  // TODO: add auth check in Task 7
-  // const session = await getServerSession(authOptions)
-  // if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const cached = getCachedGraph()
   if (cached) return NextResponse.json(cached)
 
-  const client = getVaultClient()
-  const tree = await client.getMarkdownTree()
+  // Stampede protection: if a build is in flight, wait for it
+  if (buildInFlight) {
+    await buildInFlight
+    const fresh = getCachedGraph()
+    if (fresh) return NextResponse.json(fresh)
+  }
 
-  const files = await Promise.all(
-    tree.map(async file => {
-      const { content } = await client.readFile(file.path)
-      return [file.path, content] as [string, string]
-    })
-  )
+  let resolve!: () => void
+  buildInFlight = new Promise<void>(r => { resolve = r })
 
-  const graph = buildGraph(files)
-  setCachedGraph(graph)
+  try {
+    const client = getVaultClient()
+    const tree = await client.getMarkdownTree()
 
-  return NextResponse.json(graph)
+    const files = await Promise.all(
+      tree.map(async file => {
+        const { content } = await client.readFile(file.path)
+        return [file.path, content] as [string, string]
+      })
+    )
+
+    const graph = buildGraph(files)
+    setCachedGraph(graph)
+    return NextResponse.json(graph)
+  } finally {
+    buildInFlight = null
+    resolve()
+  }
 }

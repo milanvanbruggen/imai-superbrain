@@ -79,6 +79,7 @@ Note the numeric ID (e.g. `12345678`).
 | `ALLOWED_GITHUB_USER_ID` | Your numeric GitHub user ID from Step 4 |
 | `NEXTAUTH_SECRET` | Run: `openssl rand -base64 32` |
 | `NEXTAUTH_URL` | `https://your-app.vercel.app` |
+| `GITHUB_VAULT_BRANCH` | *(optional)* Branch name of vault repo (default: `main`) |
 
 5. Deploy. Update the Vercel deployment URL in the OAuth App settings (Step 2).
 
