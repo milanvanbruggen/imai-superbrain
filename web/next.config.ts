@@ -1,5 +1,15 @@
-import type { NextConfig } from "next";
+import withPWA from '@ducanh2912/next-pwa'
 
-const nextConfig: NextConfig = {};
+const withPWAConfig = withPWA({
+  dest: 'public',
+  disable: process.env.NODE_ENV === 'development',
+  cacheOnFrontEndNav: true,
+  aggressiveFrontEndNavCaching: true,
+})
 
-export default nextConfig;
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  turbopack: {},
+}
+
+export default withPWAConfig(nextConfig)
