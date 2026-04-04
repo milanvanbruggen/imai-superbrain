@@ -1,0 +1,2 @@
+// MCP server entry point — implemented in Task 13
+export {}
