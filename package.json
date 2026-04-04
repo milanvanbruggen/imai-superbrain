@@ -1,0 +1,5 @@
+{
+  "name": "mai-superbrain",
+  "private": true,
+  "workspaces": ["web", "mcp"]
+}
