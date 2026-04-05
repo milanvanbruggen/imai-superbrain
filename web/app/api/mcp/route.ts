@@ -187,7 +187,10 @@ function createMcpServer() {
 async function handleMcpRequest(req: NextRequest): Promise<Response> {
   const authInfo = await getAuthInfo(req)
   if (!authInfo) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'Unauthorized' }, {
+      status: 401,
+      headers: { 'WWW-Authenticate': 'Bearer' },
+    })
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })

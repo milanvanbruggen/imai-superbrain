@@ -39,7 +39,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_grant' }, { status: 400 })
   }
 
-  // Verify PKCE
+  // Verify PKCE — reject explicitly if verifier is missing (RFC 7636 §4.5)
+  if (!codeVerifier) {
+    return NextResponse.json({ error: 'invalid_grant' }, { status: 400 })
+  }
   const challenge = codePayload['code_challenge'] as string
   const valid = await verifyPKCE(codeVerifier, challenge)
   if (!valid) {
