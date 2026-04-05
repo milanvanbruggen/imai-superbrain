@@ -42,8 +42,8 @@ export async function GET(req: Request) {
   }
 
   // Validate redirect_uri
-  const allowedUris = clientPayload['redirect_uris'] as string[]
-  if (!allowedUris.includes(redirectUri)) {
+  const allowedUris = clientPayload['redirect_uris']
+  if (!Array.isArray(allowedUris) || !allowedUris.includes(redirectUri)) {
     return NextResponse.json(
       { error: 'invalid_request', error_description: 'redirect_uri not registered' },
       { status: 400 }

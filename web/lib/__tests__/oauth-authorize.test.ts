@@ -52,6 +52,8 @@ describe('GET /api/mcp/oauth/authorize', () => {
     })
     const res = await GET(new Request(url))
     expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toBe('invalid_request')
   })
 
   it('returns 400 for invalid client_id JWT', async () => {
