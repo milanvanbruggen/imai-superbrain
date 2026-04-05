@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { getVaultClient } from '@/lib/github'
+import { getVaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
 import { getCachedGraph, setCachedGraph } from '@/lib/graph-cache'
 
