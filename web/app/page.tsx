@@ -4,12 +4,14 @@ import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
 import { BrainGraph } from '@/components/BrainGraph'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
+import { NewNoteModal } from '@/components/NewNoteModal'
 
 export default function BrainPage() {
   const [graph, setGraph] = useState<VaultGraph | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showNewNote, setShowNewNote] = useState(false)
 
   async function loadGraph() {
     setLoading(true)
@@ -24,6 +26,14 @@ export default function BrainPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleNoteCreated(path: string) {
+    setShowNewNote(false)
+    await loadGraph()
+    // Select the new note: stem is filename without extension
+    const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? ''
+    setSelectedId(stem.toLowerCase())
   }
 
   useEffect(() => { loadGraph() }, [])
@@ -60,8 +70,14 @@ export default function BrainPage() {
       <header className="flex items-center gap-4 px-6 py-3 border-b border-gray-800 shrink-0">
         <h1 className="text-sm font-semibold text-white tracking-wide">Superbrain</h1>
         <span className="text-xs text-gray-500">{graph.nodes.length} notes</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
           <SearchBar nodes={graph.nodes} onSelect={setSelectedId} />
+          <button
+            onClick={() => setShowNewNote(true)}
+            className="px-3 py-1.5 text-xs bg-white text-black rounded font-medium hover:bg-gray-200 transition"
+          >
+            + New Note
+          </button>
         </div>
       </header>
 
@@ -84,6 +100,12 @@ export default function BrainPage() {
           onNavigate={setSelectedId}
         />
       </div>
+      {showNewNote && (
+        <NewNoteModal
+          onClose={() => setShowNewNote(false)}
+          onCreated={handleNoteCreated}
+        />
+      )}
     </div>
   )
 }
