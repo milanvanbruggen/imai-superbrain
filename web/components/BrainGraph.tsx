@@ -20,7 +20,7 @@ const TYPE_COLORS: Record<string, string> = {
   idea: '#f59e0b',
   resource: '#a78bfa',
   note: '#94a3b8',
-  meeting: '#EAB308',
+  meeting: '#06B6D4',
   daily: '#6B7280',
   area: '#EC4899',
 }

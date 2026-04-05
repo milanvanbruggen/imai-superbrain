@@ -39,6 +39,11 @@ export default function BrainPage() {
     setSelectedId(stem.toLowerCase())
   }
 
+  async function handleNoteUpdated() {
+    await loadGraph()
+    loadInboxCount()
+  }
+
   async function loadInboxCount() {
     try {
       const res = await fetch('/api/vault/inbox')
@@ -133,7 +138,7 @@ export default function BrainPage() {
           note={selectedNote}
           allEdges={graph.edges}
           allNodes={graph.nodes}
-          onNoteUpdated={loadGraph}
+          onNoteUpdated={handleNoteUpdated}
           onNavigate={setSelectedId}
         />
       </div>
