@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GraphNode, GraphEdge, VaultNote } from '@/lib/types'
 import { NoteEditor } from './NoteEditor'
 
@@ -16,11 +16,9 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const [editing, setEditing] = useState(false)
 
   // Reset to view mode when the selected note changes
-  const [currentPath, setCurrentPath] = useState<string | null>(null)
-  if (note?.path !== currentPath) {
-    setCurrentPath(note?.path ?? null)
-    if (editing) setEditing(false)
-  }
+  useEffect(() => {
+    setEditing(false)
+  }, [note?.path])
 
   if (!node || !note) {
     return (

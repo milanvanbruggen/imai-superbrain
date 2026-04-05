@@ -3,7 +3,7 @@ import dynamic from 'next/dynamic'
 import { GraphNode, GraphEdge } from '@/lib/types'
 
 const ForceGraph2D = dynamic(
-  () => import('react-force-graph').then(m => m.ForceGraph2D),
+  () => import('react-force-graph-2d'),
   { ssr: false }
 )
 

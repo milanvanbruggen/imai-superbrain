@@ -19,11 +19,14 @@
     "codemirror": "^6.0.2",
     "flexsearch": "^0.8.212",
     "gray-matter": "^4.0.3",
+    "lightningcss": "^1.32.0",
+    "lightningcss-darwin-arm64": "^1.32.0",
     "next": "16.2.2",
     "next-auth": "^4.24.13",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-force-graph": "^1.48.2"
+    "react-force-graph": "^1.48.2",
+    "react-force-graph-2d": "^1.29.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
