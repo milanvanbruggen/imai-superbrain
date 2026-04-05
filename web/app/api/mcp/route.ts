@@ -4,14 +4,21 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod'
 import { getVaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
+import { verifyToken } from '@/lib/mcp-jwt'
 
-// Simple Bearer-token auth for the MCP endpoint.
-// Set MCP_API_KEY in Vercel env vars. If not set, the endpoint is open (local dev only).
-function isAuthorized(req: NextRequest): boolean {
-  const key = process.env.MCP_API_KEY
-  if (!key) return true // no key configured → open (dev mode)
+async function getAuthInfo(req: Request): Promise<{ token: string; clientId: string } | null> {
   const auth = req.headers.get('authorization') ?? ''
-  return auth === `Bearer ${key}`
+  if (!auth.startsWith('Bearer ')) return null
+  const rawToken = auth.slice(7)
+  try {
+    const payload = await verifyToken(rawToken, 'mcp_access')
+    return {
+      token: rawToken,
+      clientId: payload['client_id'] as string,
+    }
+  } catch {
+    return null
+  }
 }
 
 // Build an in-memory note index from the vault for this request.
@@ -178,14 +185,15 @@ function createMcpServer() {
 }
 
 async function handleMcpRequest(req: NextRequest): Promise<Response> {
-  if (!isAuthorized(req)) {
+  const authInfo = await getAuthInfo(req)
+  if (!authInfo) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
   const server = createMcpServer()
   await server.connect(transport)
-  return transport.handleRequest(req)
+  return transport.handleRequest(req, { authInfo: { token: authInfo.token, clientId: authInfo.clientId, scopes: [] } })
 }
 
 export async function POST(req: NextRequest) {
