@@ -50,7 +50,7 @@ Claude Code automatically reads `CLAUDE.md` at session start. This file gives Cl
 <!-- Wat Claude wel/niet moet doen, hoe notities aangemaakt moeten worden, etc. -->
 ```
 
-**Deliverable:** A blank `CLAUDE.md` template committed to the vault root (not the app repo). Milan fills in the content.
+**Deliverable:** A blank `CLAUDE.md` template committed to the vault root. In local dev this is `$VAULT_PATH/CLAUDE.md`; in production it lives in the GitHub vault repo (`GITHUB_VAULT_OWNER/GITHUB_VAULT_REPO`). Milan fills in the content.
 
 ---
 
@@ -197,7 +197,13 @@ type: 'person' | 'project' | 'idea' | 'note' | 'resource' | 'meeting' | 'daily' 
 | `daily` | `#6B7280` (gray) |
 | `area` | `#EC4899` (pink) |
 
-**`web/lib/vault-parser.ts`** — update any type guards or switch statements.
+**`web/lib/vault-parser.ts`** — update the `VALID_TYPES` constant to include all 8 types:
+
+```typescript
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area']
+```
+
+This is critical: without this change, notes with `type: meeting/daily/area` in frontmatter are silently coerced to `type: 'note'` and rendered with the wrong graph color.
 
 ### 3.2 Template-based new note creation
 
@@ -208,21 +214,40 @@ A modal triggered by a `+ New Note` button in the main UI. Fields:
 - Type (select: all 8 types)
 - Folder (auto-suggested based on type, editable)
 
+**Type-to-folder mapping** (auto-suggested, user can override):
+
+| Type | Default folder |
+|------|---------------|
+| `person` | `people/` |
+| `project` | `projects/` |
+| `meeting` | `meetings/` |
+| `daily` | `daily/` |
+| `idea` | `ideas/` |
+| `resource` | `resources/` |
+| `area` | `areas/` |
+| `note` | `inbox/` |
+
+**Daily note filename:** For `type: daily`, the filename is derived from the date (e.g., `daily/2026-04-05.md`). The modal enforces one daily note per date — if a file already exists at that path, it opens the existing note instead of creating a new one.
+
 On submit:
 - Generates frontmatter from the type's template
 - Today's date auto-filled for `date` fields
-- Calls existing `POST /api/vault/note/[...path]` to create the file
-- Opens the new note in DetailPanel
+- Calls `PUT /api/vault/note/[...path]` (the existing write handler) to create the file
+- Passes an `onNoteCreated` callback to the modal; `page.tsx` calls `loadGraph()` + opens the note in DetailPanel
 
 **`web/app/page.tsx`** — add `+ New Note` button to the top bar, wire to modal.
 
 ### 3.3 Inbox badge
 
-**`web/app/api/vault/inbox/route.ts`** — new GET endpoint:
-- Reads `inbox/` folder from vault
-- Returns count of files
+**`inbox` is not a note type — it is a location.** Notes captured in `inbox/` have no required frontmatter and are treated as `type: 'note'` by the parser. The inbox filter is path-based (`path.startsWith('inbox/')`), not type-based.
 
-**`web/app/page.tsx`** — show inbox count badge next to a `Inbox` link in the top bar. Clicking navigates to a filtered graph view showing only inbox notes (filter by path prefix `inbox/`).
+**`web/app/api/vault/inbox/route.ts`** — new GET endpoint:
+- Calls `getCachedGraph()` (reuses existing cache, no new VaultClient methods needed)
+- Filters nodes by `path.startsWith('inbox/')`
+- Returns `{ count: number }`
+- Note: count reflects the cache state (up to 5min lag after new captures)
+
+**`web/app/page.tsx`** — show inbox count badge next to an `Inbox` link in the top bar. Clicking filters the graph to show only nodes with `path.startsWith('inbox/')`.
 
 ---
 
@@ -233,9 +258,10 @@ User clicks "+ New Note"
   → NewNoteModal opens
   → User fills title + type
   → Template frontmatter generated client-side
-  → POST /api/vault/note/[path] (existing route)
+  → PUT /api/vault/note/[path] (existing route, also calls invalidateCache())
   → Note created in vault (GitHub or local)
-  → Graph cache invalidated
+  → onNoteCreated() callback fires in page.tsx
+  → page.tsx calls loadGraph() + sets selectedNote to new path
   → DetailPanel opens new note
 ```
 
@@ -264,8 +290,8 @@ User clicks "+ New Note"
 
 ## Success criteria
 
-- All 8 note types render correctly in the graph with correct colors
-- New note modal creates a note with the correct template in the correct folder
-- Inbox badge shows live count of unprocessed notes
+- All 8 note types (`person`, `project`, `idea`, `note`, `resource`, `meeting`, `daily`, `area`) render in the graph with correct colors; inbox notes render as `type: 'note'` (intentional — inbox is a location, not a type)
+- New note modal creates a note with the correct frontmatter template in the correct default folder; graph reloads after creation
+- Inbox badge shows count of notes in `inbox/` (reflects cache, may lag up to 5min)
 - `CLAUDE.md` exists in vault root and Claude Code reads it at session start
-- Milan can capture a new meeting/daily/idea in < 30 seconds via the webapp
+- Capturing a new meeting/daily/idea via the modal is achievable without manual frontmatter editing (manually validated)
