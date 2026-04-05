@@ -70,18 +70,3 @@ export class GitHubVaultClient {
     }
   }
 }
-
-export function getVaultClient(): GitHubVaultClient {
-  const pat = process.env.GITHUB_PAT
-  const owner = process.env.GITHUB_VAULT_OWNER
-  const repo = process.env.GITHUB_VAULT_REPO
-  if (!pat || !owner || !repo) {
-    throw new Error('Missing GITHUB_PAT, GITHUB_VAULT_OWNER, or GITHUB_VAULT_REPO env vars')
-  }
-  return new GitHubVaultClient({
-    pat,
-    owner,
-    repo,
-    branch: process.env.GITHUB_VAULT_BRANCH, // optional, defaults to 'main'
-  })
-}
