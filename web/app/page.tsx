@@ -104,7 +104,7 @@ export default function BrainPage() {
           >
             Inbox
             {inboxCount > 0 && (
-              <span className="bg-yellow-500 text-black text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="bg-black text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {inboxCount}
               </span>
             )}
