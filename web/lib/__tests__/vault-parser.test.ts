@@ -50,6 +50,21 @@ describe('parseNote', () => {
     expect(note.date).toBe('2026-01-15')
     expect(typeof note.date).toBe('string')
   })
+
+  it('parses type: meeting', () => {
+    const note = parseNote('meetings/standup.md', '---\ntype: meeting\n---\n')
+    expect(note.type).toBe('meeting')
+  })
+
+  it('parses type: daily', () => {
+    const note = parseNote('daily/2026-04-05.md', '---\ntype: daily\n---\n')
+    expect(note.type).toBe('daily')
+  })
+
+  it('parses type: area', () => {
+    const note = parseNote('areas/health.md', '---\ntype: area\n---\n')
+    expect(note.type).toBe('area')
+  })
 })
 
 describe('resolveWikilink', () => {

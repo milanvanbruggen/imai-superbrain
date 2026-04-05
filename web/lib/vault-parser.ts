@@ -3,7 +3,7 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
-const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource'] as const
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area'] as const
 
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
