@@ -10,7 +10,7 @@ export interface VaultClient {
 export function getVaultClient(): VaultClient {
   const vaultPath = process.env.VAULT_PATH
   if (vaultPath) {
-    return new LocalVaultClient(vaultPath) as unknown as VaultClient
+    return new LocalVaultClient(vaultPath)
   }
 
   const pat = process.env.GITHUB_PAT

@@ -19,8 +19,9 @@ describe('getVaultClient', () => {
     vi.stubEnv('VAULT_PATH', '/tmp/vault')
     vi.stubEnv('GITHUB_PAT', '')
     const { getVaultClient } = await import('../vault-client')
+    const { LocalVaultClient } = await import('../local')
     const client = getVaultClient()
-    expect(client.constructor.name).toBe('LocalVaultClient')
+    expect(client).toBeInstanceOf(LocalVaultClient)
   })
 
   it('returns GitHubVaultClient when only GitHub vars are set', async () => {
@@ -29,7 +30,19 @@ describe('getVaultClient', () => {
     vi.stubEnv('GITHUB_VAULT_OWNER', 'owner')
     vi.stubEnv('GITHUB_VAULT_REPO', 'repo')
     const { getVaultClient } = await import('../vault-client')
+    const { GitHubVaultClient } = await import('../github')
     const client = getVaultClient()
-    expect(client.constructor.name).toBe('GitHubVaultClient')
+    expect(client).toBeInstanceOf(GitHubVaultClient)
+  })
+
+  it('VAULT_PATH takes priority over GitHub vars when both are set', async () => {
+    vi.stubEnv('VAULT_PATH', '/tmp/vault')
+    vi.stubEnv('GITHUB_PAT', 'token')
+    vi.stubEnv('GITHUB_VAULT_OWNER', 'owner')
+    vi.stubEnv('GITHUB_VAULT_REPO', 'repo')
+    const { getVaultClient } = await import('../vault-client')
+    const { LocalVaultClient } = await import('../local')
+    const client = getVaultClient()
+    expect(client).toBeInstanceOf(LocalVaultClient)
   })
 })
