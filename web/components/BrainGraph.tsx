@@ -20,6 +20,9 @@ const TYPE_COLORS: Record<string, string> = {
   idea: '#f59e0b',
   resource: '#a78bfa',
   note: '#94a3b8',
+  meeting: '#EAB308',
+  daily: '#6B7280',
+  area: '#EC4899',
 }
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
