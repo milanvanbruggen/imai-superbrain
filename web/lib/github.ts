@@ -1,3 +1,5 @@
+import type { VaultClient } from './vault-client'
+
 interface GitHubClientConfig {
   pat: string
   owner: string
@@ -15,7 +17,7 @@ interface FileContent {
   sha: string
 }
 
-export class GitHubVaultClient {
+export class GitHubVaultClient implements VaultClient {
   private base: string
   private headers: Record<string, string>
 

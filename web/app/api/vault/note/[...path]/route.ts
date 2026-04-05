@@ -38,7 +38,11 @@ export async function PUT(
   const message = isNew ? `brain: create [[${stem}]]` : `brain: update [[${stem}]]`
 
   const client = getVaultClient()
-  await client.writeFile(filePath, content, sha ?? null, message)
+  try {
+    await client.writeFile(filePath, content, sha ?? null, message)
+  } catch (err) {
+    return NextResponse.json({ error: 'Failed to write note' }, { status: 500 })
+  }
   invalidateCache()
 
   return NextResponse.json({ ok: true })
