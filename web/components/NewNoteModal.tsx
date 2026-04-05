@@ -108,20 +108,27 @@ export function NewNoteModal({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-700 rounded-lg p-6 w-full max-w-md shadow-xl"
+        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl p-6 w-full max-w-sm shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-white mb-4">New Note</h2>
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="w-5 h-5 rounded bg-teal-100 dark:bg-teal-600/30 flex items-center justify-center">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </div>
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white">New Note</h2>
+        </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Type</label>
+            <label className="text-xs text-slate-500 dark:text-gray-500 mb-1.5 block">Type</label>
             <select
               value={type}
               onChange={e => handleTypeChange(e.target.value as NoteType)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-gray-500"
+              className="w-full bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-teal-400 dark:focus:border-teal-600 transition-colors cursor-pointer"
             >
               <option value="note">Note (inbox)</option>
               <option value="idea">Idea</option>
@@ -136,47 +143,49 @@ export function NewNoteModal({ onClose, onCreated }: Props) {
 
           {!isDaily && (
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Title</label>
+              <label className="text-xs text-slate-500 dark:text-gray-500 mb-1.5 block">Title</label>
               <input
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder="Note title..."
                 autoFocus
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500"
+                className="w-full bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:border-teal-400 dark:focus:border-teal-600 transition-colors"
               />
             </div>
           )}
 
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Folder</label>
+            <label className="text-xs text-slate-500 dark:text-gray-500 mb-1.5 block">Folder</label>
             <input
               type="text"
               value={folder}
               onChange={e => setFolder(e.target.value.replace(/^\/+|\/+$/g, ''))}
               disabled={isDaily}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 disabled:opacity-40"
+              className="w-full bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm text-gray-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:border-teal-400 dark:focus:border-teal-600 disabled:opacity-40 transition-colors"
             />
           </div>
 
-          <p className="text-xs text-gray-500">Will be saved to: <code className="text-gray-400">{path}</code></p>
+          <p className="text-xs text-slate-500 dark:text-gray-600 bg-slate-50 dark:bg-gray-800/50 rounded-md px-3 py-2">
+            → <code className="text-slate-600 dark:text-gray-500">{path}</code>
+          </p>
 
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
 
-          <div className="flex gap-3 justify-end">
+          <div className="flex gap-2 justify-end pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white transition"
+              className="px-4 py-2 text-xs text-slate-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || (!isDaily && !title.trim())}
-              className="px-4 py-2 text-sm bg-white text-black rounded font-medium hover:bg-gray-200 transition disabled:opacity-40"
+              className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors disabled:opacity-40 cursor-pointer"
             >
-              {saving ? 'Creating...' : 'Create'}
+              {saving ? 'Creating...' : 'Create Note'}
             </button>
           </div>
         </form>

@@ -1,10 +1,16 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
 import { BrainGraph } from '@/components/BrainGraph'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { SettingsModal } from '@/components/SettingsModal'
+
+const MIN_PANEL_WIDTH = 280
+const MAX_PANEL_WIDTH = 700
+const DEFAULT_PANEL_WIDTH = MAX_PANEL_WIDTH
 
 export default function BrainPage() {
   const [graph, setGraph] = useState<VaultGraph | null>(null)
@@ -12,8 +18,57 @@ export default function BrainPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showNewNote, setShowNewNote] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [inboxFilter, setInboxFilter] = useState(false)
+
+  // Panel resize & collapse
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const prevWidthRef = useRef(DEFAULT_PANEL_WIDTH)
+  const isDragging = useRef(false)
+  const dragStartX = useRef(0)
+  const dragStartWidth = useRef(DEFAULT_PANEL_WIDTH)
+
+  const togglePanel = useCallback(() => {
+    if (panelCollapsed) {
+      setPanelCollapsed(false)
+      setPanelWidth(prevWidthRef.current)
+    } else {
+      prevWidthRef.current = panelWidth
+      setPanelCollapsed(true)
+    }
+  }, [panelCollapsed, panelWidth])
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true
+    dragStartX.current = e.clientX
+    dragStartWidth.current = panelWidth
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [panelWidth])
+
+  useEffect(() => {
+    function onMouseMove(e: MouseEvent) {
+      if (!isDragging.current) return
+      const delta = dragStartX.current - e.clientX
+      const next = Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, dragStartWidth.current + delta))
+      setPanelWidth(next)
+    }
+    function onMouseUp() {
+      if (isDragging.current) {
+        isDragging.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
 
   async function loadGraph() {
     setLoading(true)
@@ -34,9 +89,13 @@ export default function BrainPage() {
     setShowNewNote(false)
     await loadGraph()
     loadInboxCount()
-    // Select the new note: stem is filename without extension
     const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? ''
     setSelectedId(stem.toLowerCase())
+    // Make sure panel is open when a note is created
+    if (panelCollapsed) {
+      setPanelCollapsed(false)
+      setPanelWidth(prevWidthRef.current)
+    }
   }
 
   async function handleNoteUpdated() {
@@ -52,30 +111,41 @@ export default function BrainPage() {
         setInboxCount(count)
       }
     } catch {
-      // non-critical, ignore
+      // non-critical
     }
   }
 
   useEffect(() => { loadGraph(); loadInboxCount() }, [])
+
+  // Auto-expand panel when a node is selected
+  useEffect(() => {
+    if (selectedId && panelCollapsed) {
+      setPanelCollapsed(false)
+      setPanelWidth(prevWidthRef.current)
+    }
+  }, [selectedId])
 
   const selectedNode = graph?.nodes.find(n => n.id === selectedId) ?? null
   const selectedNote = selectedId && graph ? (graph.notesByStem[selectedId] ?? null) : null
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-gray-400 text-sm">
-        Loading brain...
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gray-950">
+        <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500 text-sm">
+          <div className="w-4 h-4 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
+          Loading brain...
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center flex-col gap-4">
-        <p className="text-red-400 text-sm">Failed to load: {error}</p>
+      <div className="flex min-h-screen items-center justify-center flex-col gap-4 bg-slate-50 dark:bg-gray-950">
+        <p className="text-red-500 text-sm">Failed to load: {error}</p>
         <button
           onClick={loadGraph}
-          className="px-4 py-2 bg-gray-800 text-sm rounded hover:bg-gray-700 transition"
+          className="px-4 py-2 bg-slate-200 dark:bg-gray-800 text-sm rounded-md hover:bg-slate-300 dark:hover:bg-gray-700 transition cursor-pointer text-gray-700 dark:text-gray-200"
         >
           Retry
         </button>
@@ -93,38 +163,62 @@ export default function BrainPage() {
     : graph.edges
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <header className="flex items-center gap-4 px-6 py-3 border-b border-gray-800 shrink-0">
-        <h1 className="text-sm font-semibold text-white tracking-wide">Superbrain</h1>
-        <span className="text-xs text-gray-500">{graph.nodes.length} notes</span>
-        <div className="ml-auto flex items-center gap-3">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100">
+      <header className="flex items-center gap-4 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <line x1="12" y1="2" x2="12" y2="6"/>
+              <line x1="12" y1="18" x2="12" y2="22"/>
+              <line x1="2" y1="12" x2="6" y2="12"/>
+              <line x1="18" y1="12" x2="22" y2="12"/>
+            </svg>
+          </div>
+          <h1 className="text-sm font-semibold tracking-wide">Superbrain</h1>
+        </div>
+        <span className="text-xs text-gray-400 dark:text-gray-600 tabular-nums">{graph.nodes.length} notes</span>
+
+        <div className="ml-auto flex items-center gap-2">
           <SearchBar nodes={graph.nodes} onSelect={setSelectedId} />
           <button
             onClick={() => setInboxFilter(f => !f)}
-            className={`px-3 py-1.5 text-xs rounded font-medium transition flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
               inboxFilter
-                ? 'bg-yellow-500 text-black'
-                : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 ring-1 ring-amber-400/40'
+                : 'bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700'
             }`}
           >
             Inbox
             {inboxCount > 0 && (
-              <span className="bg-black text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="bg-amber-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
                 {inboxCount}
               </span>
             )}
           </button>
           <button
             onClick={() => setShowNewNote(true)}
-            className="px-3 py-1.5 text-xs bg-white text-black rounded font-medium hover:bg-gray-200 transition"
+            className="px-3 py-1.5 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors duration-150 cursor-pointer"
           >
             + New Note
           </button>
+          <button
+            onClick={() => setShowSettings(true)}
+            title="Vault settings"
+            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+            </svg>
+          </button>
+          <ThemeToggle />
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 relative overflow-hidden">
+      <div className="flex flex-1 min-h-0">
+        {/* Graph fills all remaining space — ResizeObserver in BrainGraph keeps it centered */}
+        <main className="flex-1 relative overflow-hidden min-w-0">
           <BrainGraph
             nodes={displayNodes}
             edges={displayEdges}
@@ -133,6 +227,15 @@ export default function BrainPage() {
           />
         </main>
 
+        {/* Drag handle — hidden when panel is collapsed */}
+        {!panelCollapsed && (
+          <div
+            onMouseDown={onDragStart}
+            className="w-1 cursor-col-resize shrink-0 bg-slate-200 dark:bg-gray-800/60 hover:bg-teal-400 dark:hover:bg-teal-600 transition-colors duration-150"
+            title="Drag to resize"
+          />
+        )}
+
         <DetailPanel
           node={selectedNode}
           note={selectedNote}
@@ -140,8 +243,15 @@ export default function BrainPage() {
           allNodes={graph.nodes}
           onNoteUpdated={handleNoteUpdated}
           onNavigate={setSelectedId}
+          width={panelWidth}
+          collapsed={panelCollapsed}
+          onToggleCollapse={togglePanel}
         />
       </div>
+
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} />
+      )}
       {showNewNote && (
         <NewNoteModal
           onClose={() => setShowNewNote(false)}

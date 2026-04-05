@@ -7,15 +7,22 @@ interface Props {
   onSelect: (id: string) => void
 }
 
+const TYPE_DOTS: Record<string, string> = {
+  person: 'bg-blue-400', project: 'bg-emerald-400', idea: 'bg-amber-400',
+  resource: 'bg-violet-400', note: 'bg-slate-400', meeting: 'bg-cyan-400',
+  daily: 'bg-gray-400', area: 'bg-pink-400',
+}
+
 export function SearchBar({ nodes, onSelect }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GraphNode[]>([])
   const [open, setOpen] = useState(false)
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 })
   const indexRef = useRef<any>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     import('flexsearch').then(mod => {
-      // FlexSearch Document index
       const FlexDocument = mod.Document ?? mod.default?.Document
       if (!FlexDocument) return
       const index = new FlexDocument({
@@ -26,6 +33,13 @@ export function SearchBar({ nodes, onSelect }: Props) {
     })
   }, [nodes])
 
+  function updateDropdownPos() {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
+  }
+
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
     const val = e.target.value
     setQuery(val)
@@ -34,14 +48,11 @@ export function SearchBar({ nodes, onSelect }: Props) {
       setOpen(false)
       return
     }
-
-    // flexsearch Document.search returns array of { field, result } objects
+    updateDropdownPos()
     const hits: any[] = indexRef.current.search(val, { limit: 8, enrich: true })
     const ids = new Set<string>()
     hits.forEach((field: any) => {
-      field.result?.forEach((r: any) => {
-        ids.add(typeof r === 'string' ? r : r.id)
-      })
+      field.result?.forEach((r: any) => ids.add(typeof r === 'string' ? r : r.id))
     })
     setResults(nodes.filter(n => ids.has(n.id)))
     setOpen(true)
@@ -53,28 +64,50 @@ export function SearchBar({ nodes, onSelect }: Props) {
     setOpen(false)
   }
 
+  // Close on click outside
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (inputRef.current && !inputRef.current.contains(e.target as Node)) {
+        handleClose()
+      }
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
   return (
-    <div className="relative w-72">
-      <input
-        type="search"
-        value={query}
-        onChange={handleInput}
-        placeholder="Search notes..."
-        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-gray-500"
-      />
+    <div className="relative w-56">
+      <div className="relative">
+        <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-gray-600 pointer-events-none" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          ref={inputRef}
+          type="search"
+          value={query}
+          onChange={handleInput}
+          placeholder="Search notes..."
+          className="w-full pl-8 pr-3 py-1.5 bg-slate-100 dark:bg-gray-800/80 border border-slate-200 dark:border-gray-700 rounded-md text-xs text-gray-900 dark:text-white placeholder-slate-400 dark:placeholder-gray-600 focus:outline-none focus:border-teal-400 dark:focus:border-teal-600 transition-colors"
+        />
+      </div>
+
+      {/* Fixed-position dropdown — escapes overflow-hidden parents */}
       {open && results.length > 0 && (
-        <ul className="absolute top-full mt-1 left-0 right-0 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-50 shadow-xl">
+        <ul
+          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999 }}
+          className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-md overflow-hidden shadow-xl"
+        >
           {results.map(n => (
             <li key={n.id}>
               <button
-                onClick={() => {
-                  onSelect(n.id)
-                  handleClose()
-                }}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-gray-700 flex items-center gap-2 transition"
+                onMouseDown={e => e.preventDefault()}
+                onClick={() => { onSelect(n.id); handleClose() }}
+                className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors cursor-pointer"
               >
-                <span className="truncate">{n.title}</span>
-                <span className="text-xs text-gray-500 ml-auto shrink-0">{n.type}</span>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${TYPE_DOTS[n.type] ?? 'bg-slate-400'}`} />
+                <span className="truncate text-gray-700 dark:text-slate-300">{n.title}</span>
+                <span className="text-slate-400 dark:text-gray-600 ml-auto shrink-0">{n.type}</span>
               </button>
             </li>
           ))}

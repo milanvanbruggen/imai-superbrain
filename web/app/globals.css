@@ -1,26 +1,59 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* Enable class-based dark mode (next-themes applies .dark to <html>) */
+@custom-variant dark (&:is(.dark *));
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+.dark * {
+  scrollbar-color: #374151 transparent;
+}
+
+/* Markdown prose for dark mode (default) */
+.dark .prose-brain h1 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; color: #f1f5f9; }
+.dark .prose-brain h2 { font-size: 0.9rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.4rem; color: #e2e8f0; padding-bottom: 0.2rem; border-bottom: 1px solid #1e293b; }
+.dark .prose-brain h3 { font-size: 0.8rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; color: #cbd5e1; }
+.dark .prose-brain p { margin-bottom: 0.6rem; line-height: 1.65; color: #94a3b8; font-size: 0.8rem; }
+.dark .prose-brain ul { list-style: disc; padding-left: 1.1rem; margin-bottom: 0.5rem; }
+.dark .prose-brain ol { list-style: decimal; padding-left: 1.1rem; margin-bottom: 0.5rem; }
+.dark .prose-brain li { color: #94a3b8; margin-bottom: 0.2rem; line-height: 1.55; font-size: 0.8rem; }
+.dark .prose-brain strong { color: #e2e8f0; font-weight: 600; }
+.dark .prose-brain em { color: #94a3b8; }
+.dark .prose-brain code { background: #1e293b; color: #7dd3fc; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.75rem; font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.dark .prose-brain pre { background: #0f172a; border: 1px solid #1e293b; border-radius: 0.4rem; padding: 0.75rem; overflow-x: auto; margin-bottom: 0.75rem; }
+.dark .prose-brain pre code { background: transparent; padding: 0; font-size: 0.75rem; color: #94a3b8; }
+.dark .prose-brain blockquote { border-left: 2px solid #334155; padding-left: 0.75rem; color: #64748b; margin-bottom: 0.5rem; font-size: 0.8rem; }
+.dark .prose-brain a { color: #60a5fa; }
+.dark .prose-brain a:hover { text-decoration: underline; }
+.dark .prose-brain hr { border-color: #1e293b; margin: 0.75rem 0; }
+.dark .prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
+.dark .prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #1e293b; color: #e2e8f0; font-weight: 600; }
+.dark .prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #0f172a; color: #94a3b8; }
+
+/* Markdown prose for light mode */
+.prose-brain h1 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; color: #0f172a; }
+.prose-brain h2 { font-size: 0.9rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.4rem; color: #1e293b; padding-bottom: 0.2rem; border-bottom: 1px solid #e2e8f0; }
+.prose-brain h3 { font-size: 0.8rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; color: #334155; }
+.prose-brain p { margin-bottom: 0.6rem; line-height: 1.65; color: #475569; font-size: 0.8rem; }
+.prose-brain ul { list-style: disc; padding-left: 1.1rem; margin-bottom: 0.5rem; }
+.prose-brain ol { list-style: decimal; padding-left: 1.1rem; margin-bottom: 0.5rem; }
+.prose-brain li { color: #475569; margin-bottom: 0.2rem; line-height: 1.55; font-size: 0.8rem; }
+.prose-brain strong { color: #1e293b; font-weight: 600; }
+.prose-brain em { color: #64748b; }
+.prose-brain code { background: #f1f5f9; color: #0369a1; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.75rem; font-family: var(--font-geist-mono), ui-monospace, monospace; }
+.prose-brain pre { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.4rem; padding: 0.75rem; overflow-x: auto; margin-bottom: 0.75rem; }
+.prose-brain pre code { background: transparent; padding: 0; font-size: 0.75rem; color: #475569; }
+.prose-brain blockquote { border-left: 2px solid #cbd5e1; padding-left: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem; font-size: 0.8rem; }
+.prose-brain a { color: #2563eb; }
+.prose-brain a:hover { text-decoration: underline; }
+.prose-brain hr { border-color: #e2e8f0; margin: 0.75rem 0; }
+.prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
+.prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-weight: 600; }
+.prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #f1f5f9; color: #475569; }
