@@ -53,6 +53,7 @@ describe('POST /api/mcp/oauth/token', () => {
     const body = await res.json()
     expect(typeof body.access_token).toBe('string')
     expect(body.token_type).toBe('Bearer')
+    expect(body.expires_in).toBe(2592000)
   })
 
   it('returns 400 invalid_grant for wrong code_verifier', async () => {
@@ -82,6 +83,23 @@ describe('POST /api/mcp/oauth/token', () => {
         code_verifier: 'my-verifier',
         client_id: 'client-jwt-placeholder',
         redirect_uri: 'https://evil.com/steal',
+      })
+    )
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error).toBe('invalid_grant')
+  })
+
+  it('returns 400 invalid_grant for client_id mismatch', async () => {
+    const code = await makeAuthCode({ client_id: 'original-client' })
+    const { POST } = await import('../../app/api/mcp/oauth/token/route')
+    const res = await POST(
+      makeTokenRequest({
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: 'my-verifier',
+        client_id: 'attacker-client',
+        redirect_uri: 'https://claude.ai/callback',
       })
     )
     expect(res.status).toBe(400)
