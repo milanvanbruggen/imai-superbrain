@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { createHash } from 'crypto'
 
 export function getIssuer(): string {
-  return process.env.NEXTAUTH_URL || 'https://mai-superbrain-web.vercel.app'
+  return (process.env.NEXTAUTH_URL || 'https://mai-superbrain-web.vercel.app').replace(/\/$/, '')
 }
 
 async function getSecret(): Promise<CryptoKey> {
