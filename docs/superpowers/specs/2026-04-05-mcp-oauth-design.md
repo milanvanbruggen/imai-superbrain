@@ -161,7 +161,7 @@ No `client_secret` — this is a public client.
 
 ## Dependencies
 
-`jose` must be added as a **direct** dependency (pinned to `^5.0.0`). Although a `jose` copy is currently present in `node_modules` transitively, the version is not guaranteed stable across lockfile regenerations.
+`jose` must be added as a **direct** dependency (pinned to `^6.0.0`). The transitive copy present via `@modelcontextprotocol/sdk` is `6.2.2` — adding it directly at `^6` locks the major version explicitly and prevents it from disappearing on lockfile regeneration.
 
 ## Error Handling
 
