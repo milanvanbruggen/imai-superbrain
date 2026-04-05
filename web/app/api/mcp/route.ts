@@ -1,0 +1,201 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import { z } from 'zod'
+import { getVaultClient } from '@/lib/vault-client'
+import { buildGraph } from '@/lib/vault-parser'
+
+// Simple Bearer-token auth for the MCP endpoint.
+// Set MCP_API_KEY in Vercel env vars. If not set, the endpoint is open (local dev only).
+function isAuthorized(req: NextRequest): boolean {
+  const key = process.env.MCP_API_KEY
+  if (!key) return true // no key configured → open (dev mode)
+  const auth = req.headers.get('authorization') ?? ''
+  return auth === `Bearer ${key}`
+}
+
+// Build an in-memory note index from the vault for this request.
+// We rebuild per request because Vercel functions are stateless.
+async function loadNotes() {
+  const client = getVaultClient()
+  const tree = await client.getMarkdownTree()
+  const files = await Promise.all(
+    tree.map(async f => {
+      const { content } = await client.readFile(f.path)
+      return [f.path, content] as [string, string]
+    })
+  )
+  const graph = buildGraph(files)
+
+  // Build a lookup map: path → { title, type, tags, content }
+  const noteMap = new Map<string, { path: string; title: string; type: string; tags: string[]; content: string }>()
+  for (const [path, content] of files) {
+    const node = graph.nodes.find(n => n.path === path)
+    if (node) {
+      noteMap.set(path, {
+        path,
+        title: node.title,
+        type: node.type,
+        tags: node.tags,
+        content,
+      })
+    }
+  }
+  return { noteMap, client }
+}
+
+function createMcpServer() {
+  const server = new McpServer({
+    name: 'superbrain',
+    version: '1.0.0',
+  })
+
+  // list_notes
+  server.tool(
+    'list_notes',
+    'List vault notes, optionally filtered by folder or tag',
+    {
+      folder: z.string().optional().describe('Filter by folder prefix, e.g. "people"'),
+      tag: z.string().optional().describe('Filter by tag'),
+    },
+    async ({ folder, tag }) => {
+      const { noteMap } = await loadNotes()
+      let notes = Array.from(noteMap.values())
+      if (folder) notes = notes.filter(n => n.path.startsWith(folder + '/'))
+      if (tag) notes = notes.filter(n => n.tags.includes(tag))
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            notes: notes.map(n => ({ path: n.path, title: n.title, type: n.type, tags: n.tags })),
+          }, null, 2),
+        }],
+      }
+    }
+  )
+
+  // search_notes
+  server.tool(
+    'search_notes',
+    'Full-text search across all vault notes by title or content',
+    {
+      query: z.string().describe('Search query'),
+    },
+    async ({ query }) => {
+      const { noteMap } = await loadNotes()
+      const lower = query.toLowerCase()
+      const results = Array.from(noteMap.values())
+        .filter(n => n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower))
+        .slice(0, 10)
+        .map(n => ({ path: n.path, title: n.title, type: n.type }))
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ results }, null, 2) }],
+      }
+    }
+  )
+
+  // read_note
+  server.tool(
+    'read_note',
+    'Read a note by its path or title',
+    {
+      path: z.string().optional().describe('Relative path, e.g. people/Milan van Bruggen.md'),
+      title: z.string().optional().describe('Note title (case-insensitive)'),
+    },
+    async ({ path, title }) => {
+      const { noteMap } = await loadNotes()
+      let note = path
+        ? noteMap.get(path)
+        : Array.from(noteMap.values()).find(n => n.title.toLowerCase() === (title ?? '').toLowerCase())
+      if (!note) {
+        // fuzzy fallback for title
+        const lower = (title ?? path ?? '').toLowerCase()
+        note = Array.from(noteMap.values()).find(n => n.title.toLowerCase().includes(lower))
+      }
+      if (!note) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Note not found' }) }] }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(note, null, 2) }],
+      }
+    }
+  )
+
+  // write_note
+  server.tool(
+    'write_note',
+    'Create or update a note in the vault',
+    {
+      path: z.string().describe('Relative path, e.g. inbox/my-note.md'),
+      content: z.string().describe('Full markdown content including frontmatter'),
+    },
+    async ({ path, content }) => {
+      const { client } = await loadNotes()
+      let sha: string | null = null
+      try {
+        const existing = await client.readFile(path)
+        sha = existing.sha
+      } catch {
+        // new file
+      }
+      const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
+      await client.writeFile(path, content, sha, sha ? `brain: update [[${stem}]]` : `brain: create [[${stem}]]`)
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, path }) }],
+      }
+    }
+  )
+
+  // get_related
+  server.tool(
+    'get_related',
+    'Get notes that link to or from a given note',
+    {
+      path: z.string().describe('Relative path of the note'),
+    },
+    async ({ path }) => {
+      const { noteMap } = await loadNotes()
+      const note = noteMap.get(path)
+      if (!note) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Note not found' }) }] }
+
+      // Extract [[wikilinks]] from content
+      const links = Array.from(note.content.matchAll(/\[\[([^\]]+)\]\]/g)).map(m => m[1])
+      const linked = links
+        .map(title => Array.from(noteMap.values()).find(n => n.title.toLowerCase() === title.toLowerCase()))
+        .filter(Boolean)
+        .map(n => ({ path: n!.path, title: n!.title, type: n!.type }))
+
+      // Notes that link back to this note
+      const backlinks = Array.from(noteMap.values())
+        .filter(n => n.content.includes(`[[${note.title}]]`))
+        .map(n => ({ path: n.path, title: n.title, type: n.type }))
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ linked, backlinks }, null, 2) }],
+      }
+    }
+  )
+
+  return server
+}
+
+async function handleMcpRequest(req: NextRequest): Promise<Response> {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
+  const server = createMcpServer()
+  await server.connect(transport)
+  return transport.handleRequest(req)
+}
+
+export async function POST(req: NextRequest) {
+  return handleMcpRequest(req)
+}
+
+export async function GET(req: NextRequest) {
+  return handleMcpRequest(req)
+}
+
+export async function DELETE(req: NextRequest) {
+  return handleMcpRequest(req)
+}
