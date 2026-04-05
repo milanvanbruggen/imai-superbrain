@@ -7,17 +7,17 @@ import { LocalVaultClient } from '../local'
 let vaultDir: string
 let client: LocalVaultClient
 
-beforeEach(() => {
-  vaultDir = join(tmpdir(), `vault-test-${Date.now()}`)
-  mkdirSync(vaultDir, { recursive: true })
-  client = new LocalVaultClient(vaultDir)
-})
-
-afterEach(() => {
-  rmSync(vaultDir, { recursive: true, force: true })
-})
-
 describe('LocalVaultClient', () => {
+  beforeEach(() => {
+    vaultDir = join(tmpdir(), `vault-test-${Date.now()}`)
+    mkdirSync(vaultDir, { recursive: true })
+    client = new LocalVaultClient(vaultDir)
+  })
+
+  afterEach(() => {
+    rmSync(vaultDir, { recursive: true, force: true })
+  })
+
   it('getMarkdownTree returns all .md files recursively', async () => {
     mkdirSync(join(vaultDir, 'people'))
     writeFileSync(join(vaultDir, 'README.md'), '# Hello')
@@ -59,7 +59,7 @@ describe('LocalVaultClient', () => {
   })
 
   it('readFile throws for missing file', async () => {
-    await expect(client.readFile('nonexistent.md')).rejects.toThrow()
+    await expect(client.readFile('nonexistent.md')).rejects.toThrow(/ENOENT/)
   })
 
   it('writeFile creates a new file', async () => {

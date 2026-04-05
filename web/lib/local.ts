@@ -40,23 +40,23 @@ export class LocalVaultClient implements VaultClient {
     if (!normalizedFull.startsWith(normalizedVault + '/') && normalizedFull !== normalizedVault) {
       throw new Error(`Path traversal detected: ${path}`)
     }
-    return fullPath
+    return normalizedFull
   }
 
   private async findMarkdownFiles(dir: string): Promise<string[]> {
-    const results: string[] = []
     const entries = await readdir(dir)
-    await Promise.all(
+    const nested = await Promise.all(
       entries.map(async entry => {
         const fullPath = join(dir, entry)
         const info = await stat(fullPath)
         if (info.isDirectory()) {
-          results.push(...(await this.findMarkdownFiles(fullPath)))
+          return this.findMarkdownFiles(fullPath)
         } else if (entry.endsWith('.md')) {
-          results.push(fullPath)
+          return [fullPath]
         }
+        return []
       })
     )
-    return results
+    return nested.flat()
   }
 }
