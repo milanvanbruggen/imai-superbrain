@@ -27,12 +27,16 @@ const TYPE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
   meeting:  { bg: 'bg-cyan-100 dark:bg-cyan-500/15',    text: 'text-cyan-700 dark:text-cyan-400',    dot: 'bg-cyan-500 dark:bg-cyan-400' },
   daily:    { bg: 'bg-gray-100 dark:bg-gray-500/15',    text: 'text-gray-600 dark:text-gray-400',    dot: 'bg-gray-400' },
   area:     { bg: 'bg-pink-100 dark:bg-pink-500/15',    text: 'text-pink-700 dark:text-pink-400',    dot: 'bg-pink-500 dark:bg-pink-400' },
+  group:    { bg: 'bg-orange-100 dark:bg-orange-500/15', text: 'text-orange-700 dark:text-orange-400', dot: 'bg-orange-500 dark:bg-orange-400' },
+  system:   { bg: 'bg-gray-100 dark:bg-gray-500/15',    text: 'text-gray-600 dark:text-gray-400',    dot: 'bg-gray-400' },
+  template: { bg: 'bg-purple-100 dark:bg-purple-500/15', text: 'text-purple-700 dark:text-purple-400', dot: 'bg-purple-500 dark:bg-purple-400' },
 }
 
 const TYPE_DOT: Record<string, string> = {
   person: 'bg-blue-400', project: 'bg-emerald-400', idea: 'bg-amber-400',
   resource: 'bg-violet-400', note: 'bg-slate-400', meeting: 'bg-cyan-400',
-  daily: 'bg-gray-400', area: 'bg-pink-400',
+  daily: 'bg-gray-400', area: 'bg-pink-400', group: 'bg-orange-400',
+  system: 'bg-gray-400', template: 'bg-purple-400',
 }
 
 export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse }: Props) {
