@@ -102,7 +102,7 @@ export function SearchBar({ nodes, onSelect }: Props) {
           {results.map(n => (
             <li key={n.id}>
               <button
-                onMouseDown={e => e.preventDefault()}
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation() }}
                 onClick={() => { onSelect(n.id); handleClose() }}
                 className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors cursor-pointer"
               >
