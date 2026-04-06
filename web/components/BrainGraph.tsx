@@ -69,6 +69,29 @@ function createIsolatedGravity(connectedIds: Set<string>, strength = 0.06) {
 }
 
 /**
+ * Pulls nodes toward a target radius based on their type (layered layout).
+ * layerByType maps type → layer index (0 = innermost).
+ */
+function createLayerForce(layerByType: Record<string, number>, layerRadius: number, strength = 0.05) {
+  let simNodes: any[] = []
+  function force() {
+    for (const node of simNodes) {
+      const layer = layerByType[node.type]
+      if (layer === undefined) continue
+      const x = node.x ?? 0
+      const y = node.y ?? 0
+      const r = Math.sqrt(x * x + y * y) || 1
+      const targetR = (layer + 1) * layerRadius
+      const dr = r - targetR
+      node.vx = (node.vx ?? 0) - (x / r) * dr * strength
+      node.vy = (node.vy ?? 0) - (y / r) * dr * strength
+    }
+  }
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  return force
+}
+
+/**
  * Pure-JS collision force compatible with d3-force-3d simulations.
  * Prevents node centres coming closer than `minDist` px.
  */
@@ -124,42 +147,35 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [edges])
 
-  // Physics setup:
-  // - Degree-weighted link distance: high-degree hubs (like Milan) fan out their
-  //   connections instead of pulling everything into one tight ball
-  // - Strong charge pushes distinct clusters apart
-  // - Custom collision prevents overlap, isolated gravity keeps loose nodes near center
+  // Obsidian-style physics:
+  // - Short link distance keeps connected nodes close (organic cluster)
+  // - Weak charge just nudges disconnected nodes apart
+  // - Custom collision prevents overlap inside the cluster
+  // - Isolated gravity pulls degree-0 nodes toward the cluster center
   useEffect(() => {
     const timer = setTimeout(() => {
       const fg = graphRef.current
       if (!fg) return
       const connectedIds = new Set(Object.keys(degreeById))
 
-      fg.d3Force('charge')?.strength(-200)
+      // Build layerByType based on which layer types are actually present
+      const LAYER_ORDER = ['area', 'project', 'person'] as const
+      const presentTypes = new Set(nodes.map(n => n.type))
+      const layerByType: Record<string, number> = {}
+      let layerIdx = 0
+      for (const t of LAYER_ORDER) {
+        if (presentTypes.has(t)) layerByType[t] = layerIdx++
+      }
 
-      // Distance scales with the degree of the higher-degree endpoint.
-      // Low-degree clusters stay tight (~30px); super-hubs fan out (~70px).
-      fg.d3Force('link')
-        ?.distance((link: any) => {
-          const srcId = typeof link.source === 'object' ? link.source.id : link.source
-          const tgtId = typeof link.target === 'object' ? link.target.id : link.target
-          const maxDeg = Math.max(degreeById[srcId] ?? 0, degreeById[tgtId] ?? 0)
-          return 22 + Math.sqrt(maxDeg) * 9
-        })
-        .strength((link: any) => {
-          const srcId = typeof link.source === 'object' ? link.source.id : link.source
-          const tgtId = typeof link.target === 'object' ? link.target.id : link.target
-          const maxDeg = Math.max(degreeById[srcId] ?? 0, degreeById[tgtId] ?? 0)
-          // Weaker links for super-hubs so repulsion can create real separation
-          return Math.max(0.3, 1 - maxDeg * 0.035)
-        })
-
+      fg.d3Force('charge')?.strength(-20)
+      fg.d3Force('link')?.distance(45).strength(0.9)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
+      fg.d3Force('layer', createLayerForce(layerByType, 90, 0.05))
       fg.d3ReheatSimulation()
     }, 30)
     return () => clearTimeout(timer)
-  }, [size, degreeById])
+  }, [size, degreeById, nodes])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
