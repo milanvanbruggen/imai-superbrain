@@ -51,6 +51,17 @@ async function loadNotes() {
   return { noteMap, client }
 }
 
+export function searchNoteMap(
+  noteMap: Map<string, { path: string; title: string; type: string; tags: string[]; content: string }>,
+  query: string
+): { path: string; title: string; type: string }[] {
+  const lower = query.toLowerCase()
+  return Array.from(noteMap.values())
+    .filter(n => n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower))
+    .slice(0, 10)
+    .map(n => ({ path: n.path, title: n.title, type: n.type }))
+}
+
 function createMcpServer() {
   const server = new McpServer({
     name: 'superbrain',
@@ -90,11 +101,7 @@ function createMcpServer() {
     },
     async ({ query }) => {
       const { noteMap } = await loadNotes()
-      const lower = query.toLowerCase()
-      const results = Array.from(noteMap.values())
-        .filter(n => n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower))
-        .slice(0, 10)
-        .map(n => ({ path: n.path, title: n.title, type: n.type }))
+      const results = searchNoteMap(noteMap, query)
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ results }, null, 2) }],
       }
