@@ -18,9 +18,10 @@ export function parseNote(path: string, raw: string): VaultNote {
   const stem = path.split('/').pop()!.replace(/\.md$/, '')
 
   const wikilinksInBody = new Set<string>()
+  const contentWithoutComments = content.replace(/<!--[\s\S]*?-->/g, '')
   const re = new RegExp(WIKILINK_RE.source, 'g')
   let match: RegExpExecArray | null
-  while ((match = re.exec(content)) !== null) {
+  while ((match = re.exec(contentWithoutComments)) !== null) {
     wikilinksInBody.add(match[1])
   }
 

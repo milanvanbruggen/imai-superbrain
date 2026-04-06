@@ -254,7 +254,7 @@ export default function BrainPage() {
 
           {/* System files toggle — top right */}
           <button
-            onClick={() => setShowSystemNodes(v => !v)}
+            onClick={() => { setShowSystemNodes(v => !v); setActiveTypes(new Set()) }}
             title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
             className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
               showSystemNodes
