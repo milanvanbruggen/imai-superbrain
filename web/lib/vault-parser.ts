@@ -13,6 +13,10 @@ function systemType(path: string): 'system' | 'template' | null {
 
 const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'group', 'system', 'template'] as const
 
+function stemToTitle(stem: string): string {
+  return stem.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
   const stem = path.split('/').pop()!.replace(/\.md$/, '')
@@ -33,7 +37,7 @@ export function parseNote(path: string, raw: string): VaultNote {
   return {
     path,
     stem,
-    title: data.title ?? stem,
+    title: data.title ?? stemToTitle(stem),
     type: systemType(path) ?? (VALID_TYPES.includes(data.type) ? data.type : 'note'),
     tags: data.tags ?? [],
     date: data.date instanceof Date

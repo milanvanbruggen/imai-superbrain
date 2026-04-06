@@ -22,13 +22,17 @@ export function extractWikilinks(text: string): string[] {
   return [...seen]
 }
 
+function stemToTitle(stem: string): string {
+  return stem.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 export function parseMarkdown(path: string, raw: string): ParsedNote {
   const { data, content } = matter(raw)
   const stem = path.split('/').pop()!.replace(/\.md$/, '')
   return {
     path,
     stem,
-    title: data.title ?? stem,
+    title: data.title ?? stemToTitle(stem),
     type: data.type ?? 'note',
     tags: Array.isArray(data.tags) ? data.tags : [],
     content,

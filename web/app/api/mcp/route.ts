@@ -178,10 +178,10 @@ function createMcpServer() {
   // write_note
   server.tool(
     'write_note',
-    'Create or update a note in the vault',
+    'Create or update a note in the vault. Use kebab-case for the filename (e.g. groups/digital-dialogues-bestuur.md), but always set a readable "title" field in the frontmatter with spaces and proper capitalisation (e.g. title: Digital Dialogues Bestuur).',
     {
-      path: z.string().describe('Relative path, e.g. inbox/my-note.md'),
-      content: z.string().describe('Full markdown content including frontmatter'),
+      path: z.string().describe('Relative path using kebab-case, e.g. groups/digital-dialogues-bestuur.md'),
+      content: z.string().describe('Full markdown content including frontmatter. The frontmatter title must use spaces and Title Case, not the kebab-case filename.'),
     },
     async ({ path, content }) => {
       const { client } = await loadNotes()
