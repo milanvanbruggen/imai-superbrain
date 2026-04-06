@@ -183,8 +183,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const edgeColor = isDark ? '#2d3748' : '#cbd5e1'
   const edgeColorFocus = isDark ? '#4b5563' : '#94a3b8'
   const edgeColorTyped = isDark ? '#374151' : '#b0bec5'
-  const labelColorDim = isDark ? '#374151' : '#9ca3af'
-  const labelColorActive = isDark ? '#d1d5db' : '#1f2937'
+  const labelColorDim = isDark ? '#9ca3af' : '#6b7280'
+  const labelColorActive = isDark ? '#f3f4f6' : '#1f2937'
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => {
