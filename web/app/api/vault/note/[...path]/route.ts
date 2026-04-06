@@ -22,6 +22,29 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { path: pathSegments } = await params
+  const filePath = pathSegments.join('/')
+  const { sha } = await req.json()
+
+  const stem = filePath.split('/').pop()?.replace(/\.md$/, '') ?? filePath
+  const client = getVaultClient()
+  try {
+    await client.deleteFile(filePath, sha, `brain: delete [[${stem}]]`)
+  } catch {
+    return NextResponse.json({ error: 'Failed to delete note' }, { status: 500 })
+  }
+  invalidateCache()
+
+  return NextResponse.json({ ok: true })
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }

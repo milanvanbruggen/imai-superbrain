@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir, stat, mkdir } from 'fs/promises'
+import { readFile, writeFile, readdir, stat, mkdir, unlink } from 'fs/promises'
 import { join, relative, normalize, dirname } from 'path'
 import { createHash } from 'crypto'
 import type { VaultClient } from './vault-client'
@@ -25,6 +25,11 @@ export class LocalVaultClient implements VaultClient {
     const fullPath = this.resolveSafe(path)
     const content = await readFile(fullPath, 'utf-8')
     return { content, sha: sha1(content) }
+  }
+
+  async deleteFile(path: string, _sha: string, _message: string): Promise<void> {
+    const fullPath = this.resolveSafe(path)
+    await unlink(fullPath)
   }
 
   async writeFile(path: string, content: string, _sha: string | null, _message: string): Promise<void> {

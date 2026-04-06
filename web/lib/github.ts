@@ -62,6 +62,18 @@ export class GitHubVaultClient implements VaultClient {
     return { content, sha: data.sha }
   }
 
+  async deleteFile(path: string, sha: string, message: string): Promise<void> {
+    const res = await fetch(`${this.base}/contents/${path}`, {
+      method: 'DELETE',
+      headers: { ...this.headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, sha }),
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(`Failed to delete file ${path}: ${JSON.stringify(err)}`)
+    }
+  }
+
   async writeFile(path: string, content: string, sha: string | null, message: string): Promise<void> {
     const body: Record<string, unknown> = {
       message,

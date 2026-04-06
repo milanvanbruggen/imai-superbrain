@@ -11,6 +11,7 @@ interface Props {
   allEdges: GraphEdge[]
   allNodes: GraphNode[]
   onNoteUpdated: () => void
+  onNoteDeleted: () => void
   onNavigate: (id: string) => void
   width: number
   collapsed: boolean
@@ -34,12 +35,32 @@ const TYPE_DOT: Record<string, string> = {
   daily: 'bg-gray-400', area: 'bg-pink-400',
 }
 
-export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNavigate, width, collapsed, onToggleCollapse }: Props) {
+export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse }: Props) {
   const [editing, setEditing] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     setEditing(false)
+    setConfirmDelete(false)
   }, [note?.path])
+
+  async function handleDelete() {
+    if (!note) return
+    setDeleting(true)
+    try {
+      const { sha } = await fetch(`/api/vault/note/${note.path}`).then(r => r.json())
+      await fetch(`/api/vault/note/${note.path}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sha }),
+      })
+      onNoteDeleted()
+    } finally {
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   // Collapsed strip: just shows the expand button
   if (collapsed) {
@@ -123,6 +144,33 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
               >
                 {editing ? 'View' : 'Edit'}
               </button>
+              {confirmDelete ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="text-xs px-2.5 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {deleting ? '…' : 'Confirm'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  title="Delete note"
+                  className="p-1.5 rounded-md text-slate-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              )}
               <CollapseButton onToggle={onToggleCollapse} />
             </div>
           </div>

@@ -287,6 +287,7 @@ export default function BrainPage() {
           allEdges={graph.edges}
           allNodes={graph.nodes}
           onNoteUpdated={handleNoteUpdated}
+          onNoteDeleted={() => { setSelectedId(null); loadGraph(); loadInboxCount() }}
           onNavigate={setSelectedId}
           width={panelWidth}
           collapsed={panelCollapsed}
