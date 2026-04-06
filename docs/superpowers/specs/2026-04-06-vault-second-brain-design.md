@@ -8,17 +8,17 @@ Extend the Superbrain system so that Claude Code's persistent memory is visible 
 
 The Superbrain project has an MCP server at `/api/mcp` (deployed on Vercel) with five tools: `list_notes`, `search_notes`, `read_note`, `write_note`, `get_related`. Claude Code (CLI) has its own local memory system at `~/.claude/projects/.../memory/`. These two systems currently don't communicate.
 
-The vault lives at `/Users/milanvanbruggen/Library/Mobile Documents/iCloud~md~obsidian/Documents/Milan's Brain` (local) and is also accessible via GitHub (`GITHUB_VAULT_REPO=superbrain-vault`). Local vault takes priority when `VAULT_PATH` is set.
+The vault lives at `/Users/milanvanbruggen/Library/Mobile Documents/iCloud~md~obsidian/Documents/Milan's Brain` (local, iCloud-backed) and is also accessible via GitHub (`GITHUB_VAULT_REPO=superbrain-vault`). Local vault takes priority when `VAULT_PATH` is set.
 
 ## Architecture
 
-Two independent components that work together:
+Two independent components:
 
-**Component 1 — Sync script**: bidirectional rsync between Claude Code's local memory directory and `Claude/memory/` in the vault. Last-modified-wins. Triggered automatically after Claude Code memory writes via a Claude Code `PostToolUse` hook, and run at session start (vault → local direction) via a CLAUDE.md instruction.
+**Component 1 — Sync script**: bidirectional rsync between Claude Code's local memory directory and `Claude/memory/` in the vault. Last-modified-wins. Triggered automatically after Claude Code memory writes via a `PostToolUse` hook, and run vault → local at session start via a CLAUDE.md instruction.
 
-**Component 2 — MCP context tool**: a new `get_context(topic?)` tool in the existing MCP server. Reads the vault's `Claude/` section and returns relevant context as text. Used by Claude Cowork to load personal context at the start of a conversation.
+**Component 2 — MCP context tool**: a new `get_context(topic?)` tool in the existing MCP server. Reads the vault's `Claude/` section and returns personal context as structured text. Used by Claude Cowork to load context at the start of a conversation.
 
-These two components are independent — the sync script requires no server changes, and the MCP tool works regardless of whether the sync script is active.
+These components are independent — the sync script requires no server changes, and the MCP tool works regardless of whether the sync script is active.
 
 ## Vault Structure
 
@@ -33,7 +33,7 @@ Claude/
     reference.md       — external resources, tools, links Claude has noted
 ```
 
-`Claude/profile.md` and `Claude/active-projects.md` are written and maintained by Milan in Obsidian — they are intentional inputs, not written by Claude. The `Claude/memory/` files are written by Claude via the local memory system and surfaced in Obsidian via sync.
+`Claude/profile.md` and `Claude/active-projects.md` are written and maintained by Milan in Obsidian — intentional inputs, never written by Claude. The `Claude/memory/` files mirror Claude Code's local memory system and are surfaced in Obsidian via sync.
 
 ## Component 1: Sync Script
 
@@ -41,24 +41,62 @@ Claude/
 
 **Behavior:**
 - Bidirectional rsync with `--update` flag (last-modified-wins, no deletions)
-- Direction 1 (local → vault): runs after Claude Code writes a memory file
-- Direction 2 (vault → local): runs at Claude Code session start to pick up Obsidian edits
-- Creates `Claude/memory/` in the vault if it does not exist
-- No conflict resolution beyond last-modified-wins — conflicts are rare since Claude writes frequently and the user edits occasionally
+- `local-to-vault` direction: copies `LOCAL_MEMORY/` → `$VAULT_PATH/Claude/memory/`
+- `vault-to-local` direction: copies `$VAULT_PATH/Claude/memory/` → `LOCAL_MEMORY/`
+- Creates `$VAULT_PATH/Claude/memory/` if it does not exist
+- The script accepts a direction argument: `sync-brain.sh local-to-vault` or `sync-brain.sh vault-to-local`
 
-**Variables:**
+**Path derivation:**
+
+The `LOCAL_MEMORY` path encodes the project's absolute path as a slug (Claude Code convention: replace `/` with `-`). This is machine-specific. The script derives it dynamically from the repo root:
+
+```bash
+REPO_ROOT=$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)
+PROJECT_SLUG=$(echo "$REPO_ROOT" | sed 's|^/||; s|/|-|g')
+LOCAL_MEMORY="$HOME/.claude/projects/$PROJECT_SLUG/memory"
+VAULT_MEMORY="${VAULT_PATH}/Claude/memory"
 ```
-LOCAL_MEMORY=~/.claude/projects/-Users-milanvanbruggen-Web-mai-superbrain/memory
-VAULT=$VAULT_PATH/Claude/memory  # where VAULT_PATH is the Obsidian vault root
+
+`VAULT_PATH` must be set as an environment variable (it is set in `web/.env.local`; the script sources it from there if not already in the environment).
+
+**iCloud sync latency:** the vault is stored inside an iCloud-managed directory. When running `vault-to-local` at session start, iCloud may not have synced the latest Obsidian edits yet. The `--update` flag will correctly skip files where local is newer, but cannot detect iCloud-pending edits. This is an accepted limitation — if the vault appears stale, wait for iCloud to sync and re-run the script.
+
+**Claude Code hook:**
+
+In `~/.claude/settings.json`, add a `PostToolUse` hook on the `Write` tool. The hook always fires on any write, so the script itself checks whether the written file is inside `LOCAL_MEMORY` before running rsync:
+
+```bash
+if [[ "$1" == "local-to-vault" ]]; then
+  # Called from hook with the written file path as $2
+  if [[ "$2" != "$LOCAL_MEMORY"* ]]; then
+    exit 0  # not a memory write, skip
+  fi
+  rsync -av --update "$LOCAL_MEMORY/" "$VAULT_MEMORY/"
+fi
 ```
 
-**Trigger — Claude Code hook:**
+The hook in `~/.claude/settings.json`:
+```json
+"hooks": {
+  "PostToolUse": [{
+    "matcher": "Write",
+    "hooks": [{
+      "type": "command",
+      "command": "bash /path/to/scripts/sync-brain.sh local-to-vault \"${TOOL_INPUT_PATH}\""
+    }]
+  }]
+}
+```
 
-In `~/.claude/settings.json`, add a `PostToolUse` hook on the `Write` tool that runs `sync-brain.sh local-to-vault` whenever Claude writes a file inside the memory directory.
+**Session-start trigger:**
 
-**Trigger — session start:**
+In the root `CLAUDE.md` (not `web/CLAUDE.md` — Claude Code reads from the project root during session initialization), add:
 
-In `web/CLAUDE.md` (or root `CLAUDE.md`), add an instruction: "At the start of each session, run `scripts/sync-brain.sh vault-to-local` to pull in any changes made in Obsidian."
+```markdown
+## Memory sync
+At the start of each session, run: `bash scripts/sync-brain.sh vault-to-local`
+This pulls any changes made in Obsidian into local memory.
+```
 
 ## Component 2: `get_context` MCP Tool
 
@@ -69,36 +107,82 @@ In `web/CLAUDE.md` (or root `CLAUDE.md`), add an instruction: "At the start of e
 get_context(topic?: string) → text
 ```
 
+**Implementation approach:**
+
+For the base reads (the `Claude/` files), use `getVaultClient().readFile()` directly — do NOT call `loadNotes()`, which loads the entire vault. Only load the full note index when `topic` is supplied.
+
+The existing `search_notes` tool logic lives inside an anonymous callback and cannot be called directly. Extract it into a shared helper before implementing `get_context`:
+
+```typescript
+function searchNoteMap(
+  noteMap: Map<string, { path: string; title: string; type: string; tags: string[]; content: string }>,
+  query: string
+) {
+  const lower = query.toLowerCase()
+  return Array.from(noteMap.values())
+    .filter(n => n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower))
+    .slice(0, 10)
+    .map(n => ({ path: n.path, title: n.title, type: n.type }))
+}
+```
+
+Both `search_notes` and `get_context` (when topic is given) call this helper.
+
 **Behavior:**
 
-1. Always reads: `Claude/profile.md`, `Claude/active-projects.md`, and all files in `Claude/memory/` (user.md, feedback.md, project.md, reference.md). Missing files are silently skipped.
-2. If `topic` is provided: also calls the existing `search_notes` logic to find relevant vault notes matching the topic.
-3. Returns all content concatenated as a single text block with section headers.
+1. Call `getVaultClient()`. If this throws (vault not configured), catch it and return an empty context string — do not propagate the error.
+2. For each of the six `Claude/` files, attempt `client.readFile(path)`. Missing files are silently skipped (catch per file).
+3. If `topic` is provided: call `loadNotes()` and `searchNoteMap(noteMap, topic)` to find relevant notes. Append results.
+4. Concatenate all content and return as structured text.
 
-**Usage:** Claude Cowork calls `get_context(topic)` at the start of a conversation, or when it needs personal context to answer a question. This replaces manually prompting "who am I" every session.
+**Return format:**
 
-**Error handling:** if no `Claude/` files exist yet, returns an empty string with a note that no context has been set up. Does not throw.
+```
+## Profile
+<content of Claude/profile.md, or "(not set up yet)">
+
+## Active Projects
+<content of Claude/active-projects.md, or "(not set up yet)">
+
+## Memory: User
+<content of Claude/memory/user.md, or "(empty)">
+
+## Memory: Feedback
+<content of Claude/memory/feedback.md, or "(empty)">
+
+## Memory: Projects
+<content of Claude/memory/project.md, or "(empty)">
+
+## Memory: References
+<content of Claude/memory/reference.md, or "(empty)">
+
+## Related Notes (topic: "<topic>")   ← only present when topic is supplied
+- path/to/note.md — Note Title
+...
+```
+
+If the vault is not configured and all reads fail, return: `"(No personal context configured. Create Claude/profile.md in your vault to get started.)"`
 
 ## New Files
 
 | File | Action | Purpose |
 |---|---|---|
 | `scripts/sync-brain.sh` | Create | Bidirectional memory sync |
-| `web/app/api/mcp/route.ts` | Modify | Add `get_context` tool |
+| `web/app/api/mcp/route.ts` | Modify | Extract `searchNoteMap` helper, add `get_context` tool |
 | `~/.claude/settings.json` | Modify | Add PostToolUse hook for sync |
-| `web/CLAUDE.md` | Modify | Add session-start sync instruction |
+| `CLAUDE.md` (root) | Modify | Add session-start sync instruction |
 
 ## Vault Bootstrap
 
-Before the system is useful, `Claude/profile.md` and `Claude/active-projects.md` need to exist. These are created manually by Milan in Obsidian — no code creates them. A `Claude/memory/` folder with empty placeholder files is created by the sync script on first run.
+`Claude/profile.md` and `Claude/active-projects.md` are created manually by Milan in Obsidian before using the system. The sync script creates `Claude/memory/` on first run. Until the bootstrap notes exist, `get_context` returns the graceful placeholder strings above.
 
 ## Out of Scope
 
 - Conflict resolution beyond last-modified-wins
 - Syncing Claude Code memories from other projects
 - Automatic creation of `profile.md` or `active-projects.md`
-- `write_memory` MCP tool (not needed — local memory + sync covers this)
-- Vault → Vercel sync (GitHub vault variant not addressed; `get_context` works with local vault only via `VAULT_PATH`)
+- `write_memory` MCP tool (local memory + sync covers this)
+- GitHub vault variant for `get_context` (only `VAULT_PATH` / `LocalVaultClient` is addressed; remote vault would require the Vercel function to have different access)
 
 ## Security Notes
 
