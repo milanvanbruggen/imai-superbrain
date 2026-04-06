@@ -69,7 +69,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   return (
     <aside
       style={{ width }}
-      className="border-l border-slate-200 dark:border-gray-800/60 overflow-y-auto flex flex-col bg-white dark:bg-gray-950 shrink-0"
+      className="relative border-l border-slate-200 dark:border-gray-800/60 overflow-y-auto flex flex-col bg-white dark:bg-gray-950 shrink-0"
     >
       {/* Empty state */}
       {(!node || !note) && (
