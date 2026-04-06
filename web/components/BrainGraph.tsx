@@ -219,7 +219,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           linkDirectionalArrowLength={0}
           d3AlphaDecay={0.04}
           d3VelocityDecay={0.6}
-          cooldownTicks={120}
+          warmupTicks={100}
+          cooldownTicks={0}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
