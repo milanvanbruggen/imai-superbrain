@@ -297,7 +297,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             ctx.lineTo(tgt.x, tgt.y)
             ctx.strokeStyle = color
             ctx.lineWidth = 0.8 / globalScale
-            ctx.setLineDash(isPerson2Person ? [3, 3] : [])
+            ctx.setLineDash(isPerson2Person ? [4 / globalScale, 4 / globalScale] : [])
             ctx.stroke()
             ctx.setLineDash([])
           }}
