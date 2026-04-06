@@ -36,31 +36,60 @@ async function createEditor(
 
 export function NoteEditor({ note, onSaved }: Props) {
   const editorRef = useRef<HTMLDivElement>(null)
-  const [content, setContent] = useState(note.content)
+  const [content, setContent] = useState('')
+  const [sha, setSha] = useState<string | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const viewRef = useRef<Awaited<ReturnType<typeof createEditor>> | undefined>(undefined)
 
   useEffect(() => {
-    if (!editorRef.current) return
-    let view: Awaited<ReturnType<typeof createEditor>> | undefined
-    createEditor(editorRef.current, note.content, setContent).then(v => {
-      view = v
-    })
-    return () => view?.destroy()
+    let cancelled = false
+
+    async function init() {
+      if (!editorRef.current) return
+
+      // Fetch full raw content (including frontmatter) from API
+      const res = await fetch(`/api/vault/note/${note.path}`)
+      if (!res.ok || cancelled) return
+      const { content: rawContent, sha: rawSha } = await res.json()
+
+      if (cancelled) return
+      setSha(rawSha)
+      setContent(rawContent)
+
+      // Destroy previous editor if any
+      viewRef.current?.destroy()
+
+      const view = await createEditor(editorRef.current!, rawContent, setContent)
+      if (cancelled) {
+        view.destroy()
+        return
+      }
+      viewRef.current = view
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+      viewRef.current?.destroy()
+      viewRef.current = undefined
+    }
   }, [note.path])
 
   async function handleSave() {
     setSaving(true)
     setError(null)
     try {
+      // Re-fetch SHA in case it changed since editor opened
       const getRes = await fetch(`/api/vault/note/${note.path}`)
       if (!getRes.ok) throw new Error('Failed to fetch note SHA')
-      const { sha } = await getRes.json()
+      const { sha: latestSha } = await getRes.json()
 
       const res = await fetch(`/api/vault/note/${note.path}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, sha }),
+        body: JSON.stringify({ content, sha: latestSha }),
       })
       if (!res.ok) throw new Error('Save failed')
       onSaved()
