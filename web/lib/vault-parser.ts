@@ -11,7 +11,7 @@ function systemType(path: string): 'system' | 'template' | null {
   return null
 }
 
-const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'system', 'template'] as const
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'group', 'system', 'template'] as const
 
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
