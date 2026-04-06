@@ -21,6 +21,24 @@ export class LocalVaultClient implements VaultClient {
     )
   }
 
+  async getSystemFiles(dirs: string[]): Promise<{ path: string }[]> {
+    const results: { path: string }[] = []
+    for (const dir of dirs) {
+      const fullDir = join(this.vaultPath, dir)
+      try {
+        const entries = await readdir(fullDir)
+        for (const entry of entries) {
+          if (entry.endsWith('.md')) {
+            results.push({ path: `${dir}/${entry}` })
+          }
+        }
+      } catch {
+        // Directory doesn't exist — skip
+      }
+    }
+    return results
+  }
+
   async readFile(path: string): Promise<{ content: string; sha: string }> {
     const fullPath = this.resolveSafe(path)
     const content = await readFile(fullPath, 'utf-8')

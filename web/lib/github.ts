@@ -54,6 +54,27 @@ export class GitHubVaultClient implements VaultClient {
       .map((item: any) => ({ path: item.path, sha: item.sha }))
   }
 
+  async getSystemFiles(dirs: string[]): Promise<{ path: string }[]> {
+    const branch = this.config.branch ?? 'main'
+    const branchRes = await fetch(`${this.base}/branches/${branch}`, { headers: this.headers })
+    if (!branchRes.ok) throw new Error(`Failed to get branch: ${branchRes.status}`)
+    const branchData = await branchRes.json()
+    const treeSha = branchData.commit.sha
+
+    const treeRes = await fetch(`${this.base}/git/trees/${treeSha}?recursive=1`, { headers: this.headers })
+    if (!treeRes.ok) throw new Error(`Failed to get tree: ${treeRes.status}`)
+    const tree = await treeRes.json()
+
+    const dirSet = new Set(dirs)
+    return (tree.tree as any[])
+      .filter((item: any) => {
+        if (item.type !== 'blob' || !item.path.endsWith('.md')) return false
+        const topDir = item.path.split('/')[0]
+        return dirSet.has(topDir)
+      })
+      .map((item: any) => ({ path: item.path }))
+  }
+
   async readFile(path: string): Promise<FileContent> {
     const res = await fetch(`${this.base}/contents/${path}`, { headers: this.headers })
     if (!res.ok) throw new Error(`Failed to read file ${path}: ${res.status}`)

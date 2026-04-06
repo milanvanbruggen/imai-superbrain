@@ -3,6 +3,7 @@ import { LocalVaultClient } from './local'
 
 export interface VaultClient {
   getMarkdownTree(): Promise<{ path: string; sha: string }[]>
+  getSystemFiles(dirs: string[]): Promise<{ path: string }[]>
   readFile(path: string): Promise<{ content: string; sha: string }>
   writeFile(path: string, content: string, sha: string | null, message: string): Promise<void>
   deleteFile(path: string, sha: string, message: string): Promise<void>

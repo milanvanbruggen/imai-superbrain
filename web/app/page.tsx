@@ -7,6 +7,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
+import { SystemFilesModal } from '@/components/SystemFilesModal'
 
 const MIN_PANEL_WIDTH = 280
 const MAX_PANEL_WIDTH = 700
@@ -19,6 +20,7 @@ export default function BrainPage() {
   const [error, setError] = useState<string | null>(null)
   const [showNewNote, setShowNewNote] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showSystemFiles, setShowSystemFiles] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [inboxFilter, setInboxFilter] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
@@ -221,6 +223,15 @@ export default function BrainPage() {
             + New Note
           </button>
           <button
+            onClick={() => setShowSystemFiles(true)}
+            title="System files"
+            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+          </button>
+          <button
             onClick={() => setShowSettings(true)}
             title="Vault settings"
             className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
@@ -297,6 +308,9 @@ export default function BrainPage() {
 
       {showSettings && (
         <SettingsModal onClose={() => setShowSettings(false)} />
+      )}
+      {showSystemFiles && (
+        <SystemFilesModal onClose={() => setShowSystemFiles(false)} />
       )}
       {showNewNote && (
         <NewNoteModal
