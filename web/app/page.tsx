@@ -264,10 +264,10 @@ export default function BrainPage() {
           >
             <span className="text-xs">System</span>
             {/* Toggle pill */}
-            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
-              showSystemNodes ? 'bg-teal-500 border-teal-500' : 'bg-gray-300 dark:bg-gray-700 border-gray-300 dark:border-gray-700'
+            <span className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
+              showSystemNodes ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
             }`}>
-              <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 mt-0.5 ${
+              <span className={`absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${
                 showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'
               }`} />
             </span>
