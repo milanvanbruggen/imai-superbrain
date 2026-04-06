@@ -13,7 +13,7 @@ interface Props {
   nodes: GraphNode[]
   edges: GraphEdge[]
   selectedId: string | null
-  onSelectNode: (id: string) => void
+  onSelectNode: (id: string | null) => void
   activeTypes: Set<string>
 }
 
@@ -181,6 +181,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           d3AlphaDecay={0.012}
           d3VelocityDecay={0.4}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
+          onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { GraphNode } from '@/lib/types'
 
 interface Props {
@@ -92,8 +93,8 @@ export function SearchBar({ nodes, onSelect }: Props) {
         />
       </div>
 
-      {/* Fixed-position dropdown — escapes overflow-hidden parents */}
-      {open && results.length > 0 && (
+      {/* Portal dropdown — renders in document.body to escape any stacking context */}
+      {open && results.length > 0 && typeof document !== 'undefined' && createPortal(
         <ul
           style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, zIndex: 9999 }}
           className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-md overflow-hidden shadow-xl"
@@ -111,7 +112,8 @@ export function SearchBar({ nodes, onSelect }: Props) {
               </button>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )
