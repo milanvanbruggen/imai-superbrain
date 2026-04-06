@@ -55,18 +55,22 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
-  // Apply forces once the graph is mounted. Called via onEngineStop so the
-  // ref is guaranteed to be populated, then re-heat to spread from new config.
-  const forcesApplied = useRef(false)
-  function applyForces() {
-    if (forcesApplied.current) return
-    const fg = graphRef.current
-    if (!fg) return
-    forcesApplied.current = true
-    fg.d3Force('charge')?.strength(-2500)
-    fg.d3Force('link')?.distance(180).strength(0.05)
-    fg.d3ReheatSimulation()
-  }
+  // Apply forces after the graph has initialised.
+  // forceCenter is the main culprit: it constantly pulls everything toward
+  // (0,0), overpowering even very strong charge repulsion.
+  // Solution: remove center force, crank up charge, weaken links.
+  useEffect(() => {
+    if (!size) return
+    const timer = setTimeout(() => {
+      const fg = graphRef.current
+      if (!fg) return
+      fg.d3Force('center', null)           // remove centering pull
+      fg.d3Force('charge')?.strength(-4000)
+      fg.d3Force('link')?.distance(160).strength(0.04)
+      fg.d3ReheatSimulation()
+    }, 50)
+    return () => clearTimeout(timer)
+  }, [size])
 
   const degreeById = useMemo(() => {
     const map: Record<string, number> = {}
@@ -93,21 +97,30 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const labelColorDim = isDark ? '#4b5563' : '#9ca3af'
   const labelColorFocus = isDark ? '#e5e7eb' : '#1f2937'
 
-  const graphData = useMemo(() => ({
-    nodes: nodes.map(n => {
-      const deg = degreeById[n.id] ?? 0
-      return {
-        ...n,
-        color: TYPE_COLORS[n.type] ?? '#94a3b8',
-        val: deg === 0 ? 0.3 : Math.min(0.5 + deg * 0.25, 2.5),
-      }
-    }),
-    links: edges.map(e => ({
-      source: e.source,
-      target: e.target,
-      typed: e.typed,
-    })),
-  }), [nodes, edges, degreeById])
+  // Pre-position nodes in a circle so the simulation starts spread out
+  const graphData = useMemo(() => {
+    const cx = (size?.width ?? 600) / 2
+    const cy = (size?.height ?? 400) / 2
+    const r = Math.min(cx, cy) * 0.7
+    return {
+      nodes: nodes.map((n, i) => {
+        const deg = degreeById[n.id] ?? 0
+        const angle = (i / nodes.length) * 2 * Math.PI
+        return {
+          ...n,
+          color: TYPE_COLORS[n.type] ?? '#94a3b8',
+          val: deg === 0 ? 0.3 : Math.min(0.5 + deg * 0.25, 2.5),
+          x: cx + r * Math.cos(angle),
+          y: cy + r * Math.sin(angle),
+        }
+      }),
+      links: edges.map(e => ({
+        source: e.source,
+        target: e.target,
+        typed: e.typed,
+      })),
+    }
+  }, [nodes, edges, degreeById, size])
 
   // Focus: hovered takes priority over selected
   const focusId = hoveredId ?? selectedId
@@ -131,10 +144,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={3}
           linkDirectionalArrowRelPos={1}
-          d3AlphaDecay={0.015}
-          d3VelocityDecay={0.25}
-          warmupTicks={60}
-          onEngineStop={applyForces}
+          d3AlphaDecay={0.01}
+          d3VelocityDecay={0.3}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           backgroundColor={bgColor}
@@ -149,7 +160,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const x = node.x as number
             const y = node.y as number
 
-            // Selection / hover ring
             if (isSelected || isHovered) {
               ctx.globalAlpha = 0.2
               ctx.beginPath()
@@ -158,14 +168,12 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
               ctx.fill()
             }
 
-            // Node dot
             ctx.globalAlpha = dimmed ? 0.07 : 1
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
             ctx.fillStyle = node.color as string
             ctx.fill()
 
-            // Label: always for focused cluster; for others only when zoomed in
             const showLabel = isFocused || globalScale > 1.2
             if (showLabel) {
               const label = truncate((node.title as string) ?? nodeId)
@@ -186,10 +194,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const tgt = link.target as any
             const srcId: string = src?.id ?? src
             const tgtId: string = tgt?.id ?? tgt
-            const srcType: string = src?.type ?? ''
-            const tgtType: string = tgt?.type ?? ''
-            const srcDimmed = isNodeDimmed(srcId, srcType)
-            const tgtDimmed = isNodeDimmed(tgtId, tgtType)
+            const srcDimmed = isNodeDimmed(srcId, src?.type ?? '')
+            const tgtDimmed = isNodeDimmed(tgtId, tgt?.type ?? '')
             const baseColor = (link.typed as boolean) ? '#f97316' : defaultLinkColor
             if (srcDimmed && tgtDimmed) return isDark ? '#1a2030' : '#f3f4f6'
             if (srcDimmed || tgtDimmed) return baseColor + '44'
