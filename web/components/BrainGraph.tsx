@@ -91,7 +91,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     const timer = setTimeout(() => {
       const fg = graphRef.current
       if (!fg) return
-      fg.d3Force('charge')?.strength(-40)
+      fg.d3Force('charge')?.strength(-20)
       fg.d3Force('link')?.distance(45).strength(0.9)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3ReheatSimulation()
