@@ -41,8 +41,16 @@ export class GitHubVaultClient implements VaultClient {
     if (!treeRes.ok) throw new Error(`Failed to get tree: ${treeRes.status}`)
     const tree = await treeRes.json()
 
+    const EXCLUDED = new Set(['CLAUDE.md', 'memory.md'])
+    const EXCLUDED_DIRS = new Set(['Claude', 'templates', 'archive'])
     return (tree.tree as any[])
-      .filter((item: any) => item.type === 'blob' && item.path.endsWith('.md'))
+      .filter((item: any) => {
+        if (item.type !== 'blob' || !item.path.endsWith('.md')) return false
+        const parts = item.path.split('/')
+        if (parts.length === 1 && EXCLUDED.has(parts[0])) return false
+        if (EXCLUDED_DIRS.has(parts[0])) return false
+        return true
+      })
       .map((item: any) => ({ path: item.path, sha: item.sha }))
   }
 

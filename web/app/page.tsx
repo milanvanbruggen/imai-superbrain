@@ -246,7 +246,7 @@ export default function BrainPage() {
           />
 
           {/* Type filter overlay */}
-          <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5 max-w-xs pointer-events-none">
+          <div className="absolute top-3 left-3 right-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none" style={{ scrollbarWidth: 'none' }}>
             {availableTypes.map(type => {
               const isActive = activeTypes.size === 0 || activeTypes.has(type)
               const color = TYPE_COLORS[type] ?? '#94a3b8'
