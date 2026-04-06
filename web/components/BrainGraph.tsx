@@ -68,6 +68,30 @@ function createCenterGravity(strength = 0.03) {
 }
 
 /**
+ * Pulls nodes toward a target radius based on their BFS depth from the
+ * central node. Depth 1 = areas, depth 2 = projects/people, depth 3 = leaf people.
+ * This creates a natural radial ordering without enforcing strict type-based rings.
+ */
+function createDepthRadialForce(depthById: Record<string, number>, layerRadius: number, strength = 0.05) {
+  let simNodes: any[] = []
+  function force() {
+    for (const node of simNodes) {
+      const depth = depthById[node.id]
+      if (depth === undefined || depth === 0) continue
+      const x = node.x ?? 0
+      const y = node.y ?? 0
+      const r = Math.sqrt(x * x + y * y) || 1
+      const targetR = depth * layerRadius
+      const dr = r - targetR
+      node.vx = (node.vx ?? 0) - (x / r) * dr * strength
+      node.vy = (node.vy ?? 0) - (y / r) * dr * strength
+    }
+  }
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  return force
+}
+
+/**
  * Pure-JS collision force compatible with d3-force-3d simulations.
  * Prevents node centres coming closer than `minDist` px.
  */
@@ -123,6 +147,30 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [edges])
 
+  // BFS depth from the highest-degree node (the vault owner / central hub).
+  // Determines which radial shell each node belongs to.
+  const depthById = useMemo(() => {
+    const rootId = Object.entries(degreeById).sort((a, b) => b[1] - a[1])[0]?.[0]
+    if (!rootId) return {} as Record<string, number>
+    const adj: Record<string, string[]> = {}
+    edges.forEach(e => {
+      ;(adj[e.source] ??= []).push(e.target)
+      ;(adj[e.target] ??= []).push(e.source)
+    })
+    const depth: Record<string, number> = { [rootId]: 0 }
+    const queue = [rootId]
+    while (queue.length) {
+      const cur = queue.shift()!
+      for (const nb of adj[cur] ?? []) {
+        if (depth[nb] === undefined) {
+          depth[nb] = depth[cur] + 1
+          queue.push(nb)
+        }
+      }
+    }
+    return depth
+  }, [edges, degreeById])
+
   // Organic physics:
   // - Charge -60 with distanceMax 120: repels nearby nodes (local spread)
   //   but doesn't push distant clusters apart — lets topology form clusters
@@ -154,6 +202,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         return 60
       }).strength(1.1)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
+      fg.d3Force('depthRadial', createDepthRadialForce(depthById, 80, 0.05))
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
@@ -162,7 +211,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
     applyForces()
     return () => clearTimeout(timer)
-  }, [size])
+  }, [size, depthById])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
@@ -243,23 +292,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
             const color = node.color as string
             const alpha = dimmed ? 0.08 : 1
-
-            // Cluster halo for area and project nodes — soft radial blob that
-            // visually encloses their connected neighbors
-            if ((nodeType === 'area' || nodeType === 'project') && isFinite(x) && isFinite(y)) {
-              const haloR = nodeType === 'area' ? 72 : 52
-              const haloAlpha = (nodeType === 'area' ? 0.11 : 0.08) * (dimmed ? 0.15 : 1)
-              const haloGrad = ctx.createRadialGradient(x, y, 0, x, y, haloR)
-              const hex = Math.round(haloAlpha * 255).toString(16).padStart(2, '0')
-              haloGrad.addColorStop(0,   color + hex)
-              haloGrad.addColorStop(0.6, color + Math.round(haloAlpha * 0.6 * 255).toString(16).padStart(2, '0'))
-              haloGrad.addColorStop(1,   color + '00')
-              ctx.globalAlpha = 1
-              ctx.beginPath()
-              ctx.arc(x, y, haloR, 0, 2 * Math.PI)
-              ctx.fillStyle = haloGrad
-              ctx.fill()
-            }
 
             // Selection / hover ring
             if (isSelected || isHovered) {
