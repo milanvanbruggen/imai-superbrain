@@ -226,7 +226,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           onEngineStop={() => {
             if (!initialZoomDone.current) {
               initialZoomDone.current = true
-              graphRef.current?.zoomToFit(600, 60)
+              graphRef.current?.zoomToFit(0, 60)
             }
           }}
           backgroundColor={bgColor}
