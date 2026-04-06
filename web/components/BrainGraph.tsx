@@ -37,6 +37,23 @@ function truncate(s: string, max = 20): string {
 }
 
 /**
+ * Pure-JS gravity force for isolated nodes (degree 0).
+ * Pulls them toward the origin so they stay near the main cluster.
+ */
+function createIsolatedGravity(connectedIds: Set<string>, strength = 0.06) {
+  let simNodes: any[] = []
+  function force() {
+    for (const node of simNodes) {
+      if (connectedIds.has(node.id)) continue
+      node.vx = (node.vx ?? 0) - (node.x ?? 0) * strength
+      node.vy = (node.vy ?? 0) - (node.y ?? 0) * strength
+    }
+  }
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  return force
+}
+
+/**
  * Pure-JS collision force compatible with d3-force-3d simulations.
  * Prevents node centres coming closer than `minDist` px.
  */
@@ -58,7 +75,7 @@ function createCollideForce(minDist: number) {
       }
     }
   }
-  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  ; (force as any).initialize = (nodes: any[]) => { simNodes = nodes }
   return force
 }
 
@@ -83,22 +100,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
-  // Obsidian-style physics:
-  // - Short link distance keeps connected nodes close (organic cluster)
-  // - Weak charge just nudges disconnected nodes apart
-  // - Custom collision prevents overlap inside the cluster
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const fg = graphRef.current
-      if (!fg) return
-      fg.d3Force('charge')?.strength(-20)
-      fg.d3Force('link')?.distance(45).strength(0.9)
-      fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
-      fg.d3ReheatSimulation()
-    }, 30)
-    return () => clearTimeout(timer)
-  }, [size])
-
   const degreeById = useMemo(() => {
     const map: Record<string, number> = {}
     edges.forEach(e => {
@@ -107,6 +108,25 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     })
     return map
   }, [edges])
+
+  // Obsidian-style physics:
+  // - Short link distance keeps connected nodes close (organic cluster)
+  // - Weak charge just nudges disconnected nodes apart
+  // - Custom collision prevents overlap inside the cluster
+  // - Isolated gravity pulls degree-0 nodes toward the cluster center
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const fg = graphRef.current
+      if (!fg) return
+      const connectedIds = new Set(Object.keys(degreeById))
+      fg.d3Force('charge')?.strength(-20)
+      fg.d3Force('link')?.distance(45).strength(0.9)
+      fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
+      fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
+      fg.d3ReheatSimulation()
+    }, 30)
+    return () => clearTimeout(timer)
+  }, [size, degreeById])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
