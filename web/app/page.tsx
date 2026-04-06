@@ -119,6 +119,15 @@ export default function BrainPage() {
 
   useEffect(() => { loadGraph(); loadInboxCount() }, [])
 
+  // Escape key deselects
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSelectedId(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // Auto-expand panel when a node is selected
   useEffect(() => {
     if (selectedId && panelCollapsed) {
@@ -188,7 +197,7 @@ export default function BrainPage() {
   const displayEdges = baseEdges
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100" onClick={() => setSelectedId(null)}>
       <header className="flex items-center gap-4 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-md bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shrink-0">
@@ -241,7 +250,7 @@ export default function BrainPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0" onClick={e => e.stopPropagation()}>
         {/* Graph fills all remaining space — ResizeObserver in BrainGraph keeps it centered */}
         <main className="flex-1 relative overflow-hidden min-w-0">
           <BrainGraph
