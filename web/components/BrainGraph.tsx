@@ -102,6 +102,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const initialZoomDone = useRef(false)
+  const [graphReady, setGraphReady] = useState(false)
 
   useEffect(() => setMounted(true), [])
 
@@ -209,7 +210,15 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div
+      ref={containerRef}
+      className="w-full h-full"
+      style={{
+        opacity: graphReady ? 1 : 0,
+        transform: graphReady ? 'scale(1)' : 'scale(0.96)',
+        transition: 'opacity 0.5s ease, transform 0.5s ease',
+      }}
+    >
       {size && (
         <ForceGraph2D
           ref={graphRef}
@@ -228,6 +237,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             if (!initialZoomDone.current) {
               initialZoomDone.current = true
               graphRef.current?.zoomToFit(0, 60)
+              setGraphReady(true)
             }
           }}
           backgroundColor={bgColor}
