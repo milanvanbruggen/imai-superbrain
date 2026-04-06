@@ -266,7 +266,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             ctx.globalAlpha = 1
           }}
           nodeCanvasObjectMode={() => 'replace'}
-          linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D) => {
+          linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const src = link.source as any
             const tgt = link.target as any
             if (src?.x == null || tgt?.x == null) return
@@ -296,7 +296,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             ctx.moveTo(src.x, src.y)
             ctx.lineTo(tgt.x, tgt.y)
             ctx.strokeStyle = color
-            ctx.lineWidth = 0.8
+            ctx.lineWidth = 0.8 / globalScale
             ctx.setLineDash(isPerson2Person ? [3, 3] : [])
             ctx.stroke()
             ctx.setLineDash([])
