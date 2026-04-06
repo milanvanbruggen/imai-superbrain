@@ -24,6 +24,7 @@ export default function BrainPage() {
   const [inboxCount, setInboxCount] = useState(0)
   const [inboxFilter, setInboxFilter] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
+  const [showSystemNodes, setShowSystemNodes] = useState(false)
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -163,8 +164,10 @@ export default function BrainPage() {
 
   if (!graph) return null
 
-  const baseNodes = inboxFilter ? graph.nodes.filter(n => n.path.startsWith('inbox/')) : graph.nodes
-  const baseEdges = inboxFilter ? graph.edges.filter(e => baseNodes.some(n => n.id === e.source)) : graph.edges
+  const allNodes = showSystemNodes ? graph.nodes : graph.nodes.filter(n => n.type !== 'system')
+  const allEdges = showSystemNodes ? graph.edges : graph.edges.filter(e => allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target))
+  const baseNodes = inboxFilter ? allNodes.filter(n => n.path.startsWith('inbox/')) : allNodes
+  const baseEdges = inboxFilter ? allEdges.filter(e => baseNodes.some(n => n.id === e.source)) : allEdges
 
   function toggleType(type: string) {
     setActiveTypes(prev => {
@@ -258,7 +261,24 @@ export default function BrainPage() {
 
           {/* Type filter overlay */}
           <div className="absolute top-3 left-3 right-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none" style={{ scrollbarWidth: 'none' }}>
-            {availableTypes.map(type => {
+            {graph.nodes.some(n => n.type === 'system') && (
+              <button
+                onClick={() => setShowSystemNodes(v => !v)}
+                title={showSystemNodes ? 'Hide system files' : 'Show system files'}
+                className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                  showSystemNodes
+                    ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
+                    : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
+                }`}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={showSystemNodes ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}>
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M9 9h6M9 12h6M9 15h4"/>
+                </svg>
+                system
+              </button>
+            )}
+            {availableTypes.filter(t => t !== 'system').map(type => {
               const isActive = activeTypes.size === 0 || activeTypes.has(type)
               const color = TYPE_COLORS[type] ?? '#94a3b8'
               return (

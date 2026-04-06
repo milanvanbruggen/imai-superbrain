@@ -70,16 +70,14 @@ export class LocalVaultClient implements VaultClient {
     const entries = await readdir(dir)
     const nested = await Promise.all(
       entries.map(async entry => {
-        // Skip hidden dirs and Claude-system directories at vault root
+        // Skip hidden dirs and archive at vault root
         if (entry.startsWith('.')) return []
-        if (depth === 0 && (entry === 'Claude' || entry === 'templates' || entry === 'archive')) return []
+        if (depth === 0 && entry === 'archive') return []
         const fullPath = join(dir, entry)
         const info = await stat(fullPath)
         if (info.isDirectory()) {
           return this.findMarkdownFiles(fullPath, depth + 1)
         } else if (entry.endsWith('.md')) {
-          // Skip Claude-system files at vault root
-          if (depth === 0 && (entry === 'CLAUDE.md' || entry === 'memory.md')) return []
           return [fullPath]
         }
         return []

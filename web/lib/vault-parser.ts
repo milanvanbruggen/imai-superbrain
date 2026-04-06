@@ -3,7 +3,14 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
-const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area'] as const
+const SYSTEM_PATHS = new Set(['CLAUDE.md', 'memory.md'])
+const SYSTEM_DIRS = ['Claude/', 'templates/']
+
+function isSystemPath(path: string): boolean {
+  return SYSTEM_PATHS.has(path) || SYSTEM_DIRS.some(d => path.startsWith(d))
+}
+
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'system'] as const
 
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
@@ -25,7 +32,7 @@ export function parseNote(path: string, raw: string): VaultNote {
     path,
     stem,
     title: data.title ?? stem,
-    type: VALID_TYPES.includes(data.type) ? data.type : 'note',
+    type: VALID_TYPES.includes(data.type) ? data.type : isSystemPath(path) ? 'system' : 'note',
     tags: data.tags ?? [],
     date: data.date
       ? data.date instanceof Date
