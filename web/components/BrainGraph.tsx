@@ -28,83 +28,38 @@ export const TYPE_COLORS: Record<string, string> = {
   area: '#EC4899',
 }
 
-const NODE_REL_SIZE = 4
-// Minimum arc distance between nodes on the same ring — guarantees labels don't overlap
-const MIN_ARC_SPACING = 130
-// Minimum radial gap between consecutive rings
-const MIN_RING_GAP = 180
+const NODE_REL_SIZE = 3.5
+// Minimum distance between node centres — keeps the compact organic cluster readable
+const COLLIDE_DIST = 20
 
 function truncate(s: string, max = 20): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
 }
 
 /**
- * BFS radial layout — hub at centre, each BFS ring placed at the radius
- * required to give all nodes on that ring at least MIN_ARC_SPACING of space.
- * Returns a Map of nodeId → {x, y} in graph coordinate space (hub at 0,0).
+ * Pure-JS collision force compatible with d3-force-3d simulations.
+ * Prevents node centres coming closer than `minDist` px.
  */
-function computeRadialPositions(
-  nodes: GraphNode[],
-  edges: GraphEdge[]
-): Map<string, { x: number; y: number }> {
-  const adj: Record<string, Set<string>> = {}
-  nodes.forEach(n => { adj[n.id] = new Set() })
-  edges.forEach(e => {
-    adj[e.source]?.add(e.target)
-    adj[e.target]?.add(e.source)
-  })
-
-  const degree = (id: string) => adj[id]?.size ?? 0
-  const hub = [...nodes].sort((a, b) => degree(b.id) - degree(a.id))[0]
-  const pos = new Map<string, { x: number; y: number }>()
-  const visited = new Set<string>()
-
-  if (!hub) return pos
-
-  pos.set(hub.id, { x: 0, y: 0 })
-  visited.add(hub.id)
-
-  let frontier = [hub.id]
-  let currentRadius = 0
-
-  while (frontier.length > 0) {
-    const next: string[] = []
-    frontier.forEach(id => {
-      adj[id]?.forEach(nid => {
-        if (!visited.has(nid)) { visited.add(nid); next.push(nid) }
-      })
-    })
-    if (next.length === 0) break
-
-    // Ring radius: enough arc space for all nodes on this ring
-    const minForSpacing = (next.length * MIN_ARC_SPACING) / (2 * Math.PI)
-    currentRadius += Math.max(MIN_RING_GAP, minForSpacing)
-
-    next.forEach((id, i) => {
-      const angle = (i / next.length) * 2 * Math.PI - Math.PI / 2
-      pos.set(id, {
-        x: currentRadius * Math.cos(angle),
-        y: currentRadius * Math.sin(angle),
-      })
-    })
-    frontier = next
+function createCollideForce(minDist: number) {
+  let simNodes: any[] = []
+  function force() {
+    for (let i = 0; i < simNodes.length; i++) {
+      for (let j = i + 1; j < simNodes.length; j++) {
+        const dx = (simNodes[j].x - simNodes[i].x) || 0.001
+        const dy = (simNodes[j].y - simNodes[i].y) || 0.001
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        if (dist < minDist) {
+          const push = ((minDist - dist) / minDist) * 0.8
+          simNodes[i].vx = (simNodes[i].vx ?? 0) - dx * push
+          simNodes[i].vy = (simNodes[i].vy ?? 0) - dy * push
+          simNodes[j].vx = (simNodes[j].vx ?? 0) + dx * push
+          simNodes[j].vy = (simNodes[j].vy ?? 0) + dy * push
+        }
+      }
+    }
   }
-
-  // Disconnected nodes (no path to hub) — outer ring
-  const orphans = nodes.filter(n => !visited.has(n.id))
-  if (orphans.length > 0) {
-    const minForSpacing = (orphans.length * MIN_ARC_SPACING) / (2 * Math.PI)
-    currentRadius += Math.max(MIN_RING_GAP, minForSpacing)
-    orphans.forEach((n, i) => {
-      const angle = (i / orphans.length) * 2 * Math.PI - Math.PI / 2
-      pos.set(n.id, {
-        x: currentRadius * Math.cos(angle),
-        y: currentRadius * Math.sin(angle),
-      })
-    })
-  }
-
-  return pos
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  return force
 }
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes }: Props) {
@@ -128,15 +83,18 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
-  // Disable centering + physics since positions are pre-computed.
-  // Keep a tiny charge so dragged (unpinned) nodes don't fly off.
+  // Obsidian-style physics:
+  // - Short link distance keeps connected nodes close (organic cluster)
+  // - Weak charge just nudges disconnected nodes apart
+  // - Custom collision prevents overlap inside the cluster
   useEffect(() => {
     const timer = setTimeout(() => {
       const fg = graphRef.current
       if (!fg) return
-      fg.d3Force('center', null)
-      fg.d3Force('charge')?.strength(-80)
-      fg.d3Force('link')?.strength(0)
+      fg.d3Force('charge')?.strength(-40)
+      fg.d3Force('link')?.distance(45).strength(0.9)
+      fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
+      fg.d3ReheatSimulation()
     }, 30)
     return () => clearTimeout(timer)
   }, [size])
@@ -160,32 +118,27 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [nodes, edges])
 
-  const radialPositions = useMemo(
-    () => computeRadialPositions(nodes, edges),
-    [nodes, edges]
-  )
-
   const isDark = !mounted || resolvedTheme === 'dark'
   const bgColor = isDark ? '#030712' : '#f8fafc'
-  const defaultLinkColor = isDark ? '#374151' : '#d1d5db'
-  const labelColorDim = isDark ? '#4b5563' : '#9ca3af'
-  const labelColorFocus = isDark ? '#e5e7eb' : '#1f2937'
+  // Subtle edge colors — same as Obsidian (no bright orange distracting from structure)
+  const edgeColor = isDark ? '#2d3748' : '#cbd5e1'
+  const edgeColorFocus = isDark ? '#4b5563' : '#94a3b8'
+  const edgeColorTyped = isDark ? '#374151' : '#b0bec5'
+  const labelColorDim = isDark ? '#374151' : '#9ca3af'
+  const labelColorActive = isDark ? '#d1d5db' : '#1f2937'
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => {
       const deg = degreeById[n.id] ?? 0
-      const rp = radialPositions.get(n.id)
       return {
         ...n,
         color: TYPE_COLORS[n.type] ?? '#94a3b8',
-        val: deg === 0 ? 0.3 : Math.min(0.5 + deg * 0.2, 2.5),
-        // Pin nodes to computed positions; dragging clears fx/fy automatically
-        fx: rp?.x,
-        fy: rp?.y,
+        // Degree-proportional size: hub is visibly larger
+        val: deg === 0 ? 0.4 : Math.min(0.6 + deg * 0.15, 3),
       }
     }),
     links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
-  }), [nodes, edges, degreeById, radialPositions])
+  }), [nodes, edges, degreeById])
 
   const focusId = hoveredId ?? selectedId
   const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
@@ -204,10 +157,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           graphData={graphData}
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
-          linkDirectionalArrowLength={3}
-          linkDirectionalArrowRelPos={1}
-          d3AlphaDecay={0.1}
-          d3VelocityDecay={0.5}
+          linkDirectionalArrowLength={0}
+          d3AlphaDecay={0.012}
+          d3VelocityDecay={0.4}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           backgroundColor={bgColor}
@@ -224,29 +176,32 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
             // Selection / hover ring
             if (isSelected || isHovered) {
-              ctx.globalAlpha = 0.2
+              ctx.globalAlpha = 0.18
               ctx.beginPath()
-              ctx.arc(x, y, r + 4, 0, 2 * Math.PI)
+              ctx.arc(x, y, r + 3, 0, 2 * Math.PI)
               ctx.fillStyle = node.color as string
               ctx.fill()
             }
 
             // Node dot
-            ctx.globalAlpha = dimmed ? 0.07 : 1
+            ctx.globalAlpha = dimmed ? 0.08 : 1
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
             ctx.fillStyle = node.color as string
             ctx.fill()
 
-            // Label — always visible in radial layout (spacing guaranteed)
-            const label = truncate((node.title as string) ?? nodeId)
-            const fontSize = Math.min(11, Math.max(4, 10 / globalScale))
-            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'top'
-            ctx.globalAlpha = dimmed ? 0.07 : 1
-            ctx.fillStyle = isFocused ? labelColorFocus : labelColorDim
-            ctx.fillText(label, x, y + r + 2)
+            // Label — show always when zoomed in, or for focused cluster
+            const showLabel = isFocused || globalScale > 0.9
+            if (showLabel) {
+              const label = truncate((node.title as string) ?? nodeId)
+              const fontSize = Math.min(10, Math.max(3, 9 / globalScale))
+              ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'top'
+              ctx.globalAlpha = dimmed ? 0.08 : isFocused ? 1 : 0.75
+              ctx.fillStyle = isFocused ? labelColorActive : labelColorDim
+              ctx.fillText(label, x, y + r + 1.5)
+            }
 
             ctx.globalAlpha = 1
           }}
@@ -254,13 +209,26 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           linkColor={(link: any) => {
             const src = link.source as any
             const tgt = link.target as any
-            const srcDimmed = isNodeDimmed(src?.id ?? src, src?.type ?? '')
-            const tgtDimmed = isNodeDimmed(tgt?.id ?? tgt, tgt?.type ?? '')
-            const base = (link.typed as boolean) ? '#f97316' : defaultLinkColor
-            if (srcDimmed && tgtDimmed) return isDark ? '#1a2030' : '#f3f4f6'
-            if (srcDimmed || tgtDimmed) return base + '44'
-            return base
+            const srcId: string = src?.id ?? src
+            const tgtId: string = tgt?.id ?? tgt
+            const srcDimmed = isNodeDimmed(srcId, src?.type ?? '')
+            const tgtDimmed = isNodeDimmed(tgtId, tgt?.type ?? '')
+
+            // When focused: highlight edges in the cluster, fade everything else
+            if (focusId !== null) {
+              if (srcDimmed && tgtDimmed) return isDark ? '#1a202c' : '#f8fafc'
+              // Edge touches focused node/neighbor — show it
+              const base = (link.typed as boolean) ? edgeColorTyped : edgeColor
+              return srcDimmed || tgtDimmed ? base + '55' : edgeColorFocus
+            }
+
+            // No focus — uniform subtle edges
+            if (activeTypes.size > 0 && (srcDimmed || tgtDimmed)) {
+              return isDark ? '#1e2533' : '#f1f5f9'
+            }
+            return (link.typed as boolean) ? edgeColorTyped : edgeColor
           }}
+          linkWidth={0.8}
           width={size.width}
           height={size.height}
         />
