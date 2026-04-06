@@ -164,7 +164,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   // graphData.nodes are mutated in-place by the d3 simulation, so they carry current x/y.
   useEffect(() => {
     if (!selectedId || !graphRef.current) return
-    const node = graphData.nodes.find((n: any) => n.id === selectedId)
+    const node = graphData.nodes.find(n => n.id === selectedId) as any
     if (node?.x != null && node?.y != null) {
       graphRef.current.centerAt(node.x, node.y, 400)
     }
