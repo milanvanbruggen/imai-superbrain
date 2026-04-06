@@ -244,6 +244,23 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const color = node.color as string
             const alpha = dimmed ? 0.08 : 1
 
+            // Cluster halo for area and project nodes — soft radial blob that
+            // visually encloses their connected neighbors
+            if ((nodeType === 'area' || nodeType === 'project') && isFinite(x) && isFinite(y)) {
+              const haloR = nodeType === 'area' ? 72 : 52
+              const haloAlpha = (nodeType === 'area' ? 0.11 : 0.08) * (dimmed ? 0.15 : 1)
+              const haloGrad = ctx.createRadialGradient(x, y, 0, x, y, haloR)
+              const hex = Math.round(haloAlpha * 255).toString(16).padStart(2, '0')
+              haloGrad.addColorStop(0,   color + hex)
+              haloGrad.addColorStop(0.6, color + Math.round(haloAlpha * 0.6 * 255).toString(16).padStart(2, '0'))
+              haloGrad.addColorStop(1,   color + '00')
+              ctx.globalAlpha = 1
+              ctx.beginPath()
+              ctx.arc(x, y, haloR, 0, 2 * Math.PI)
+              ctx.fillStyle = haloGrad
+              ctx.fill()
+            }
+
             // Selection / hover ring
             if (isSelected || isHovered) {
               ctx.globalAlpha = alpha * 0.2
