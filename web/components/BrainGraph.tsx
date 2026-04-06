@@ -145,7 +145,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       fg.d3Force('charge')?.strength(-60).distanceMax(120)
       fg.d3Force('link')?.distance(45).strength(1.0)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
-      fg.d3Force('centerGravity', createCenterGravity(0.03))
+      fg.d3Force('centerGravity', createCenterGravity(0.008))
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
       fg.d3ReheatSimulation()
