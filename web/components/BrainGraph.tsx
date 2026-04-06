@@ -153,12 +153,20 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   // - Custom collision prevents overlap inside the cluster
   // - Isolated gravity pulls degree-0 nodes toward the cluster center
   useEffect(() => {
-    const timer = setTimeout(() => {
+    // ForceGraph2D loads via dynamic import, so graphRef.current may not be set yet.
+    // Retry until the instance is available (max ~3s).
+    let attempts = 0
+    let timer: ReturnType<typeof setTimeout>
+
+    function applyForces() {
       const fg = graphRef.current
-      if (!fg) return
+      if (!fg) {
+        if (++attempts < 30) timer = setTimeout(applyForces, 100)
+        return
+      }
+
       const connectedIds = new Set(Object.keys(degreeById))
 
-      // Build layerByType based on which layer types are actually present
       const LAYER_ORDER = ['area', 'project', 'person'] as const
       const presentTypes = new Set(nodes.map(n => n.type))
       const layerByType: Record<string, number> = {}
@@ -173,7 +181,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
       fg.d3Force('layer', createLayerForce(layerByType, 90, 0.05))
       fg.d3ReheatSimulation()
-    }, 30)
+    }
+
+    applyForces()
     return () => clearTimeout(timer)
   }, [size, degreeById, nodes])
 
