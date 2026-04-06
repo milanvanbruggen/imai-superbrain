@@ -161,7 +161,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   // Update Three.js material properties on focus/selection/hover changes
   useEffect(() => {
     nodeObjectsRef.current.forEach(({ sphere, halo, label }, nodeId) => {
-      const mat = sphere.material as THREE.MeshPhongMaterial
+      const mat = sphere.material as THREE.MeshLambertMaterial
       const nodeType = sphere.userData.type as string
       const dimmed = isNodeDimmed(nodeId, nodeType)
       const isFocused = nodeId === focusId || focusNeighbors.has(nodeId)
@@ -214,13 +214,11 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
     const group = new THREE.Group()
 
-    // Sphere with Phong shading for faux-3D appearance
+    // Sphere with subtle Lambert shading — diffuse-only, no specular highlight
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(r, 24, 18),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         color: new THREE.Color(color),
-        shininess: 80,
-        specular: new THREE.Color(isDark ? 0x333333 : 0x888888),
         transparent: true,
         opacity: 1,
       })
@@ -296,8 +294,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             }
             return edgeColor
           }}
-          linkWidth={0.8}
-          linkOpacity={1}
+          linkWidth={0.5}
+          linkOpacity={0.8}
           width={size.width}
           height={size.height}
         />
