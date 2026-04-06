@@ -2,6 +2,7 @@
 import dynamic from 'next/dynamic'
 import { useTheme } from 'next-themes'
 import { useEffect, useState, useRef, useMemo } from 'react'
+import { forceCollide } from 'd3-force-3d'
 import { GraphNode, GraphEdge } from '@/lib/types'
 
 const ForceGraph2D = dynamic(
@@ -29,6 +30,12 @@ export const TYPE_COLORS: Record<string, string> = {
 }
 
 const NODE_REL_SIZE = 4
+// Minimum screen-space separation between node centers (px at zoom=1)
+const COLLISION_RADIUS = 36
+
+function truncate(s: string, max = 22): string {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s
+}
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes }: Props) {
   const { resolvedTheme } = useTheme()
@@ -51,11 +58,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
+  // Spread nodes apart: strong repulsion + collision + loose links
   useEffect(() => {
     const fg = graphRef.current
     if (!fg || !size) return
-    fg.d3Force('charge')?.strength(-80)
-    fg.d3Force('link')?.distance(70)
+    fg.d3Force('charge')?.strength(-500)
+    fg.d3Force('link')?.distance(120).strength(0.15)
+    fg.d3Force('collision', forceCollide(COLLISION_RADIUS))
   }, [size])
 
   const degreeById = useMemo(() => {
@@ -69,20 +78,19 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
+    nodes.forEach(n => { map[n.id] = new Set() })
     edges.forEach(e => {
-      if (!map[e.source]) map[e.source] = new Set()
-      if (!map[e.target]) map[e.target] = new Set()
-      map[e.source].add(e.target)
-      map[e.target].add(e.source)
+      map[e.source]?.add(e.target)
+      map[e.target]?.add(e.source)
     })
     return map
-  }, [edges])
+  }, [nodes, edges])
 
   const isDark = !mounted || resolvedTheme === 'dark'
   const bgColor = isDark ? '#030712' : '#f8fafc'
   const defaultLinkColor = isDark ? '#374151' : '#d1d5db'
-  const labelColor = isDark ? '#6b7280' : '#9ca3af'
-  const labelColorActive = isDark ? '#d1d5db' : '#374151'
+  const labelColorDim = isDark ? '#4b5563' : '#9ca3af'
+  const labelColorFocus = isDark ? '#e5e7eb' : '#1f2937'
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => {
@@ -100,18 +108,14 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     })),
   }), [nodes, edges, degreeById])
 
-  // Focus node: hovered takes priority over selected
+  // Focus: hovered takes priority over selected
   const focusId = hoveredId ?? selectedId
-  const focusNeighbors = focusId ? (neighborsOf[focusId] ?? new Set<string>()) : new Set<string>()
+  const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
 
   function isNodeDimmed(nodeId: string, nodeType: string): boolean {
-    // Hover/select focus: dim everything outside the cluster
     if (focusId !== null) {
-      if (nodeId === focusId) return false
-      if (focusNeighbors.has(nodeId)) return false
-      return true
+      return nodeId !== focusId && !focusNeighbors.has(nodeId)
     }
-    // No focus — apply type filter
     if (activeTypes.size === 0) return false
     return !activeTypes.has(nodeType)
   }
@@ -135,38 +139,39 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const dimmed = isNodeDimmed(nodeId, nodeType)
             const isSelected = nodeId === selectedId
             const isHovered = nodeId === hoveredId
-            const isFocusNeighbor = focusId !== null && focusNeighbors.has(nodeId)
+            const isFocused = nodeId === focusId || focusNeighbors.has(nodeId)
             const r = Math.sqrt(node.val as number) * NODE_REL_SIZE
             const x = node.x as number
             const y = node.y as number
 
             // Selection ring
-            if (isSelected) {
-              ctx.globalAlpha = 0.25
+            if (isSelected || isHovered) {
+              ctx.globalAlpha = 0.2
               ctx.beginPath()
-              ctx.arc(x, y, r + 3.5, 0, 2 * Math.PI)
+              ctx.arc(x, y, r + 4, 0, 2 * Math.PI)
               ctx.fillStyle = node.color as string
               ctx.fill()
             }
 
-            // Node circle
-            ctx.globalAlpha = dimmed ? 0.08 : 1
+            // Node dot
+            ctx.globalAlpha = dimmed ? 0.07 : 1
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
             ctx.fillStyle = node.color as string
             ctx.fill()
 
-            // Label
-            const label = (node.title as string) ?? nodeId
-            const fontSize = Math.min(12, Math.max(3, 11 / globalScale))
-            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-            ctx.textAlign = 'center'
-            ctx.textBaseline = 'top'
-
-            const highlighted = isSelected || isHovered || isFocusNeighbor
-            ctx.globalAlpha = dimmed ? 0.08 : highlighted ? 1 : 0.7
-            ctx.fillStyle = highlighted ? labelColorActive : labelColor
-            ctx.fillText(label, x, y + r + 2)
+            // Label: always show when zoomed in, only show focused cluster at normal zoom
+            const showLabel = isFocused || globalScale > 1.2
+            if (showLabel) {
+              const label = truncate((node.title as string) ?? nodeId)
+              const fontSize = Math.min(11, Math.max(4, 10 / globalScale))
+              ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'top'
+              ctx.globalAlpha = dimmed ? 0.07 : 1
+              ctx.fillStyle = isFocused ? labelColorFocus : labelColorDim
+              ctx.fillText(label, x, y + r + 2)
+            }
 
             ctx.globalAlpha = 1
           }}
@@ -181,7 +186,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const srcDimmed = isNodeDimmed(srcId, srcType)
             const tgtDimmed = isNodeDimmed(tgtId, tgtType)
             const baseColor = (link.typed as boolean) ? '#f97316' : defaultLinkColor
-            if (srcDimmed && tgtDimmed) return isDark ? '#1f2937' : '#f3f4f6'
+            if (srcDimmed && tgtDimmed) return isDark ? '#1a2030' : '#f3f4f6'
             if (srcDimmed || tgtDimmed) return baseColor + '44'
             return baseColor
           }}
