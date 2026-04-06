@@ -7,7 +7,6 @@ import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
-import { SystemFilesModal } from '@/components/SystemFilesModal'
 
 const MIN_PANEL_WIDTH = 280
 const MAX_PANEL_WIDTH = 700
@@ -20,7 +19,6 @@ export default function BrainPage() {
   const [error, setError] = useState<string | null>(null)
   const [showNewNote, setShowNewNote] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [showSystemFiles, setShowSystemFiles] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [inboxFilter, setInboxFilter] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
@@ -164,10 +162,14 @@ export default function BrainPage() {
 
   if (!graph) return null
 
-  const allNodes = showSystemNodes ? graph.nodes : graph.nodes.filter(n => n.type !== 'system')
-  const allEdges = showSystemNodes ? graph.edges : graph.edges.filter(e => allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target))
-  const baseNodes = inboxFilter ? allNodes.filter(n => n.path.startsWith('inbox/')) : allNodes
-  const baseEdges = inboxFilter ? allEdges.filter(e => baseNodes.some(n => n.id === e.source)) : allEdges
+  const allNodes = showSystemNodes
+    ? graph.nodes.filter(n => n.type === 'system')
+    : graph.nodes.filter(n => n.type !== 'system')
+  const allEdges = graph.edges.filter(e =>
+    allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target)
+  )
+  const baseNodes = !showSystemNodes && inboxFilter ? allNodes.filter(n => n.path.startsWith('inbox/')) : allNodes
+  const baseEdges = !showSystemNodes && inboxFilter ? allEdges.filter(e => baseNodes.some(n => n.id === e.source)) : allEdges
 
   function toggleType(type: string) {
     setActiveTypes(prev => {
@@ -226,15 +228,6 @@ export default function BrainPage() {
             + New Note
           </button>
           <button
-            onClick={() => setShowSystemFiles(true)}
-            title="System files"
-            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
-            </svg>
-          </button>
-          <button
             onClick={() => setShowSettings(true)}
             title="Vault settings"
             className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
@@ -259,25 +252,30 @@ export default function BrainPage() {
             activeTypes={activeTypes}
           />
 
-          {/* Type filter overlay */}
+          {/* System files toggle — top right */}
+          <button
+            onClick={() => setShowSystemNodes(v => !v)}
+            title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
+            className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+              showSystemNodes
+                ? 'bg-white/90 dark:bg-gray-900/90 text-gray-600 dark:text-gray-300 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
+                : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
+            }`}
+          >
+            <span className="text-xs">System</span>
+            {/* Toggle pill */}
+            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full border transition-colors duration-200 ${
+              showSystemNodes ? 'bg-teal-500 border-teal-500' : 'bg-gray-300 dark:bg-gray-700 border-gray-300 dark:border-gray-700'
+            }`}>
+              <span className={`inline-block h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 mt-0.5 ${
+                showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'
+              }`} />
+            </span>
+          </button>
+
+          {/* Type filter overlay — left, hidden in system mode */}
+          {!showSystemNodes && (
           <div className="absolute top-3 left-3 right-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none" style={{ scrollbarWidth: 'none' }}>
-            {graph.nodes.some(n => n.type === 'system') && (
-              <button
-                onClick={() => setShowSystemNodes(v => !v)}
-                title={showSystemNodes ? 'Hide system files' : 'Show system files'}
-                className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
-                  showSystemNodes
-                    ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
-                    : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
-                }`}
-              >
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={showSystemNodes ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 dark:text-gray-600'}>
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <path d="M9 9h6M9 12h6M9 15h4"/>
-                </svg>
-                system
-              </button>
-            )}
             {availableTypes.filter(t => t !== 'system').map(type => {
               const isActive = activeTypes.size === 0 || activeTypes.has(type)
               const color = TYPE_COLORS[type] ?? '#94a3b8'
@@ -301,6 +299,7 @@ export default function BrainPage() {
               )
             })}
           </div>
+          )}
         </main>
 
         {/* Drag handle — hidden when panel is collapsed */}
@@ -328,9 +327,6 @@ export default function BrainPage() {
 
       {showSettings && (
         <SettingsModal onClose={() => setShowSettings(false)} />
-      )}
-      {showSystemFiles && (
-        <SystemFilesModal onClose={() => setShowSystemFiles(false)} />
       )}
       {showNewNote && (
         <NewNoteModal
