@@ -8,6 +8,15 @@ TODAY=$(date +%Y-%m-%d)
 
 mkdir -p "$RESOURCES"
 
+# Standard Claude/Cowork built-in skills — skip these, only import custom skills
+SKIP_SKILLS="schedule docx pdf pptx xlsx create-shortcut"
+
+is_standard_skill() {
+  local name="$1"
+  for s in $SKIP_SKILLS; do [ "$s" = "$name" ] && return 0; done
+  return 1
+}
+
 import_skill() {
   local skill_file="$1"
   local dir_name="$2"
@@ -63,6 +72,7 @@ if [ -n "$COWORK_SKILLS" ]; then
     skill_file="$skill_dir/SKILL.md"
     [ -f "$skill_file" ] || continue
     dir_name=$(basename "$skill_dir")
+    is_standard_skill "$dir_name" && continue
     # Skip skills already imported from ~/.claude/skills/ (avoid duplicates)
     [ -f "$RESOURCES/skill-${dir_name}.md" ] && continue
     import_skill "$skill_file" "$dir_name"
@@ -72,6 +82,7 @@ fi
 # 3. Skills stored inside local session .claude/skills/ dirs (e.g. linkedin-post)
 while IFS= read -r skill_file; do
   dir_name=$(basename "$(dirname "$skill_file")")
+  is_standard_skill "$dir_name" && continue
   # Skip if already imported
   [ -f "$RESOURCES/skill-${dir_name}.md" ] && continue
   import_skill "$skill_file" "$dir_name"
