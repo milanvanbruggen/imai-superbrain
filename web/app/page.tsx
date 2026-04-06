@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
-import { BrainGraph } from '@/components/BrainGraph'
+import { BrainGraph, TYPE_COLORS } from '@/components/BrainGraph'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
@@ -21,6 +21,7 @@ export default function BrainPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [inboxCount, setInboxCount] = useState(0)
   const [inboxFilter, setInboxFilter] = useState(false)
+  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -155,12 +156,35 @@ export default function BrainPage() {
 
   if (!graph) return null
 
-  const displayNodes = inboxFilter
-    ? graph.nodes.filter(n => n.path.startsWith('inbox/'))
-    : graph.nodes
-  const displayEdges = inboxFilter
-    ? graph.edges.filter(e => displayNodes.some(n => n.id === e.source))
-    : graph.edges
+  const baseNodes = inboxFilter ? graph.nodes.filter(n => n.path.startsWith('inbox/')) : graph.nodes
+  const baseEdges = inboxFilter ? graph.edges.filter(e => baseNodes.some(n => n.id === e.source)) : graph.edges
+
+  const availableTypes = useMemo(
+    () => [...new Set(graph.nodes.map(n => n.type))].sort(),
+    [graph.nodes]
+  )
+
+  function toggleType(type: string) {
+    setActiveTypes(prev => {
+      if (prev.size === 0) return new Set([type])
+      const next = new Set(prev)
+      if (next.has(type)) {
+        next.delete(type)
+        return next.size === 0 ? new Set() : next
+      }
+      next.add(type)
+      return next
+    })
+  }
+
+  const displayNodes = activeTypes.size === 0
+    ? baseNodes
+    : baseNodes.filter(n => activeTypes.has(n.type))
+
+  const displayNodeIds = new Set(displayNodes.map(n => n.id))
+  const displayEdges = activeTypes.size === 0
+    ? baseEdges
+    : baseEdges.filter(e => displayNodeIds.has(e.source) && displayNodeIds.has(e.target))
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100">
@@ -225,6 +249,32 @@ export default function BrainPage() {
             selectedId={selectedId}
             onSelectNode={setSelectedId}
           />
+
+          {/* Type filter overlay */}
+          <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5 max-w-xs pointer-events-none">
+            {availableTypes.map(type => {
+              const isActive = activeTypes.size === 0 || activeTypes.has(type)
+              const color = TYPE_COLORS[type] ?? '#94a3b8'
+              return (
+                <button
+                  key={type}
+                  onClick={() => toggleType(type)}
+                  title={isActive ? `Hide ${type}` : `Show only ${type}`}
+                  className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                    isActive
+                      ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
+                      : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: isActive ? color : '#9ca3af' }}
+                  />
+                  {type}
+                </button>
+              )
+            })}
+          </div>
         </main>
 
         {/* Drag handle — hidden when panel is collapsed */}

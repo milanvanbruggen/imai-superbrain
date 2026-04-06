@@ -1,7 +1,7 @@
 'use client'
 import dynamic from 'next/dynamic'
 import { useTheme } from 'next-themes'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { GraphNode, GraphEdge } from '@/lib/types'
 
 const ForceGraph2D = dynamic(
@@ -16,7 +16,7 @@ interface Props {
   onSelectNode: (id: string) => void
 }
 
-const TYPE_COLORS: Record<string, string> = {
+export const TYPE_COLORS: Record<string, string> = {
   person: '#60a5fa',
   project: '#34d399',
   idea: '#f59e0b',
@@ -31,6 +31,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const graphRef = useRef<any>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
 
   useEffect(() => setMounted(true), [])
@@ -47,16 +48,39 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
     return () => obs.disconnect()
   }, [])
 
+  // Configure d3 forces for a tighter, less drifty layout
+  useEffect(() => {
+    const fg = graphRef.current
+    if (!fg || !size) return
+    fg.d3Force('charge')?.strength(-60)
+    fg.d3Force('link')?.distance(60)
+  }, [size])
+
+  // Degree per node — more connections = larger node
+  const degreeById = useMemo(() => {
+    const map: Record<string, number> = {}
+    edges.forEach(e => {
+      map[e.source] = (map[e.source] ?? 0) + 1
+      map[e.target] = (map[e.target] ?? 0) + 1
+    })
+    return map
+  }, [edges])
+
   const isDark = !mounted || resolvedTheme === 'dark'
   const bgColor = isDark ? '#030712' : '#f8fafc'
   const linkColor = isDark ? '#374151' : '#cbd5e1'
   const selectedColor = isDark ? '#ffffff' : '#0f172a'
 
   const graphData = {
-    nodes: nodes.map(n => ({
-      ...n,
-      color: selectedId === n.id ? selectedColor : (TYPE_COLORS[n.type] ?? '#94a3b8'),
-    })),
+    nodes: nodes.map(n => {
+      const deg = degreeById[n.id] ?? 0
+      return {
+        ...n,
+        color: selectedId === n.id ? selectedColor : (TYPE_COLORS[n.type] ?? '#94a3b8'),
+        // Orphan nodes stay small; connected nodes scale up with degree
+        val: deg === 0 ? 0.4 : Math.min(1 + deg * 0.4, 4),
+      }
+    }),
     links: edges.map(e => ({
       source: e.source,
       target: e.target,
@@ -69,6 +93,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
     <div ref={containerRef} className="w-full h-full">
       {size && (
         <ForceGraph2D
+          ref={graphRef}
           graphData={graphData}
           nodeLabel="title"
           nodeRelSize={6}
@@ -78,6 +103,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
           backgroundColor={bgColor}
           linkColor={(link: any) => link.color as string}
           nodeColor={(node: any) => node.color as string}
+          nodeVal={(node: any) => node.val as number}
           width={size.width}
           height={size.height}
         />
