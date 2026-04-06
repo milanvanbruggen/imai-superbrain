@@ -143,7 +143,16 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       }
 
       fg.d3Force('charge')?.strength(-60).distanceMax(120)
-      fg.d3Force('link')?.distance(45).strength(1.0)
+      fg.d3Force('link')?.distance((link: any) => {
+        const srcType: string = link.source?.type ?? ''
+        const tgtType: string = link.target?.type ?? ''
+        // Area nodes anchor close to their connections (Milan, projects, people)
+        if (srcType === 'area' || tgtType === 'area') return 30
+        // Projects pull their people/resources to medium distance
+        if (srcType === 'project' || tgtType === 'project') return 42
+        // Person-to-person (dashed) and other loose links: more room to spread
+        return 60
+      }).strength(1.1)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
