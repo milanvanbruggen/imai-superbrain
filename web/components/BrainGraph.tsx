@@ -134,8 +134,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       const fg = graphRef.current
       if (!fg) return
       const connectedIds = new Set(Object.keys(degreeById))
-      fg.d3Force('charge')?.strength(-20)
-      fg.d3Force('link')?.distance(45).strength(0.9)
+      fg.d3Force('charge')?.strength(-120)
+      fg.d3Force('link')?.distance(28).strength(0.9)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
       fg.d3ReheatSimulation()
