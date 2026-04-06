@@ -9,7 +9,7 @@ if [[ -z "${VAULT_PATH:-}" ]]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   ENV_FILE="$SCRIPT_DIR/../web/.env.local"
   if [[ -f "$ENV_FILE" ]]; then
-    VAULT_PATH="$(grep '^VAULT_PATH=' "$ENV_FILE" | cut -d '=' -f2- | tr -d '"' | tr -d "'")"
+    VAULT_PATH="$(grep '^VAULT_PATH=' "$ENV_FILE" | cut -d '=' -f2- | sed "s/^['\"]//; s/['\"]$//")"
     export VAULT_PATH
   fi
 fi
@@ -20,21 +20,21 @@ if [[ -z "${VAULT_PATH:-}" ]]; then
 fi
 
 # Derive LOCAL_MEMORY path from git root (Claude Code convention: replace / with -)
-REPO_ROOT=$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --show-toplevel)
+REPO_ROOT="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --show-toplevel)"
 PROJECT_SLUG=$(echo "$REPO_ROOT" | sed 's|^/||; s|/|-|g')
 LOCAL_MEMORY="$HOME/.claude/projects/$PROJECT_SLUG/memory"
 VAULT_MEMORY="${VAULT_PATH}/Claude/memory"
 
 if [[ "$DIRECTION" == "local-to-vault" ]]; then
   # Guard: only sync when the written file is inside LOCAL_MEMORY
-  if [[ -n "$WRITTEN_FILE" && "$WRITTEN_FILE" != "$LOCAL_MEMORY"* ]]; then
+  if [[ -n "$WRITTEN_FILE" && "$WRITTEN_FILE" != "$LOCAL_MEMORY/"* ]]; then
     exit 0
   fi
   if [[ ! -d "$LOCAL_MEMORY" ]]; then
     exit 0  # nothing to sync yet
   fi
   mkdir -p "$VAULT_MEMORY"
-  rsync -av --update "$LOCAL_MEMORY/" "$VAULT_MEMORY/"
+  rsync -a --update "$LOCAL_MEMORY/" "$VAULT_MEMORY/" || true
 
 elif [[ "$DIRECTION" == "vault-to-local" ]]; then
   if [[ ! -d "$VAULT_MEMORY" ]]; then
@@ -42,7 +42,7 @@ elif [[ "$DIRECTION" == "vault-to-local" ]]; then
     exit 0
   fi
   mkdir -p "$LOCAL_MEMORY"
-  rsync -av --update "$VAULT_MEMORY/" "$LOCAL_MEMORY/"
+  rsync -a --update "$VAULT_MEMORY/" "$LOCAL_MEMORY/" || true
 
 else
   echo "Usage: sync-brain.sh <local-to-vault|vault-to-local> [written-file-path]" >&2
