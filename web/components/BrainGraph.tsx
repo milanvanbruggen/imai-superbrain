@@ -86,9 +86,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const graphRef = useRef<any>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [draggingId, setDraggingId] = useState<string | null>(null)
-  // Track last drag position to compute throw velocity on release
-  const lastDragRef = useRef<{ x: number; y: number; t: number } | null>(null)
 
   useEffect(() => setMounted(true), [])
 
@@ -191,26 +188,11 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={0}
-          d3AlphaDecay={0.008}
-          d3VelocityDecay={0.12}
+          d3AlphaDecay={0.012}
+          d3VelocityDecay={0.4}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
-          onNodeDrag={(node: any) => {
-            setDraggingId(node.id)
-            lastDragRef.current = { x: node.x, y: node.y, t: Date.now() }
-          }}
-          onNodeDragEnd={(node: any) => {
-            // Apply throw velocity based on last movement delta
-            const last = lastDragRef.current
-            if (last && Date.now() - last.t < 80) {
-              node.vx = (node.x - last.x) * 4
-              node.vy = (node.y - last.y) * 4
-            }
-            lastDragRef.current = null
-            setDraggingId(null)
-            graphRef.current?.d3ReheatSimulation()
-          }}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const nodeId = node.id as string
@@ -218,35 +200,35 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const dimmed = isNodeDimmed(nodeId, nodeType)
             const isSelected = nodeId === selectedId
             const isHovered = nodeId === hoveredId
-            const isDragging = nodeId === draggingId
             const isFocused = nodeId === focusId || focusNeighbors.has(nodeId)
             const r = Math.sqrt(node.val as number) * NODE_REL_SIZE
             const x = node.x as number
             const y = node.y as number
 
-            // Drag glow — larger, brighter ring while being moved
-            if (isDragging) {
-              ctx.globalAlpha = 0.25
-              ctx.beginPath()
-              ctx.arc(x, y, r + 6, 0, 2 * Math.PI)
-              ctx.fillStyle = node.color as string
-              ctx.fill()
-            }
+            const color = node.color as string
+            const alpha = dimmed ? 0.08 : 1
 
             // Selection / hover ring
-            if ((isSelected || isHovered) && !isDragging) {
-              ctx.globalAlpha = 0.18
+            if (isSelected || isHovered) {
+              ctx.globalAlpha = alpha * 0.2
               ctx.beginPath()
-              ctx.arc(x, y, r + 3, 0, 2 * Math.PI)
-              ctx.fillStyle = node.color as string
+              ctx.arc(x, y, r + 3.5, 0, 2 * Math.PI)
+              ctx.fillStyle = color
               ctx.fill()
             }
 
-            // Node dot
-            ctx.globalAlpha = dimmed ? 0.08 : 1
+            // Sphere: radial gradient from highlight to base colour to dark edge
+            ctx.globalAlpha = alpha
+            const grad = ctx.createRadialGradient(
+              x - r * 0.35, y - r * 0.35, r * 0.05,  // highlight centre (top-left)
+              x, y, r
+            )
+            grad.addColorStop(0,   'rgba(255,255,255,0.55)')  // specular highlight
+            grad.addColorStop(0.4, color)                      // base colour
+            grad.addColorStop(1,   'rgba(0,0,0,0.35)')        // dark edge
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
-            ctx.fillStyle = node.color as string
+            ctx.fillStyle = grad
             ctx.fill()
 
             // Label — show always when zoomed in, or for focused cluster
