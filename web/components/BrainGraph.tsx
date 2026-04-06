@@ -152,6 +152,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
       fg.d3ReheatSimulation()
+
+      // Zoom to fit + reveal on first load (warmupTicks already positioned nodes)
+      if (!initialZoomDone.current) {
+        initialZoomDone.current = true
+        fg.zoomToFit(0, 60)
+        setGraphReady(true)
+      }
     }
 
     applyForces()
@@ -229,17 +236,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           d3AlphaDecay={0.04}
           d3VelocityDecay={0.6}
           warmupTicks={100}
-          cooldownTicks={0}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
-          onEngineStop={() => {
-            if (!initialZoomDone.current) {
-              initialZoomDone.current = true
-              graphRef.current?.zoomToFit(0, 60)
-              setGraphReady(true)
-            }
-          }}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const nodeId = node.id as string
