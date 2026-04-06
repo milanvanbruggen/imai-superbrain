@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { z } from 'zod'
-import { getVaultClient } from '@/lib/vault-client'
+import { getVaultClient, VaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
 import { verifyToken } from '@/lib/mcp-jwt'
 
@@ -74,7 +74,7 @@ export async function getContextText(topic?: string): Promise<string> {
     { path: 'Claude/memory/project.md', header: 'Memory: Projects', fallback: '(empty)' },
     { path: 'Claude/memory/reference.md', header: 'Memory: References', fallback: '(empty)' },
   ]
-  let client
+  let client: VaultClient
   try {
     client = getVaultClient()
   } catch {
@@ -91,6 +91,8 @@ export async function getContextText(topic?: string): Promise<string> {
   }
   if (topic) {
     try {
+      // TODO: loadNotes() creates a second VaultClient internally; consider passing
+      // the existing client to avoid duplicate tree fetches on topic searches.
       const { noteMap } = await loadNotes()
       const results = searchNoteMap(noteMap, topic)
       if (results.length > 0) {

@@ -64,7 +64,6 @@ describe('getContextText', () => {
     const { getContextText } = await import('@/app/api/mcp/route')
     const result = await getContextText()
     expect(result).toBe('(No personal context configured. Create Claude/profile.md in your vault to get started.)')
-    vi.doUnmock('@/lib/vault-client')
   })
 
   it('returns structured sections for existing and missing files', async () => {
@@ -82,7 +81,6 @@ describe('getContextText', () => {
     expect(result).toContain('## Profile\nI am Milan')
     expect(result).toContain('## Active Projects\n(not set up yet)')  // intentional user input → not set up yet
     expect(result).toContain('## Memory: User\n(empty)')              // auto-generated memory file → empty
-    vi.doUnmock('@/lib/vault-client')
   })
 
   it('appends related notes section when topic is given', async () => {
@@ -103,7 +101,5 @@ describe('getContextText', () => {
     const result = await getContextText('foo')
     expect(result).toContain('## Related Notes (topic: "foo")')
     expect(result).toContain('projects/foo.md — Foo Project')
-    vi.doUnmock('@/lib/vault-client')
-    vi.doUnmock('@/lib/vault-parser')
   })
 })
