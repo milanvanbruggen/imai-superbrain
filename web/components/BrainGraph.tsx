@@ -32,7 +32,7 @@ export const TYPE_COLORS: Record<string, string> = {
 
 const NODE_REL_SIZE = 3.5
 // Minimum distance between node centres — keeps the compact organic cluster readable
-const COLLIDE_DIST = 20
+const COLLIDE_DIST = 24
 
 function truncate(s: string, max = 20): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
@@ -52,39 +52,15 @@ function tint(hex: string, ratio: number): string {
 }
 
 /**
- * Pure-JS gravity force for isolated nodes (degree 0).
- * Pulls them toward the origin so they stay near the main cluster.
+ * Pulls ALL nodes gently toward the origin so the cluster stays centered.
+ * Much weaker than isolatedGravity — topology still dominates positioning.
  */
-function createIsolatedGravity(connectedIds: Set<string>, strength = 0.06) {
+function createCenterGravity(strength = 0.03) {
   let simNodes: any[] = []
   function force() {
     for (const node of simNodes) {
-      if (connectedIds.has(node.id)) continue
       node.vx = (node.vx ?? 0) - (node.x ?? 0) * strength
       node.vy = (node.vy ?? 0) - (node.y ?? 0) * strength
-    }
-  }
-  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
-  return force
-}
-
-/**
- * Pulls nodes toward a target radius based on their type (layered layout).
- * layerByType maps type → layer index (0 = innermost).
- */
-function createLayerForce(layerByType: Record<string, number>, layerRadius: number, strength = 0.05) {
-  let simNodes: any[] = []
-  function force() {
-    for (const node of simNodes) {
-      const layer = layerByType[node.type]
-      if (layer === undefined) continue
-      const x = node.x ?? 0
-      const y = node.y ?? 0
-      const r = Math.sqrt(x * x + y * y) || 1
-      const targetR = (layer + 1) * layerRadius
-      const dr = r - targetR
-      node.vx = (node.vx ?? 0) - (x / r) * dr * strength
-      node.vy = (node.vy ?? 0) - (y / r) * dr * strength
     }
   }
   ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
@@ -147,11 +123,11 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [edges])
 
-  // Obsidian-style physics:
-  // - Short link distance keeps connected nodes close (organic cluster)
-  // - Weak charge just nudges disconnected nodes apart
-  // - Custom collision prevents overlap inside the cluster
-  // - Isolated gravity pulls degree-0 nodes toward the cluster center
+  // Organic physics:
+  // - Strong charge (-80) gives nodes breathing room
+  // - Link distance 60 keeps connected nodes close but not cramped
+  // - Custom collision prevents overlap
+  // - Universal center gravity (0.03) keeps the cluster from drifting
   useEffect(() => {
     // ForceGraph2D loads via dynamic import, so graphRef.current may not be set yet.
     // Retry until the instance is available (max ~3s).
@@ -165,27 +141,18 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         return
       }
 
-      const connectedIds = new Set(Object.keys(degreeById))
-
-      const LAYER_ORDER = ['area', 'project', 'person'] as const
-      const presentTypes = new Set(nodes.map(n => n.type))
-      const layerByType: Record<string, number> = {}
-      let layerIdx = 0
-      for (const t of LAYER_ORDER) {
-        if (presentTypes.has(t)) layerByType[t] = layerIdx++
-      }
-
-      fg.d3Force('charge')?.strength(-20)
-      fg.d3Force('link')?.distance(45).strength(0.9)
+      fg.d3Force('charge')?.strength(-80)
+      fg.d3Force('link')?.distance(60).strength(0.9)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
-      fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
-      fg.d3Force('layer', createLayerForce(layerByType, 90, 0.05))
+      fg.d3Force('centerGravity', createCenterGravity(0.03))
+      fg.d3Force('isolatedGravity', null)
+      fg.d3Force('layer', null)
       fg.d3ReheatSimulation()
     }
 
     applyForces()
     return () => clearTimeout(timer)
-  }, [size, degreeById, nodes])
+  }, [size])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
