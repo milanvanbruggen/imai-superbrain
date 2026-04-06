@@ -129,6 +129,11 @@ export default function BrainPage() {
   const selectedNode = graph?.nodes.find(n => n.id === selectedId) ?? null
   const selectedNote = selectedId && graph ? (graph.notesByStem[selectedId] ?? null) : null
 
+  const availableTypes = useMemo(
+    () => graph ? [...new Set(graph.nodes.map(n => n.type))].sort() : [],
+    [graph]
+  )
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gray-950">
@@ -158,11 +163,6 @@ export default function BrainPage() {
 
   const baseNodes = inboxFilter ? graph.nodes.filter(n => n.path.startsWith('inbox/')) : graph.nodes
   const baseEdges = inboxFilter ? graph.edges.filter(e => baseNodes.some(n => n.id === e.source)) : graph.edges
-
-  const availableTypes = useMemo(
-    () => [...new Set(graph.nodes.map(n => n.type))].sort(),
-    [graph.nodes]
-  )
 
   function toggleType(type: string) {
     setActiveTypes(prev => {
