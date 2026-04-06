@@ -219,16 +219,20 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
             // Sphere: radial gradient from highlight to base colour to dark edge
             ctx.globalAlpha = alpha
-            const grad = ctx.createRadialGradient(
-              x - r * 0.35, y - r * 0.35, r * 0.05,  // highlight centre (top-left)
-              x, y, r
-            )
-            grad.addColorStop(0,   'rgba(255,255,255,0.55)')  // specular highlight
-            grad.addColorStop(0.4, color)                      // base colour
-            grad.addColorStop(1,   'rgba(0,0,0,0.35)')        // dark edge
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
-            ctx.fillStyle = grad
+            if (isFinite(x) && isFinite(y) && isFinite(r) && r > 0) {
+              const grad = ctx.createRadialGradient(
+                x - r * 0.35, y - r * 0.35, r * 0.05,
+                x, y, r
+              )
+              grad.addColorStop(0,   'rgba(255,255,255,0.55)')
+              grad.addColorStop(0.4, color)
+              grad.addColorStop(1,   'rgba(0,0,0,0.35)')
+              ctx.fillStyle = grad
+            } else {
+              ctx.fillStyle = color
+            }
             ctx.fill()
 
             // Label — show always when zoomed in, or for focused cluster
