@@ -124,8 +124,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   }, [edges])
 
   // Organic physics:
-  // - Strong charge (-80) gives nodes breathing room
-  // - Link distance 60 keeps connected nodes close but not cramped
+  // - Charge -60 with distanceMax 120: repels nearby nodes (local spread)
+  //   but doesn't push distant clusters apart — lets topology form clusters
+  // - Link distance 45 pulls connected nodes close so hubs gather their neighbors
   // - Custom collision prevents overlap
   // - Universal center gravity (0.03) keeps the cluster from drifting
   useEffect(() => {
@@ -141,8 +142,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         return
       }
 
-      fg.d3Force('charge')?.strength(-80)
-      fg.d3Force('link')?.distance(60).strength(0.9)
+      fg.d3Force('charge')?.strength(-60).distanceMax(120)
+      fg.d3Force('link')?.distance(45).strength(1.0)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3Force('centerGravity', createCenterGravity(0.03))
       fg.d3Force('isolatedGravity', null)
