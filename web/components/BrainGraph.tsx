@@ -101,6 +101,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const graphRef = useRef<any>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const initialZoomDone = useRef(false)
 
   useEffect(() => setMounted(true), [])
 
@@ -221,6 +222,12 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
+          onEngineStop={() => {
+            if (!initialZoomDone.current) {
+              initialZoomDone.current = true
+              graphRef.current?.zoomToFit(400, 60)
+            }
+          }}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const nodeId = node.id as string
