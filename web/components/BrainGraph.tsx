@@ -203,8 +203,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={0}
-          d3AlphaDecay={0.012}
-          d3VelocityDecay={0.4}
+          d3AlphaDecay={0.04}
+          d3VelocityDecay={0.6}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
@@ -266,29 +266,42 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             ctx.globalAlpha = 1
           }}
           nodeCanvasObjectMode={() => 'replace'}
-          linkColor={(link: any) => {
+          linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D) => {
             const src = link.source as any
             const tgt = link.target as any
+            if (src?.x == null || tgt?.x == null) return
+
             const srcId: string = src?.id ?? src
             const tgtId: string = tgt?.id ?? tgt
             const srcDimmed = isNodeDimmed(srcId, src?.type ?? '')
             const tgtDimmed = isNodeDimmed(tgtId, tgt?.type ?? '')
 
-            // When focused: highlight edges in the cluster, fade everything else
+            // Compute edge color (same logic as before)
+            let color: string
             if (focusId !== null) {
-              if (srcDimmed && tgtDimmed) return isDark ? '#1a202c' : '#f8fafc'
-              // Edge touches focused node/neighbor — show it
-              const base = (link.typed as boolean) ? edgeColorTyped : edgeColor
-              return srcDimmed || tgtDimmed ? base + '55' : edgeColorFocus
+              if (srcDimmed && tgtDimmed) color = isDark ? '#1a202c' : '#f8fafc'
+              else {
+                const base = (link.typed as boolean) ? edgeColorTyped : edgeColor
+                color = srcDimmed || tgtDimmed ? base + '55' : edgeColorFocus
+              }
+            } else if (activeTypes.size > 0 && (srcDimmed || tgtDimmed)) {
+              color = isDark ? '#1e2533' : '#f1f5f9'
+            } else {
+              color = (link.typed as boolean) ? edgeColorTyped : edgeColor
             }
 
-            // No focus — uniform subtle edges
-            if (activeTypes.size > 0 && (srcDimmed || tgtDimmed)) {
-              return isDark ? '#1e2533' : '#f1f5f9'
-            }
-            return (link.typed as boolean) ? edgeColorTyped : edgeColor
+            const isPerson2Person = src?.type === 'person' && tgt?.type === 'person'
+
+            ctx.beginPath()
+            ctx.moveTo(src.x, src.y)
+            ctx.lineTo(tgt.x, tgt.y)
+            ctx.strokeStyle = color
+            ctx.lineWidth = 0.8
+            ctx.setLineDash(isPerson2Person ? [3, 3] : [])
+            ctx.stroke()
+            ctx.setLineDash([])
           }}
-          linkWidth={0.8}
+          linkCanvasObjectMode={() => 'replace'}
           width={size.width}
           height={size.height}
         />
