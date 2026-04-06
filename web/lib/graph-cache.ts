@@ -1,20 +1,33 @@
-// web/lib/graph-cache.ts
 import { VaultGraph } from './types'
 
-const TTL_MS = 5 * 60 * 1000 // 5 minutes
+let cachedGraph: VaultGraph | null = null
+let cachedHash: string | null = null
 
-let cached: VaultGraph | null = null
-
-export function getCachedGraph(): VaultGraph | null {
-  if (!cached) return null
-  if (Date.now() - cached.builtAt > TTL_MS) return null
-  return cached
+/** Returns cached graph only if the vault hash matches — otherwise null. */
+export function getCachedGraph(vaultHash: string): VaultGraph | null {
+  if (!cachedGraph || cachedHash !== vaultHash) return null
+  return cachedGraph
 }
 
-export function setCachedGraph(graph: VaultGraph): void {
-  cached = graph
+/** Returns whatever is in cache right now, regardless of hash (for secondary routes). */
+export function getCachedGraphIfAvailable(): VaultGraph | null {
+  return cachedGraph
+}
+
+export function setCachedGraph(graph: VaultGraph, vaultHash: string): void {
+  cachedGraph = graph
+  cachedHash = vaultHash
 }
 
 export function invalidateCache(): void {
-  cached = null
+  cachedGraph = null
+  cachedHash = null
+}
+
+/** Stable hash from a vault tree — any file change changes the hash. */
+export function computeVaultHash(tree: { path: string; sha: string }[]): string {
+  return tree
+    .map(f => `${f.path}:${f.sha}`)
+    .sort()
+    .join('|')
 }

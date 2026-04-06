@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { invalidateCache, getCachedGraph } from '@/lib/graph-cache'
+import { invalidateCache, getCachedGraphIfAvailable } from '@/lib/graph-cache'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -12,7 +12,7 @@ export async function GET() {
   const repo = process.env.GITHUB_VAULT_REPO
   const branch = process.env.GITHUB_VAULT_BRANCH ?? 'main'
 
-  const graph = getCachedGraph()
+  const graph = getCachedGraphIfAvailable()
 
   if (vaultPath) {
     return NextResponse.json({
