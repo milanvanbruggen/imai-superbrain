@@ -2,7 +2,6 @@
 import dynamic from 'next/dynamic'
 import { useTheme } from 'next-themes'
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { forceCollide } from 'd3-force-3d'
 import { GraphNode, GraphEdge } from '@/lib/types'
 
 const ForceGraph2D = dynamic(
@@ -30,8 +29,6 @@ export const TYPE_COLORS: Record<string, string> = {
 }
 
 const NODE_REL_SIZE = 4
-// Minimum screen-space separation between node centers (px at zoom=1)
-const COLLISION_RADIUS = 36
 
 function truncate(s: string, max = 22): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
@@ -58,14 +55,18 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
-  // Spread nodes apart: strong repulsion + collision + loose links
-  useEffect(() => {
+  // Apply forces once the graph is mounted. Called via onEngineStop so the
+  // ref is guaranteed to be populated, then re-heat to spread from new config.
+  const forcesApplied = useRef(false)
+  function applyForces() {
+    if (forcesApplied.current) return
     const fg = graphRef.current
-    if (!fg || !size) return
-    fg.d3Force('charge')?.strength(-500)
-    fg.d3Force('link')?.distance(120).strength(0.15)
-    fg.d3Force('collision', forceCollide(COLLISION_RADIUS))
-  }, [size])
+    if (!fg) return
+    forcesApplied.current = true
+    fg.d3Force('charge')?.strength(-2500)
+    fg.d3Force('link')?.distance(180).strength(0.05)
+    fg.d3ReheatSimulation()
+  }
 
   const degreeById = useMemo(() => {
     const map: Record<string, number> = {}
@@ -130,6 +131,10 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={3}
           linkDirectionalArrowRelPos={1}
+          d3AlphaDecay={0.015}
+          d3VelocityDecay={0.25}
+          warmupTicks={60}
+          onEngineStop={applyForces}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           backgroundColor={bgColor}
@@ -144,7 +149,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const x = node.x as number
             const y = node.y as number
 
-            // Selection ring
+            // Selection / hover ring
             if (isSelected || isHovered) {
               ctx.globalAlpha = 0.2
               ctx.beginPath()
@@ -160,7 +165,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             ctx.fillStyle = node.color as string
             ctx.fill()
 
-            // Label: always show when zoomed in, only show focused cluster at normal zoom
+            // Label: always for focused cluster; for others only when zoomed in
             const showLabel = isFocused || globalScale > 1.2
             if (showLabel) {
               const label = truncate((node.title as string) ?? nodeId)
