@@ -219,13 +219,14 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           linkDirectionalArrowLength={0}
           d3AlphaDecay={0.04}
           d3VelocityDecay={0.6}
+          cooldownTicks={120}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           onEngineStop={() => {
             if (!initialZoomDone.current) {
               initialZoomDone.current = true
-              graphRef.current?.zoomToFit(400, 60)
+              graphRef.current?.zoomToFit(600, 60)
             }
           }}
           backgroundColor={bgColor}
