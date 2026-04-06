@@ -127,9 +127,11 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       }
 
       // dagMode handles radial positioning — charge + collide handle within-ring spread
-      fg.d3Force('charge')?.strength(-60).distanceMax(120)
+      fg.d3Force('charge')?.strength(-80).distanceMax(150)
       fg.d3Force('link')?.distance(40).strength(0.9)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
+      // Re-enable built-in d3 center force to keep the graph centered on canvas
+      fg.d3Force('center')?.strength(0.05)
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
@@ -204,7 +206,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           dagMode="radialout"
-          dagLevelDistance={90}
+          dagLevelDistance={120}
           onDagError={(loopNodeIds: any) => console.warn('DAG cycle detected, skipping nodes:', loopNodeIds)}
           linkDirectionalArrowLength={0}
           d3AlphaDecay={0.04}
