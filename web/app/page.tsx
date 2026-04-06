@@ -177,14 +177,8 @@ export default function BrainPage() {
     })
   }
 
-  const displayNodes = activeTypes.size === 0
-    ? baseNodes
-    : baseNodes.filter(n => activeTypes.has(n.type))
-
-  const displayNodeIds = new Set(displayNodes.map(n => n.id))
-  const displayEdges = activeTypes.size === 0
-    ? baseEdges
-    : baseEdges.filter(e => displayNodeIds.has(e.source) && displayNodeIds.has(e.target))
+  const displayNodes = baseNodes
+  const displayEdges = baseEdges
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100">
@@ -248,6 +242,7 @@ export default function BrainPage() {
             edges={displayEdges}
             selectedId={selectedId}
             onSelectNode={setSelectedId}
+            activeTypes={activeTypes}
           />
 
           {/* Type filter overlay */}

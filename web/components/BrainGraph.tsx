@@ -14,6 +14,7 @@ interface Props {
   edges: GraphEdge[]
   selectedId: string | null
   onSelectNode: (id: string) => void
+  activeTypes: Set<string>
 }
 
 export const TYPE_COLORS: Record<string, string> = {
@@ -27,7 +28,7 @@ export const TYPE_COLORS: Record<string, string> = {
   area: '#EC4899',
 }
 
-export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
+export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes }: Props) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -66,27 +67,44 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
     return map
   }, [edges])
 
+  // Neighbors of the selected node — always shown at full opacity
+  const selectedNeighbors = useMemo(() => {
+    if (!selectedId) return new Set<string>()
+    const set = new Set<string>()
+    edges.forEach(e => {
+      if (e.source === selectedId) set.add(e.target)
+      if (e.target === selectedId) set.add(e.source)
+    })
+    return set
+  }, [selectedId, edges])
+
   const isDark = !mounted || resolvedTheme === 'dark'
   const bgColor = isDark ? '#030712' : '#f8fafc'
-  const linkColor = isDark ? '#374151' : '#cbd5e1'
-  const selectedColor = isDark ? '#ffffff' : '#0f172a'
+  const defaultLinkColor = isDark ? '#374151' : '#cbd5e1'
+
+  const NODE_REL_SIZE = 6
 
   const graphData = {
     nodes: nodes.map(n => {
       const deg = degreeById[n.id] ?? 0
       return {
         ...n,
-        color: selectedId === n.id ? selectedColor : (TYPE_COLORS[n.type] ?? '#94a3b8'),
-        // Orphan nodes stay small; connected nodes scale up with degree
+        color: TYPE_COLORS[n.type] ?? '#94a3b8',
         val: deg === 0 ? 0.4 : Math.min(1 + deg * 0.4, 4),
       }
     }),
     links: edges.map(e => ({
       source: e.source,
       target: e.target,
-      color: e.typed ? '#f97316' : linkColor,
-      label: e.relationType,
+      typed: e.typed,
     })),
+  }
+
+  function isNodeDimmed(nodeId: string, nodeType: string): boolean {
+    if (activeTypes.size === 0) return false
+    if (nodeId === selectedId) return false
+    if (selectedNeighbors.has(nodeId)) return false
+    return !activeTypes.has(nodeType)
   }
 
   return (
@@ -96,14 +114,53 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode }: Props) {
           ref={graphRef}
           graphData={graphData}
           nodeLabel="title"
-          nodeRelSize={6}
+          nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={4}
           linkDirectionalArrowRelPos={1}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           backgroundColor={bgColor}
-          linkColor={(link: any) => link.color as string}
-          nodeColor={(node: any) => node.color as string}
-          nodeVal={(node: any) => node.val as number}
+          nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D) => {
+            const dimmed = isNodeDimmed(node.id as string, node.type as string)
+            const r = Math.sqrt(node.val as number) * NODE_REL_SIZE
+            const isSelected = node.id === selectedId
+
+            ctx.globalAlpha = dimmed ? 0.1 : 1
+
+            // Selection ring
+            if (isSelected) {
+              ctx.beginPath()
+              ctx.arc(node.x as number, node.y as number, r + 4, 0, 2 * Math.PI)
+              ctx.fillStyle = node.color as string
+              ctx.globalAlpha = 0.2
+              ctx.fill()
+              ctx.globalAlpha = 1
+            }
+
+            ctx.beginPath()
+            ctx.arc(node.x as number, node.y as number, r, 0, 2 * Math.PI)
+            ctx.fillStyle = node.color as string
+            ctx.fill()
+
+            ctx.globalAlpha = 1
+          }}
+          nodeCanvasObjectMode={() => 'replace'}
+          linkColor={(link: any) => {
+            if (activeTypes.size === 0) {
+              return (link.typed as boolean) ? '#f97316' : defaultLinkColor
+            }
+            const src = link.source as any
+            const tgt = link.target as any
+            const srcId = src?.id ?? src
+            const tgtId = tgt?.id ?? tgt
+            const srcType = src?.type as string | undefined
+            const tgtType = tgt?.type as string | undefined
+            // Edge is visible if either endpoint is active or is selected/neighbor
+            const srcVisible = !isNodeDimmed(srcId, srcType ?? '')
+            const tgtVisible = !isNodeDimmed(tgtId, tgtType ?? '')
+            if (!srcVisible && !tgtVisible) return isDark ? '#111827' : '#f1f5f9'
+            const baseColor = (link.typed as boolean) ? '#f97316' : defaultLinkColor
+            return (!srcVisible || !tgtVisible) ? baseColor + '55' : baseColor
+          }}
           width={size.width}
           height={size.height}
         />
