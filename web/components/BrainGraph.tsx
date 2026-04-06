@@ -86,6 +86,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const graphRef = useRef<any>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  // Track last drag position to compute throw velocity on release
+  const lastDragRef = useRef<{ x: number; y: number; t: number } | null>(null)
 
   useEffect(() => setMounted(true), [])
 
@@ -188,11 +191,26 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={0}
-          d3AlphaDecay={0.012}
-          d3VelocityDecay={0.4}
+          d3AlphaDecay={0.008}
+          d3VelocityDecay={0.12}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
+          onNodeDrag={(node: any) => {
+            setDraggingId(node.id)
+            lastDragRef.current = { x: node.x, y: node.y, t: Date.now() }
+          }}
+          onNodeDragEnd={(node: any) => {
+            // Apply throw velocity based on last movement delta
+            const last = lastDragRef.current
+            if (last && Date.now() - last.t < 80) {
+              node.vx = (node.x - last.x) * 4
+              node.vy = (node.y - last.y) * 4
+            }
+            lastDragRef.current = null
+            setDraggingId(null)
+            graphRef.current?.d3ReheatSimulation()
+          }}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const nodeId = node.id as string
@@ -200,13 +218,23 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const dimmed = isNodeDimmed(nodeId, nodeType)
             const isSelected = nodeId === selectedId
             const isHovered = nodeId === hoveredId
+            const isDragging = nodeId === draggingId
             const isFocused = nodeId === focusId || focusNeighbors.has(nodeId)
             const r = Math.sqrt(node.val as number) * NODE_REL_SIZE
             const x = node.x as number
             const y = node.y as number
 
+            // Drag glow — larger, brighter ring while being moved
+            if (isDragging) {
+              ctx.globalAlpha = 0.25
+              ctx.beginPath()
+              ctx.arc(x, y, r + 6, 0, 2 * Math.PI)
+              ctx.fillStyle = node.color as string
+              ctx.fill()
+            }
+
             // Selection / hover ring
-            if (isSelected || isHovered) {
+            if ((isSelected || isHovered) && !isDragging) {
               ctx.globalAlpha = 0.18
               ctx.beginPath()
               ctx.arc(x, y, r + 3, 0, 2 * Math.PI)
