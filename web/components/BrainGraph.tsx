@@ -29,9 +29,82 @@ export const TYPE_COLORS: Record<string, string> = {
 }
 
 const NODE_REL_SIZE = 4
+// Minimum arc distance between nodes on the same ring — guarantees labels don't overlap
+const MIN_ARC_SPACING = 130
+// Minimum radial gap between consecutive rings
+const MIN_RING_GAP = 180
 
-function truncate(s: string, max = 22): string {
+function truncate(s: string, max = 20): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
+}
+
+/**
+ * BFS radial layout — hub at centre, each BFS ring placed at the radius
+ * required to give all nodes on that ring at least MIN_ARC_SPACING of space.
+ * Returns a Map of nodeId → {x, y} in graph coordinate space (hub at 0,0).
+ */
+function computeRadialPositions(
+  nodes: GraphNode[],
+  edges: GraphEdge[]
+): Map<string, { x: number; y: number }> {
+  const adj: Record<string, Set<string>> = {}
+  nodes.forEach(n => { adj[n.id] = new Set() })
+  edges.forEach(e => {
+    adj[e.source]?.add(e.target)
+    adj[e.target]?.add(e.source)
+  })
+
+  const degree = (id: string) => adj[id]?.size ?? 0
+  const hub = [...nodes].sort((a, b) => degree(b.id) - degree(a.id))[0]
+  const pos = new Map<string, { x: number; y: number }>()
+  const visited = new Set<string>()
+
+  if (!hub) return pos
+
+  pos.set(hub.id, { x: 0, y: 0 })
+  visited.add(hub.id)
+
+  let frontier = [hub.id]
+  let currentRadius = 0
+
+  while (frontier.length > 0) {
+    const next: string[] = []
+    frontier.forEach(id => {
+      adj[id]?.forEach(nid => {
+        if (!visited.has(nid)) { visited.add(nid); next.push(nid) }
+      })
+    })
+    if (next.length === 0) break
+
+    // Ring radius: enough arc space for all nodes on this ring
+    const minForSpacing = (next.length * MIN_ARC_SPACING) / (2 * Math.PI)
+    currentRadius += Math.max(MIN_RING_GAP, minForSpacing)
+
+    next.forEach((id, i) => {
+      const angle = (i / next.length) * 2 * Math.PI - Math.PI / 2
+      pos.set(id, {
+        x: currentRadius * Math.cos(angle),
+        y: currentRadius * Math.sin(angle),
+      })
+    })
+    frontier = next
+  }
+
+  // Disconnected nodes (no path to hub) — outer ring
+  const orphans = nodes.filter(n => !visited.has(n.id))
+  if (orphans.length > 0) {
+    const minForSpacing = (orphans.length * MIN_ARC_SPACING) / (2 * Math.PI)
+    currentRadius += Math.max(MIN_RING_GAP, minForSpacing)
+    orphans.forEach((n, i) => {
+      const angle = (i / orphans.length) * 2 * Math.PI - Math.PI / 2
+      pos.set(n.id, {
+        x: currentRadius * Math.cos(angle),
+        y: currentRadius * Math.sin(angle),
+      })
+    })
+  }
+
+  return pos
 }
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes }: Props) {
@@ -55,20 +128,16 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return () => obs.disconnect()
   }, [])
 
-  // Apply forces after the graph has initialised.
-  // forceCenter is the main culprit: it constantly pulls everything toward
-  // (0,0), overpowering even very strong charge repulsion.
-  // Solution: remove center force, crank up charge, weaken links.
+  // Disable centering + physics since positions are pre-computed.
+  // Keep a tiny charge so dragged (unpinned) nodes don't fly off.
   useEffect(() => {
-    if (!size) return
     const timer = setTimeout(() => {
       const fg = graphRef.current
       if (!fg) return
-      fg.d3Force('center', null)           // remove centering pull
-      fg.d3Force('charge')?.strength(-4000)
-      fg.d3Force('link')?.distance(160).strength(0.04)
-      fg.d3ReheatSimulation()
-    }, 50)
+      fg.d3Force('center', null)
+      fg.d3Force('charge')?.strength(-80)
+      fg.d3Force('link')?.strength(0)
+    }, 30)
     return () => clearTimeout(timer)
   }, [size])
 
@@ -91,45 +160,38 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [nodes, edges])
 
+  const radialPositions = useMemo(
+    () => computeRadialPositions(nodes, edges),
+    [nodes, edges]
+  )
+
   const isDark = !mounted || resolvedTheme === 'dark'
   const bgColor = isDark ? '#030712' : '#f8fafc'
   const defaultLinkColor = isDark ? '#374151' : '#d1d5db'
   const labelColorDim = isDark ? '#4b5563' : '#9ca3af'
   const labelColorFocus = isDark ? '#e5e7eb' : '#1f2937'
 
-  // Pre-position nodes in a circle so the simulation starts spread out
-  const graphData = useMemo(() => {
-    const cx = (size?.width ?? 600) / 2
-    const cy = (size?.height ?? 400) / 2
-    const r = Math.min(cx, cy) * 0.7
-    return {
-      nodes: nodes.map((n, i) => {
-        const deg = degreeById[n.id] ?? 0
-        const angle = (i / nodes.length) * 2 * Math.PI
-        return {
-          ...n,
-          color: TYPE_COLORS[n.type] ?? '#94a3b8',
-          val: deg === 0 ? 0.3 : Math.min(0.5 + deg * 0.25, 2.5),
-          x: cx + r * Math.cos(angle),
-          y: cy + r * Math.sin(angle),
-        }
-      }),
-      links: edges.map(e => ({
-        source: e.source,
-        target: e.target,
-        typed: e.typed,
-      })),
-    }
-  }, [nodes, edges, degreeById, size])
+  const graphData = useMemo(() => ({
+    nodes: nodes.map(n => {
+      const deg = degreeById[n.id] ?? 0
+      const rp = radialPositions.get(n.id)
+      return {
+        ...n,
+        color: TYPE_COLORS[n.type] ?? '#94a3b8',
+        val: deg === 0 ? 0.3 : Math.min(0.5 + deg * 0.2, 2.5),
+        // Pin nodes to computed positions; dragging clears fx/fy automatically
+        fx: rp?.x,
+        fy: rp?.y,
+      }
+    }),
+    links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
+  }), [nodes, edges, degreeById, radialPositions])
 
-  // Focus: hovered takes priority over selected
   const focusId = hoveredId ?? selectedId
   const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
 
   function isNodeDimmed(nodeId: string, nodeType: string): boolean {
-    if (focusId !== null) {
-      return nodeId !== focusId && !focusNeighbors.has(nodeId)
-    }
+    if (focusId !== null) return nodeId !== focusId && !focusNeighbors.has(nodeId)
     if (activeTypes.size === 0) return false
     return !activeTypes.has(nodeType)
   }
@@ -144,8 +206,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={3}
           linkDirectionalArrowRelPos={1}
-          d3AlphaDecay={0.01}
-          d3VelocityDecay={0.3}
+          d3AlphaDecay={0.1}
+          d3VelocityDecay={0.5}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
           backgroundColor={bgColor}
@@ -160,6 +222,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             const x = node.x as number
             const y = node.y as number
 
+            // Selection / hover ring
             if (isSelected || isHovered) {
               ctx.globalAlpha = 0.2
               ctx.beginPath()
@@ -168,23 +231,22 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
               ctx.fill()
             }
 
+            // Node dot
             ctx.globalAlpha = dimmed ? 0.07 : 1
             ctx.beginPath()
             ctx.arc(x, y, r, 0, 2 * Math.PI)
             ctx.fillStyle = node.color as string
             ctx.fill()
 
-            const showLabel = isFocused || globalScale > 1.2
-            if (showLabel) {
-              const label = truncate((node.title as string) ?? nodeId)
-              const fontSize = Math.min(11, Math.max(4, 10 / globalScale))
-              ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-              ctx.textAlign = 'center'
-              ctx.textBaseline = 'top'
-              ctx.globalAlpha = dimmed ? 0.07 : 1
-              ctx.fillStyle = isFocused ? labelColorFocus : labelColorDim
-              ctx.fillText(label, x, y + r + 2)
-            }
+            // Label — always visible in radial layout (spacing guaranteed)
+            const label = truncate((node.title as string) ?? nodeId)
+            const fontSize = Math.min(11, Math.max(4, 10 / globalScale))
+            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'top'
+            ctx.globalAlpha = dimmed ? 0.07 : 1
+            ctx.fillStyle = isFocused ? labelColorFocus : labelColorDim
+            ctx.fillText(label, x, y + r + 2)
 
             ctx.globalAlpha = 1
           }}
@@ -192,14 +254,12 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           linkColor={(link: any) => {
             const src = link.source as any
             const tgt = link.target as any
-            const srcId: string = src?.id ?? src
-            const tgtId: string = tgt?.id ?? tgt
-            const srcDimmed = isNodeDimmed(srcId, src?.type ?? '')
-            const tgtDimmed = isNodeDimmed(tgtId, tgt?.type ?? '')
-            const baseColor = (link.typed as boolean) ? '#f97316' : defaultLinkColor
+            const srcDimmed = isNodeDimmed(src?.id ?? src, src?.type ?? '')
+            const tgtDimmed = isNodeDimmed(tgt?.id ?? tgt, tgt?.type ?? '')
+            const base = (link.typed as boolean) ? '#f97316' : defaultLinkColor
             if (srcDimmed && tgtDimmed) return isDark ? '#1a2030' : '#f3f4f6'
-            if (srcDimmed || tgtDimmed) return baseColor + '44'
-            return baseColor
+            if (srcDimmed || tgtDimmed) return base + '44'
+            return base
           }}
           width={size.width}
           height={size.height}
