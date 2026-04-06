@@ -6,6 +6,8 @@ interface Props {
   onClose: () => void
 }
 
+const SYSTEM_DIRS = ['Claude', 'templates']
+
 async function createEditor(
   el: HTMLElement,
   initialContent: string,
@@ -40,17 +42,26 @@ export function SystemFilesModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // New file state
+  const [newFileDir, setNewFileDir] = useState<string | null>(null)
+  const [newFileName, setNewFileName] = useState('')
+
   const editorRef = useRef<HTMLDivElement>(null)
   const editorViewRef = useRef<any>(null)
 
-  useEffect(() => {
-    fetch('/api/vault/system')
+  function refreshFiles() {
+    return fetch('/api/vault/system')
       .then(r => r.json())
       .then(d => setFiles(d.files ?? []))
-  }, [])
+  }
+
+  useEffect(() => { refreshFiles() }, [])
 
   async function selectFile(path: string) {
     setSelectedPath(path)
+    setNewFileDir(null)
+    setNewFileName('')
     setLoading(true)
     setError(null)
     try {
@@ -102,11 +113,34 @@ export function SystemFilesModal({ onClose }: Props) {
     }
   }
 
-  // Group files by directory
-  const groups = files.reduce<Record<string, SystemFile[]>>((acc, f) => {
-    ;(acc[f.dir] ??= []).push(f)
-    return acc
-  }, {})
+  async function handleCreateFile() {
+    if (!newFileDir || !newFileName.trim()) return
+    const name = newFileName.trim().endsWith('.md') ? newFileName.trim() : `${newFileName.trim()}.md`
+    const path = newFileDir === '/' ? name : `${newFileDir}/${name}`
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/vault/note/${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '', sha: null }),
+      })
+      if (!res.ok) throw new Error('Failed to create file')
+      await refreshFiles()
+      setNewFileDir(null)
+      setNewFileName('')
+      selectFile(path)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Create failed')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Group files by directory, always show all system dirs
+  const groups: Record<string, SystemFile[]> = { '/': [] }
+  SYSTEM_DIRS.forEach(d => { groups[d] = [] })
+  files.forEach(f => { (groups[f.dir] ??= []).push(f) })
 
   return (
     <div
@@ -133,10 +167,41 @@ export function SystemFilesModal({ onClose }: Props) {
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {Object.entries(groups).map(([dir, groupFiles]) => (
-              <div key={dir} className="mb-1">
-                <p className="px-4 py-1 text-xs font-medium text-slate-400 dark:text-gray-600 uppercase tracking-wider">
-                  {dir === '/' ? 'root' : dir}
-                </p>
+              <div key={dir} className="mb-2">
+                <div className="flex items-center justify-between px-4 py-1 group">
+                  <p className="text-xs font-medium text-slate-400 dark:text-gray-600 uppercase tracking-wider">
+                    {dir === '/' ? 'root' : dir}
+                  </p>
+                  {dir !== '/' && (
+                    <button
+                      onClick={() => { setNewFileDir(dir); setNewFileName(''); setSelectedPath(null) }}
+                      title={`New file in ${dir}/`}
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {/* New file input */}
+                {newFileDir === dir && (
+                  <div className="px-3 pb-1.5">
+                    <input
+                      autoFocus
+                      value={newFileName}
+                      onChange={e => setNewFileName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleCreateFile()
+                        if (e.key === 'Escape') { setNewFileDir(null); setNewFileName('') }
+                      }}
+                      placeholder="filename.md"
+                      className="w-full px-2 py-1 text-xs rounded border border-teal-400 dark:border-teal-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 outline-none"
+                    />
+                  </div>
+                )}
+
                 {groupFiles.map(f => (
                   <button
                     key={f.path}
@@ -157,9 +222,13 @@ export function SystemFilesModal({ onClose }: Props) {
 
         {/* Editor area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {selectedPath === null ? (
+          {selectedPath === null && newFileDir === null ? (
             <div className="flex-1 flex items-center justify-center text-sm text-slate-400 dark:text-gray-600">
               Select a file to view or edit
+            </div>
+          ) : newFileDir !== null && selectedPath === null ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-slate-400 dark:text-gray-600">
+              <p>Enter a filename in the sidebar and press <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-gray-800 text-xs font-mono">Enter</kbd></p>
             </div>
           ) : loading ? (
             <div className="flex-1 flex items-center justify-center gap-2 text-sm text-slate-400">
