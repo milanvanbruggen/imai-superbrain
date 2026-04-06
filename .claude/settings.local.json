@@ -41,7 +41,17 @@
       "Bash(npm install @testing-library/react jsdom --save-dev)",
       "Bash(node -e \"const p = require\\(''./node_modules/next-auth/package.json''\\); console.log\\(''next-auth version:'', p.version\\)\")",
       "Bash(npm install next-auth@^4.24.13)",
-      "Bash(git add .)"
+      "Bash(git add .)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npm test)",
+      "Bash(git add web/lib/vault-parser.ts web/lib/__tests__/vault-parser.test.ts)",
+      "Bash(npm test -- --reporter=verbose)",
+      "Bash(git add web/lib/github.ts web/lib/__tests__/github.test.ts)",
+      "Bash(git add web/lib/graph-cache.ts web/app/api/vault/graph/ web/app/api/vault/note/)",
+      "Bash(find /Users/milanvanbruggen/Web/mai-superbrain/web/node_modules/next -name *.md -maxdepth 3)",
+      "Read(//Users/milanvanbruggen/**)",
+      "Bash(echo \"home: $HOME\")",
+      "Bash(VAULT=\"/Users/milanvanbruggen/Library/Mobile Documents/iCloud~md~obsidian/Documents/Milan's Brain\"\n\nmkdir -p \"$VAULT/00-Inbox\"\nmkdir -p \"$VAULT/01-Projects/DDZ-voorzitterschap-2026\"\nmkdir -p \"$VAULT/01-Projects/Podcast-seizoen\"\nmkdir -p \"$VAULT/01-Projects/ietsmetai-contentkalender\"\nmkdir -p \"$VAULT/02-Areas/DDZ\"\nmkdir -p \"$VAULT/02-Areas/Podcast\"\nmkdir -p \"$VAULT/02-Areas/ietsmetai\"\nmkdir -p \"$VAULT/02-Areas/Onder\"\nmkdir -p \"$VAULT/02-Areas/Persoonlijk\"\nmkdir -p \"$VAULT/03-Knowledge\"\nmkdir -p \"$VAULT/04-Templates\"\nmkdir -p \"$VAULT/05-Archive\"\n\necho \"Mappen aangemaakt:\"\nfind \"$VAULT\" -not -path \"*/.obsidian*\" -type d | sort)"
     ]
   }
 }
