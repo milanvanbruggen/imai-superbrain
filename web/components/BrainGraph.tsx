@@ -52,6 +52,60 @@ function tint(hex: string, ratio: number): string {
 }
 
 /**
+ * BFS from sourceId over undirected edges. Returns a map of nodeId → hop distance.
+ * Nodes unreachable from source are omitted.
+ */
+function bfsDistances(sourceId: string, edges: GraphEdge[]): Record<string, number> {
+  const adj: Record<string, string[]> = {}
+  for (const e of edges) {
+    ;(adj[e.source] ??= []).push(e.target)
+    ;(adj[e.target] ??= []).push(e.source)
+  }
+  const dist: Record<string, number> = { [sourceId]: 0 }
+  const queue = [sourceId]
+  while (queue.length) {
+    const curr = queue.shift()!
+    for (const nb of adj[curr] ?? []) {
+      if (dist[nb] === undefined) {
+        dist[nb] = dist[curr] + 1
+        queue.push(nb)
+      }
+    }
+  }
+  return dist
+}
+
+/**
+ * Pulls each node toward a target radius equal to its BFS distance × ringSpacing.
+ * The hub node (distance 0) is pulled toward the origin.
+ * Nodes with no entry in distByNode are unaffected.
+ */
+function createRadialForce(distByNode: Record<string, number>, ringSpacing: number, strength = 0.05) {
+  let simNodes: any[] = []
+  function force() {
+    for (const node of simNodes) {
+      const dist = distByNode[node.id]
+      if (dist === undefined) continue
+      const x = node.x ?? 0
+      const y = node.y ?? 0
+      const targetR = dist * ringSpacing
+      if (targetR === 0) {
+        // Hub: pull straight to origin
+        node.vx = (node.vx ?? 0) - x * strength * 3
+        node.vy = (node.vy ?? 0) - y * strength * 3
+      } else {
+        const r = Math.sqrt(x * x + y * y) || 1
+        const dr = r - targetR
+        node.vx = (node.vx ?? 0) - (x / r) * dr * strength
+        node.vy = (node.vy ?? 0) - (y / r) * dr * strength
+      }
+    }
+  }
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  return force
+}
+
+/**
  * Pure-JS collision force compatible with d3-force-3d simulations.
  * Prevents node centres coming closer than `minDist` px.
  */
@@ -107,12 +161,19 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [edges])
 
-  // Organic physics:
-  // - Charge -60 with distanceMax 120: repels nearby nodes (local spread)
-  //   but doesn't push distant clusters apart — lets topology form clusters
-  // - Link distance 45 pulls connected nodes close so hubs gather their neighbors
+  // BFS distances from the highest-degree node (the hub, typically Milan van Bruggen).
+  // Used by the radial force to nudge nodes toward concentric rings: hub → areas → people.
+  const bfsFromHub = useMemo(() => {
+    const hubId = Object.entries(degreeById).sort(([, a], [, b]) => b - a)[0]?.[0]
+    if (!hubId) return {}
+    return bfsDistances(hubId, edges)
+  }, [edges, degreeById])
+
+  // Physics:
+  // - Radial force (BFS-distance based) nudges nodes into rings around the hub
+  // - Charge -40 with distanceMax 100: local repulsion only, lets clusters form
+  // - Link distance 40 pulls connected nodes tightly around their hubs
   // - Custom collision prevents overlap
-  // - Universal center gravity (0.03) keeps the cluster from drifting
   useEffect(() => {
     // ForceGraph2D loads via dynamic import, so graphRef.current may not be set yet.
     // Retry until the instance is available (max ~3s).
@@ -126,22 +187,19 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         return
       }
 
-      // dagMode handles radial positioning — charge + collide handle within-ring spread
-      fg.d3Force('charge')?.strength(-80).distanceMax(150)
-      fg.d3Force('link')?.distance(40).strength(0.9)
+      fg.d3Force('charge')?.strength(-40).distanceMax(100)
+      fg.d3Force('link')?.distance(40).strength(1.0)
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
-      // Re-enable built-in d3 center force to keep the graph centered on canvas
-      fg.d3Force('center')?.strength(0.05)
+      fg.d3Force('radial', createRadialForce(bfsFromHub, 80, 0.04))
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
-      fg.d3Force('depthRadial', null)
       fg.d3ReheatSimulation()
     }
 
     applyForces()
     return () => clearTimeout(timer)
-  }, [size])
+  }, [size, bfsFromHub])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
@@ -172,10 +230,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         val: deg === 0 ? 0.4 : Math.min(0.6 + deg * 0.15, 3),
       }
     }),
-    // Reversed so the highest-degree hub (vault owner) is the DAG root at center.
-    // Edges in the vault point inward (person→area→hub); reversing makes hub the source
-    // so dagMode="radialout" correctly places the hub at depth 0 (center).
-    links: edges.map(e => ({ source: e.target, target: e.source, typed: e.typed })),
+    links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
   }), [nodes, edges, degreeById])
 
   // Center graph on selected node whenever selectedId changes.
@@ -205,9 +260,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           graphData={graphData}
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
-          dagMode="radialout"
-          dagLevelDistance={120}
-          onDagError={(loopNodeIds: any) => console.warn('DAG cycle detected, skipping nodes:', loopNodeIds)}
           linkDirectionalArrowLength={0}
           d3AlphaDecay={0.04}
           d3VelocityDecay={0.6}
