@@ -9,3 +9,4 @@ npm-debug.log*
 *.pem
 .vercel
 .worktrees/
+.superpowers/
