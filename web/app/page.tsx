@@ -26,7 +26,7 @@ export default function BrainPage() {
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
-  const [panelCollapsed, setPanelCollapsed] = useState(false)
+  const [panelCollapsed, setPanelCollapsed] = useState(true)
   const prevWidthRef = useRef(DEFAULT_PANEL_WIDTH)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
