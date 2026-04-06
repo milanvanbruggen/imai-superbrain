@@ -32,7 +32,7 @@ export function parseNote(path: string, raw: string): VaultNote {
     path,
     stem,
     title: data.title ?? stem,
-    type: VALID_TYPES.includes(data.type) ? data.type : isSystemPath(path) ? 'system' : 'note',
+    type: isSystemPath(path) ? 'system' : VALID_TYPES.includes(data.type) ? data.type : 'note',
     tags: data.tags ?? [],
     date: data.date
       ? data.date instanceof Date
