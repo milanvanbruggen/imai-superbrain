@@ -163,8 +163,8 @@ export default function BrainPage() {
   if (!graph) return null
 
   const allNodes = showSystemNodes
-    ? graph.nodes.filter(n => n.type === 'system')
-    : graph.nodes.filter(n => n.type !== 'system')
+    ? graph.nodes.filter(n => n.type === 'system' || n.type === 'template')
+    : graph.nodes.filter(n => n.type !== 'system' && n.type !== 'template')
   const allEdges = graph.edges.filter(e =>
     allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target)
   )
@@ -273,10 +273,9 @@ export default function BrainPage() {
             </span>
           </button>
 
-          {/* Type filter overlay — left, hidden in system mode */}
-          {!showSystemNodes && (
-          <div className="absolute top-3 left-3 right-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none" style={{ scrollbarWidth: 'none' }}>
-            {availableTypes.filter(t => t !== 'system').map(type => {
+          {/* Type filter overlay — left */}
+          <div className="absolute top-3 left-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none pr-28" style={{ scrollbarWidth: 'none' }}>
+            {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => {
               const isActive = activeTypes.size === 0 || activeTypes.has(type)
               const color = TYPE_COLORS[type] ?? '#94a3b8'
               return (
@@ -299,7 +298,6 @@ export default function BrainPage() {
               )
             })}
           </div>
-          )}
         </main>
 
         {/* Drag handle — hidden when panel is collapsed */}

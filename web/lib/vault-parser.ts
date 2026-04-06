@@ -4,13 +4,14 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
 const SYSTEM_PATHS = new Set(['CLAUDE.md', 'memory.md'])
-const SYSTEM_DIRS = ['Claude/', 'templates/']
 
-function isSystemPath(path: string): boolean {
-  return SYSTEM_PATHS.has(path) || SYSTEM_DIRS.some(d => path.startsWith(d))
+function systemType(path: string): 'system' | 'template' | null {
+  if (SYSTEM_PATHS.has(path) || path.startsWith('Claude/')) return 'system'
+  if (path.startsWith('templates/')) return 'template'
+  return null
 }
 
-const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'system'] as const
+const VALID_TYPES = ['person', 'project', 'idea', 'note', 'resource', 'meeting', 'daily', 'area', 'system', 'template'] as const
 
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
@@ -32,13 +33,13 @@ export function parseNote(path: string, raw: string): VaultNote {
     path,
     stem,
     title: data.title ?? stem,
-    type: isSystemPath(path) ? 'system' : VALID_TYPES.includes(data.type) ? data.type : 'note',
+    type: systemType(path) ?? (VALID_TYPES.includes(data.type) ? data.type : 'note'),
     tags: data.tags ?? [],
-    date: data.date
-      ? data.date instanceof Date
-        ? data.date.toISOString().slice(0, 10)
-        : String(data.date)
-      : null,
+    date: data.date instanceof Date
+      ? data.date.toISOString().slice(0, 10)
+      : typeof data.date === 'string'
+        ? data.date
+        : null,
     content,
     relations,
     wikilinks: [...wikilinksInBody],

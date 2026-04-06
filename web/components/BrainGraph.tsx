@@ -26,6 +26,8 @@ export const TYPE_COLORS: Record<string, string> = {
   meeting: '#06B6D4',
   daily: '#6B7280',
   area: '#EC4899',
+  system: '#9CA3AF',
+  template: '#C084FC',
 }
 
 const NODE_REL_SIZE = 3.5
