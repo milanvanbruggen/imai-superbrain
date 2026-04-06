@@ -160,15 +160,15 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
   }), [nodes, edges, degreeById])
 
-  // Center graph on selected node whenever selectedId changes
+  // Center graph on selected node whenever selectedId changes.
+  // graphData.nodes are mutated in-place by the d3 simulation, so they carry current x/y.
   useEffect(() => {
     if (!selectedId || !graphRef.current) return
-    const data = graphRef.current.graphData()
-    const node = data.nodes.find((n: any) => n.id === selectedId)
+    const node = graphData.nodes.find((n: any) => n.id === selectedId)
     if (node?.x != null && node?.y != null) {
       graphRef.current.centerAt(node.x, node.y, 400)
     }
-  }, [selectedId])
+  }, [selectedId, graphData])
 
   const focusId = hoveredId ?? selectedId
   const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
