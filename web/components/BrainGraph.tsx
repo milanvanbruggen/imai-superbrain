@@ -124,18 +124,36 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     return map
   }, [edges])
 
-  // Obsidian-style physics:
-  // - Short link distance keeps connected nodes close (organic cluster)
-  // - Weak charge just nudges disconnected nodes apart
-  // - Custom collision prevents overlap inside the cluster
-  // - Isolated gravity pulls degree-0 nodes toward the cluster center
+  // Physics setup:
+  // - Degree-weighted link distance: high-degree hubs (like Milan) fan out their
+  //   connections instead of pulling everything into one tight ball
+  // - Strong charge pushes distinct clusters apart
+  // - Custom collision prevents overlap, isolated gravity keeps loose nodes near center
   useEffect(() => {
     const timer = setTimeout(() => {
       const fg = graphRef.current
       if (!fg) return
       const connectedIds = new Set(Object.keys(degreeById))
-      fg.d3Force('charge')?.strength(-120)
-      fg.d3Force('link')?.distance(28).strength(0.9)
+
+      fg.d3Force('charge')?.strength(-200)
+
+      // Distance scales with the degree of the higher-degree endpoint.
+      // Low-degree clusters stay tight (~30px); super-hubs fan out (~70px).
+      fg.d3Force('link')
+        ?.distance((link: any) => {
+          const srcId = typeof link.source === 'object' ? link.source.id : link.source
+          const tgtId = typeof link.target === 'object' ? link.target.id : link.target
+          const maxDeg = Math.max(degreeById[srcId] ?? 0, degreeById[tgtId] ?? 0)
+          return 22 + Math.sqrt(maxDeg) * 9
+        })
+        .strength((link: any) => {
+          const srcId = typeof link.source === 'object' ? link.source.id : link.source
+          const tgtId = typeof link.target === 'object' ? link.target.id : link.target
+          const maxDeg = Math.max(degreeById[srcId] ?? 0, degreeById[tgtId] ?? 0)
+          // Weaker links for super-hubs so repulsion can create real separation
+          return Math.max(0.3, 1 - maxDeg * 0.035)
+        })
+
       fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
       fg.d3Force('isolatedGravity', createIsolatedGravity(connectedIds, 0.06))
       fg.d3ReheatSimulation()
