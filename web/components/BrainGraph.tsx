@@ -153,10 +153,12 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       fg.d3Force('layer', null)
       fg.d3ReheatSimulation()
 
-      // Zoom to fit + reveal on first load (warmupTicks already positioned nodes)
+      // Zoom to fit + reveal on first load (warmupTicks already positioned nodes).
+      // After fitting, zoom out to 70% so the graph has breathing room in the viewport.
       if (!initialZoomDone.current) {
         initialZoomDone.current = true
         fg.zoomToFit(0, 60)
+        fg.zoom(fg.zoom() * 0.7, 0)
         setGraphReady(true)
       }
     }
