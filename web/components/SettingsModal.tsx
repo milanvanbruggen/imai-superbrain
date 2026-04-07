@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
 
 interface VaultConfig {
   mode: 'local' | 'github' | 'unconfigured'
@@ -19,6 +20,8 @@ export function SettingsModal({ onClose }: Props) {
   const [config, setConfig] = useState<VaultConfig | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncDone, setSyncDone] = useState(false)
+  const { data: session, update } = useSession()
+  const [disconnecting, setDisconnecting] = useState(false)
 
   useEffect(() => {
     fetch('/api/vault/config')
@@ -176,6 +179,50 @@ export function SettingsModal({ onClose }: Props) {
                   </>
                 )}
               </button>
+            </div>
+
+            {/* Integraties */}
+            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+              <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Integraties</span>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-red-400">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                  <span className="text-xs text-gray-700 dark:text-gray-300">Gmail</span>
+                </div>
+
+                {(session as any)?.googleConnected ? (
+                  <button
+                    onClick={async () => {
+                      setDisconnecting(true)
+                      await fetch('/api/gmail/disconnect', { method: 'POST' })
+                      await update()
+                      setDisconnecting(false)
+                    }}
+                    disabled={disconnecting}
+                    className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-50 cursor-pointer transition-colors"
+                  >
+                    {disconnecting ? 'Ontkoppelen...' : 'Ontkoppel'}
+                  </button>
+                ) : (
+                  <a
+                    href="/api/auth/signin/google"
+                    className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-colors"
+                  >
+                    Koppel Gmail
+                  </a>
+                )}
+              </div>
+
+              {(session as any)?.googleError === 'RefreshTokenError' && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Gmail-verbinding verlopen.{' '}
+                  <a href="/api/auth/signin/google" className="underline">Herverbind</a>
+                </p>
+              )}
             </div>
           </div>
         )}
