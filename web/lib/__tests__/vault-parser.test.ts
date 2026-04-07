@@ -34,9 +34,9 @@ describe('parseNote', () => {
     expect(note.wikilinks).toEqual(['Superbrain', 'ambient computing'])
   })
 
-  it('uses stem as title when frontmatter title is missing', () => {
+  it('uses prettified stem as title when frontmatter title is missing', () => {
     const note = parseNote('notes/quick-idea.md', '# Quick idea\n\nsome text')
-    expect(note.title).toBe('quick-idea')
+    expect(note.title).toBe('Quick Idea')
     expect(note.stem).toBe('quick-idea')
   })
 
