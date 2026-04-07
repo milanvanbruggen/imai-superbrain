@@ -124,7 +124,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
       const res = await fetch('/api/gmail/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageIds: Array.from(selected), personName: note.title }),
+        body: JSON.stringify({ messageIds: Array.from(selected), personName: note.title, path: note.path }),
       })
       if (res.status === 401) { setError('Sessie verlopen — herlaad de pagina.'); setPhase('error'); return }
       if (res.status === 429) { setError('Probeer het over een moment opnieuw.'); setPhase('results'); return }
