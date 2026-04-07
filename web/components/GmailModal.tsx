@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { GmailMessage } from '@/lib/types'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 interface Props {
   note: { path: string; title: string; email?: string }
@@ -79,6 +81,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         body: JSON.stringify({ messageIds: Array.from(selected), personName: note.title }),
       })
       if (res.status === 401) { setError('Sessie verlopen — herlaad de pagina.'); setPhase('error'); return }
+      if (res.status === 429) { setError('Probeer het over een moment opnieuw.'); setPhase('results'); return }
       if (res.status === 422) { setError('De geselecteerde emails konden niet worden opgehaald.'); setPhase('results'); return }
       if (!res.ok) { setError('Samenvatting mislukt. Probeer opnieuw.'); setPhase('results'); return }
       const data = await res.json()
@@ -198,8 +201,8 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           {phase === 'summary' && (
             <div className="space-y-3">
               <p className="text-xs text-slate-500 dark:text-gray-500 font-medium uppercase tracking-wider">Gegenereerde samenvatting</p>
-              <div className="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                {summary}
+              <div className="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg text-sm text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
               </div>
             </div>
           )}

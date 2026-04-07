@@ -234,29 +234,30 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   </svg>
                 </button>
               )}
-              {note?.type === 'person' && (session as any)?.googleConnected && (
-                <button
-                  onClick={() => setGmailOpen(true)}
-                  title="Zoek emails in Gmail"
-                  className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                </button>
-              )}
-              {note?.type === 'person' && (session as any)?.googleError === 'RefreshTokenError' && (
-                <button
-                  onClick={() => {/* opens settings - will be wired up if SettingsModal is accessible */}}
-                  title="Gmail verbinding verlopen — herverbind in instellingen"
-                  className="p-1.5 rounded-md text-amber-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                </button>
+              {note?.type === 'person' && (
+                (session as any)?.googleConnected ? (
+                  <button
+                    onClick={() => setGmailOpen(true)}
+                    title="Zoek emails in Gmail"
+                    className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </button>
+                ) : (session as any)?.googleError === 'RefreshTokenError' ? (
+                  <button
+                    onClick={onToggleCollapse}
+                    title="Gmail verbinding verlopen — herverbind in instellingen"
+                    className="p-1.5 rounded-md text-amber-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </button>
+                ) : null
               )}
               <CollapseButton onToggle={onToggleCollapse} />
             </div>
