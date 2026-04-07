@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "web/app/api/gmail/summarize/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
