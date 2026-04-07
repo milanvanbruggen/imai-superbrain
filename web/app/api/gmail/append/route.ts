@@ -4,6 +4,17 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
 
+const EMAIL_CONTEXT_MARKER = '\n\n## Email context\n\n'
+
+// Exported for testing
+export function replaceEmailContext(content: string, summary: string): string {
+  const markerIdx = content.indexOf(EMAIL_CONTEXT_MARKER)
+  if (markerIdx === -1) {
+    return content.trimEnd() + EMAIL_CONTEXT_MARKER + summary.trim() + '\n'
+  }
+  return content.slice(0, markerIdx) + EMAIL_CONTEXT_MARKER + summary.trim() + '\n'
+}
+
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Note not found' }, { status: 404 })
   }
 
-  const appendedContent = content.trimEnd() + '\n\n## Email context\n\n' + summary.trim() + '\n'
+  const appendedContent = replaceEmailContext(content, summary)
 
   const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
   try {
