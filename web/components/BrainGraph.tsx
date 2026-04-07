@@ -155,13 +155,17 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       fg.d3Force('layer', null)
       fg.d3ReheatSimulation()
 
-      // Zoom to fit + reveal on first load (warmupTicks already positioned nodes).
-      // After fitting, zoom out to 70% so the graph has breathing room in the viewport.
+      // warmupTicks already positioned nodes before first render — wait two frames
+      // for the canvas to be painted, then zoom to fit.
       if (!initialZoomDone.current) {
         initialZoomDone.current = true
-        fg.zoomToFit(0, 60)
-        fg.zoom(fg.zoom() * 0.7, 0)
-        setGraphReady(true)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          fg.zoomToFit(400, 60)
+          setTimeout(() => {
+            fg.zoom(fg.zoom() * 0.7, 300)
+            setGraphReady(true)
+          }, 450)
+        }))
       }
     }
 

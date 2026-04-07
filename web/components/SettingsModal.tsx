@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn, signOut } from 'next-auth/react'
 
 interface VaultConfig {
   mode: 'local' | 'github' | 'unconfigured'
@@ -181,6 +181,19 @@ export function SettingsModal({ onClose }: Props) {
               </button>
             </div>
 
+            {/* Account */}
+            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Account</span>
+                <button
+                  onClick={() => signOut({ callbackUrl: '/login' })}
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  Uitloggen
+                </button>
+              </div>
+            </div>
+
             {/* Integraties */}
             <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
               <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Integraties</span>
@@ -208,19 +221,19 @@ export function SettingsModal({ onClose }: Props) {
                     {disconnecting ? 'Ontkoppelen...' : 'Ontkoppel'}
                   </button>
                 ) : (
-                  <a
-                    href="/api/auth/signin/google"
-                    className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-colors"
+                  <button
+                    onClick={() => signIn('google', { callbackUrl: window.location.origin })}
+                    className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-colors cursor-pointer"
                   >
                     Koppel Gmail
-                  </a>
+                  </button>
                 )}
               </div>
 
               {(session as any)?.googleError === 'RefreshTokenError' && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   Gmail-verbinding verlopen.{' '}
-                  <a href="/api/auth/signin/google" className="underline">Herverbind</a>
+                  <button onClick={() => signIn('google', { callbackUrl: window.location.origin })} className="underline cursor-pointer">Herverbind</button>
                 </p>
               )}
             </div>
