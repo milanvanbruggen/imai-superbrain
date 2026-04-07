@@ -10,42 +10,86 @@ interface Props {
   onAppended: () => void
 }
 
-type Phase = 'loading' | 'results' | 'summarizing' | 'summary' | 'error'
+type Phase = 'email-input' | 'loading' | 'results' | 'summarizing' | 'summary' | 'error'
 
 const CONSENT_KEY = 'gmail_summarize_consent_v1'
 
 export function GmailModal({ note, onClose, onAppended }: Props) {
-  const [phase, setPhase] = useState<Phase>('loading')
+  const [phase, setPhase] = useState<Phase>(() => note.email ? 'loading' : 'email-input')
   const [messages, setMessages] = useState<GmailMessage[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [summary, setSummary] = useState('')
   const [error, setError] = useState('')
   const [appending, setAppending] = useState(false)
   const [showConsent, setShowConsent] = useState(false)
+  const [emailInput, setEmailInput] = useState(note.email ?? '')
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   useEffect(() => {
-    searchEmails()
+    if (note.email) searchEmails(note.email)
   }, [])
 
-  async function searchEmails() {
+  async function searchEmails(email?: string) {
+    setMessages([])
+    setNextPageToken(null)
     setPhase('loading')
     setError('')
     try {
       const res = await fetch('/api/gmail/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: note.title, email: note.email }),
+        body: JSON.stringify({ title: note.title, email: email || undefined }),
       })
       if (res.status === 401) { setError('Sessie verlopen — herlaad de pagina.'); setPhase('error'); return }
       if (res.status === 429) { setError('Probeer het over een moment opnieuw.'); setPhase('error'); return }
       if (!res.ok) { setError('Gmail kon niet worden bereikt. Probeer opnieuw.'); setPhase('error'); return }
       const data = await res.json()
       setMessages(data.messages ?? [])
+      setNextPageToken(data.nextPageToken ?? null)
       setPhase('results')
     } catch {
       setError('Verbindingsfout. Probeer opnieuw.')
       setPhase('error')
     }
+  }
+
+  async function loadMore() {
+    if (!nextPageToken || loadingMore) return
+    setLoadingMore(true)
+    setError('')
+    try {
+      const res = await fetch('/api/gmail/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: note.title,
+          email: emailInput.trim() || note.email || undefined,
+          pageToken: nextPageToken,
+        }),
+      })
+      if (!res.ok) { setError('Meer laden mislukt. Probeer opnieuw.'); return }
+      const data = await res.json()
+      setMessages(prev => [...prev, ...(data.messages ?? [])])
+      setNextPageToken(data.nextPageToken ?? null)
+    } catch {
+      setError('Verbindingsfout. Probeer opnieuw.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  async function handleEmailSubmit() {
+    const trimmed = emailInput.trim()
+    if (trimmed && trimmed.includes('@')) {
+      // Fire-and-forget: save email to note (non-blocking — search starts immediately)
+      fetch('/api/vault/update-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: note.path, email: trimmed }),
+      }).catch(() => {/* non-critical */})
+    }
+    searchEmails(trimmed || undefined)
   }
 
   function toggleSelect(id: string) {
@@ -154,6 +198,23 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
             </div>
           )}
 
+          {phase === 'email-input' && (
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-slate-500 dark:text-gray-400">
+                Voeg het emailadres van <span className="font-medium text-gray-800 dark:text-gray-200">{note.title}</span> toe voor nauwkeurigere resultaten.
+              </p>
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleEmailSubmit()}
+                placeholder="naam@voorbeeld.com"
+                autoFocus
+                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+          )}
+
           {phase === 'loading' && (
             <div className="flex items-center gap-2 text-sm text-slate-400 py-8 justify-center">
               <div className="w-4 h-4 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
@@ -170,7 +231,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
 
           {phase === 'error' && (
             <div className="py-8 text-center">
-              <button onClick={searchEmails} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">Opnieuw proberen</button>
+              <button onClick={() => searchEmails(emailInput.trim() || undefined)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">Opnieuw proberen</button>
             </div>
           )}
 
@@ -198,6 +259,21 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
             </div>
           )}
 
+          {phase === 'results' && nextPageToken && (
+            <div className="mt-3 flex justify-center">
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400 hover:underline disabled:opacity-50 cursor-pointer"
+              >
+                {loadingMore && (
+                  <div className="w-3 h-3 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
+                )}
+                {loadingMore ? 'Laden...' : 'Laad meer'}
+              </button>
+            </div>
+          )}
+
           {phase === 'summary' && (
             <div className="space-y-3">
               <p className="text-xs text-slate-500 dark:text-gray-500 font-medium uppercase tracking-wider">Gegenereerde samenvatting</p>
@@ -210,6 +286,18 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
 
         {/* Footer */}
         <div className="flex justify-between items-center p-4 border-t border-slate-100 dark:border-gray-800 shrink-0">
+          {phase === 'email-input' && (
+            <>
+              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</button>
+              <button
+                onClick={handleEmailSubmit}
+                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors cursor-pointer"
+              >
+                Zoeken
+              </button>
+            </>
+          )}
+
           {phase === 'results' && (
             <>
               <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</button>
