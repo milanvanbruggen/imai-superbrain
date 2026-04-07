@@ -17,11 +17,13 @@ export function buildGmailQuery(name: string, email?: string): string {
 export async function listMessages(
   accessToken: string,
   query: string,
-  maxResults = 20
-): Promise<string[]> {
+  maxResults = 20,
+  pageToken?: string
+): Promise<{ ids: string[]; nextPageToken?: string }> {
   const url = new URL(`${GMAIL_API}/messages`)
   url.searchParams.set('q', query)
   url.searchParams.set('maxResults', String(maxResults))
+  if (pageToken) url.searchParams.set('pageToken', pageToken)
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -30,7 +32,10 @@ export async function listMessages(
   if (!res.ok) throw Object.assign(new Error('Gmail API error'), { status: res.status })
 
   const data = await res.json()
-  return (data.messages ?? []).map((m: { id: string }) => m.id)
+  return {
+    ids: (data.messages ?? []).map((m: { id: string }) => m.id),
+    nextPageToken: data.nextPageToken,
+  }
 }
 
 export async function getMessageMetadata(
