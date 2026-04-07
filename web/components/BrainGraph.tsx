@@ -101,6 +101,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   const graphRef = useRef<any>(null)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const hoveredIdRef = useRef<string | null>(null)
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null)
   const initialZoomDone = useRef(false)
   const [graphReady, setGraphReady] = useState(false)
 
@@ -227,6 +229,18 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         transform: graphReady ? 'scale(1)' : 'scale(0.96)',
         transition: 'opacity 0.5s ease, transform 0.5s ease',
       }}
+      onPointerDown={e => { pointerDownPos.current = { x: e.clientX, y: e.clientY } }}
+      onPointerUp={e => {
+        const down = pointerDownPos.current
+        pointerDownPos.current = null
+        if (!down) return
+        const dx = e.clientX - down.x
+        const dy = e.clientY - down.y
+        // Treat as click if movement < 12px, and no node is hovered (background click)
+        if (Math.sqrt(dx * dx + dy * dy) < 12 && hoveredIdRef.current === null) {
+          onSelectNode(null)
+        }
+      }}
     >
       {size && (
         <ForceGraph2D
@@ -240,7 +254,11 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           warmupTicks={100}
           onNodeClick={(node: any) => onSelectNode(node.id as string)}
           onBackgroundClick={() => onSelectNode(null)}
-          onNodeHover={(node: any) => setHoveredId(node?.id ?? null)}
+          onNodeHover={(node: any) => {
+            const id = node?.id ?? null
+            setHoveredId(id)
+            hoveredIdRef.current = id
+          }}
           backgroundColor={bgColor}
           nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const nodeId = node.id as string
