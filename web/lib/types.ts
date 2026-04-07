@@ -7,6 +7,7 @@ export interface VaultNote {
   type: 'person' | 'project' | 'idea' | 'note' | 'resource' | 'meeting' | 'daily' | 'area' | 'group' | 'system' | 'template'
   tags: string[]
   date: string | null
+  email?: string
   content: string       // raw markdown (body only, no frontmatter)
   relations: TypedRelation[]
   wikilinks: string[]   // stems found in body [[...]]
@@ -39,4 +40,12 @@ export interface VaultGraph {
   notesByPath: Record<string, VaultNote>
   notesByStem: Record<string, VaultNote>
   builtAt: number
+}
+
+export interface GmailMessage {
+  id: string
+  subject: string
+  sender: string
+  date: string
+  snippet: string
 }

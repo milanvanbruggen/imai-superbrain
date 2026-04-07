@@ -34,6 +34,8 @@ export function parseNote(path: string, raw: string): VaultNote {
     type: r.type ?? 'references',
   }))
 
+  const email = typeof data.email === 'string' ? data.email : undefined
+
   return {
     path,
     stem,
@@ -45,6 +47,7 @@ export function parseNote(path: string, raw: string): VaultNote {
       : typeof data.date === 'string'
         ? data.date
         : null,
+    email,
     content,
     relations,
     wikilinks: [...wikilinksInBody],
