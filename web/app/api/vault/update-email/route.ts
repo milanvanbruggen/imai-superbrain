@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (!path.endsWith('.md') || path.includes('..')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
-  if (!email.includes('@')) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ error: 'Invalid email' }, { status: 400 })
   }
 

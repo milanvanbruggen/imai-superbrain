@@ -39,6 +39,11 @@ export async function POST(req: NextRequest) {
     result.ids.map(id => getMessageMetadata(tokenResult.accessToken, id))
   )
 
+  const failures = results.filter(r => r.status === 'rejected')
+  if (failures.length > 0) {
+    console.error(`[gmail/search] ${failures.length} metadata fetch(es) failed`, failures)
+  }
+
   const messages = results
     .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
     .map(r => r.value)

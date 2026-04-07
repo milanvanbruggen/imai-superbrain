@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { GmailMessage } from '@/lib/types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -25,12 +25,14 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
   const [emailInput, setEmailInput] = useState(note.email ?? '')
   const [nextPageToken, setNextPageToken] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const currentSearchEmail = useRef<string | undefined>(undefined)
 
   useEffect(() => {
     if (note.email) searchEmails(note.email)
   }, [])
 
   async function searchEmails(email?: string) {
+    currentSearchEmail.current = email
     setMessages([])
     setNextPageToken(null)
     setPhase('loading')
@@ -64,7 +66,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: note.title,
-          email: emailInput.trim() || note.email || undefined,
+          email: currentSearchEmail.current,
           pageToken: nextPageToken,
         }),
       })
@@ -81,7 +83,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
 
   async function handleEmailSubmit() {
     const trimmed = emailInput.trim()
-    if (trimmed && trimmed.includes('@')) {
+    if (trimmed && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
       // Fire-and-forget: save email to note (non-blocking — search starts immediately)
       fetch('/api/vault/update-email', {
         method: 'POST',
