@@ -3,8 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
-
-const EMAIL_CONTEXT_MARKER = '\n\n## Email context\n\n'
+import { EMAIL_CONTEXT_MARKER } from '@/lib/gmail-constants'
 
 // Exported for testing
 export function replaceEmailContext(content: string, summary: string): string {

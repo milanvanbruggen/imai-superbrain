@@ -21,4 +21,9 @@ describe('extractEmailContext', () => {
     const content = 'Intro\n\n## Email context\n\n\n\n## Next section'
     expect(extractEmailContext(content)).toBeNull()
   })
+
+  it('stops at a heading preceded by a single newline', () => {
+    const content = 'Intro\n\n## Email context\n\nSummary.\n## Adjacent section\n\nContent.'
+    expect(extractEmailContext(content)).toBe('Summary.')
+  })
 })

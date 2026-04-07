@@ -3,17 +3,17 @@ import { getGoogleAccessToken } from '@/lib/google-auth'
 import { getMessageBody } from '@/lib/gmail-client'
 import { getVaultClient } from '@/lib/vault-client'
 import Anthropic from '@anthropic-ai/sdk'
+import { EMAIL_CONTEXT_MARKER } from '@/lib/gmail-constants'
 
 const MAX_IDS = 10
 const MAX_CHARS = 50_000
-const EMAIL_CONTEXT_MARKER = '\n\n## Email context\n\n'
 
 // Exported for testing
 export function extractEmailContext(content: string): string | null {
   const markerIdx = content.indexOf(EMAIL_CONTEXT_MARKER)
   if (markerIdx === -1) return null
   const start = markerIdx + EMAIL_CONTEXT_MARKER.length
-  const nextHeading = content.indexOf('\n\n##', start)
+  const nextHeading = content.indexOf('\n##', start)
   const end = nextHeading === -1 ? content.length : nextHeading
   const extracted = content.slice(start, end).trim()
   return extracted.length > 0 ? extracted : null
