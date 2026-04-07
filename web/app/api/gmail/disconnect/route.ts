@@ -19,13 +19,17 @@ export async function POST(req: NextRequest) {
   const isSecure = req.nextUrl.protocol === 'https:'
   const cookieName = isSecure ? '__Secure-next-auth.session-token' : 'next-auth.session-token'
 
+  // Preserve original session expiry
+  const exp = token.exp as number | undefined
+  const maxAge = exp ? Math.max(0, exp - Math.floor(Date.now() / 1000)) : 30 * 24 * 60 * 60
+
   const response = NextResponse.json({ ok: true })
   response.cookies.set(cookieName, encoded, {
     httpOnly: true,
     sameSite: 'lax',
     secure: isSecure,
     path: '/',
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge,
   })
   return response
 }

@@ -13,8 +13,15 @@ export async function POST(req: NextRequest) {
   }
 
   const { messageIds, personName } = await req.json()
+  const safeName = typeof personName === 'string'
+    ? personName.slice(0, 200)
+    : 'deze persoon'
   if (!Array.isArray(messageIds) || messageIds.length === 0) {
     return NextResponse.json({ error: 'messageIds is required' }, { status: 400 })
+  }
+
+  if (!messageIds.every((id: unknown) => typeof id === 'string')) {
+    return NextResponse.json({ error: 'messageIds must be strings' }, { status: 400 })
   }
 
   const ids = messageIds.slice(0, MAX_IDS)
@@ -47,7 +54,7 @@ export async function POST(req: NextRequest) {
           role: 'user',
           content: `Je bent een assistent die helpt een persoonlijk kennisbeheersysteem bij te houden.
 
-Hieronder staan ${bodies.length} e-mails die gerelateerd zijn aan ${personName ?? 'deze persoon'}. Schrijf een beknopte contextparagraaf in markdown die toegevoegd kan worden aan de notitie over deze persoon. Focus op:
+Hieronder staan ${bodies.length} e-mails die gerelateerd zijn aan ${safeName}. Schrijf een beknopte contextparagraaf in markdown die toegevoegd kan worden aan de notitie over deze persoon. Focus op:
 - Wat is de aard van het contact?
 - Welke projecten of onderwerpen zijn besproken?
 - Relevante afspraken, acties of besluiten?

@@ -18,6 +18,7 @@ interface Props {
   width: number
   collapsed: boolean
   onToggleCollapse: () => void
+  onOpenSettings?: () => void
 }
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -41,7 +42,7 @@ const TYPE_DOT: Record<string, string> = {
   system: 'bg-gray-400', template: 'bg-purple-400',
 }
 
-export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse }: Props) {
+export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse, onOpenSettings }: Props) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -248,7 +249,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   </button>
                 ) : (session as any)?.googleError === 'RefreshTokenError' ? (
                   <button
-                    onClick={onToggleCollapse}
+                    onClick={() => onOpenSettings?.()}
                     title="Gmail verbinding verlopen — herverbind in instellingen"
                     className="p-1.5 rounded-md text-amber-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                   >

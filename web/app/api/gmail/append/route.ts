@@ -13,6 +13,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'path and summary are required' }, { status: 400 })
   }
 
+  if (!path.endsWith('.md') || path.includes('..')) {
+    return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
+  }
+
   const client = getVaultClient()
 
   let content: string

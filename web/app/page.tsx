@@ -329,6 +329,7 @@ export default function BrainPage() {
           width={panelWidth}
           collapsed={panelCollapsed}
           onToggleCollapse={togglePanel}
+          onOpenSettings={() => setShowSettings(true)}
         />
       </div>
 
