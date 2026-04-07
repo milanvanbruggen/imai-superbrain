@@ -40,11 +40,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Note not found' }, { status: 404 })
   }
 
-  const appendedContent = replaceEmailContext(content, summary)
+  const updatedContent = replaceEmailContext(content, summary)
 
   const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
   try {
-    await client.writeFile(path, appendedContent, sha, `brain: update [[${stem}]] with email context`)
+    await client.writeFile(path, updatedContent, sha, `brain: update [[${stem}]] with email context`)
   } catch (err: any) {
     // GitHub returns 409 on SHA conflict
     if (err.message?.includes('409') || err.status === 409) {
