@@ -13,16 +13,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: tokenResult.error }, { status: tokenResult.status })
   }
 
-  const { title, email } = await req.json()
+  const { title, email, pageToken } = await req.json()
   if (!title) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 })
   }
 
   const query = buildSearchPayload({ title, email })
 
-  let messageIds: string[]
+  let result: { ids: string[]; nextPageToken?: string }
   try {
-    messageIds = await listMessages(tokenResult.accessToken, query, 20)
+    result = await listMessages(tokenResult.accessToken, query, 20, pageToken)
   } catch (err: any) {
     if (err.status === 429) {
       return NextResponse.json({ error: 'rate_limited' }, { status: 429 })
@@ -30,18 +30,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Gmail API error' }, { status: 502 })
   }
 
-  if (messageIds.length === 0) {
-    return NextResponse.json({ messages: [] })
+  if (result.ids.length === 0) {
+    return NextResponse.json({ messages: [], nextPageToken: null })
   }
 
   // Fetch all metadata in parallel
   const results = await Promise.allSettled(
-    messageIds.map(id => getMessageMetadata(tokenResult.accessToken, id))
+    result.ids.map(id => getMessageMetadata(tokenResult.accessToken, id))
   )
 
   const messages = results
     .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
     .map(r => r.value)
 
-  return NextResponse.json({ messages })
+  return NextResponse.json({ messages, nextPageToken: result.nextPageToken ?? null })
 }
