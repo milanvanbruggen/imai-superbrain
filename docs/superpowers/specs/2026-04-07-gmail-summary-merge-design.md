@@ -13,21 +13,26 @@ Two focused changes to the existing Gmail summarise → append pipeline. The sum
 ### `POST /api/gmail/summarize` changes
 
 - Accept optional `path: string` alongside existing `messageIds` and `personName`
-- If `path` is provided:
-  - Read the note file via the vault client
-  - Extract the content of the existing `## Email context` section (if present) — everything between `\n\n## Email context\n\n` and the next `\n\n##` heading or end of file
-  - If existing context is found and non-empty, include it in the Claude prompt as prior context to integrate
-- If no existing context is found (section absent or empty), the prompt is unchanged from today
-- Path validation: must end in `.md` and must not contain `..` — failure is silently ignored (treat as no existing context, so summarisation still proceeds)
+- **Auth:** No additional auth check beyond the existing `getGoogleAccessToken`. The vault read is best-effort and read-only — all failures are silently ignored (see error handling below).
+- If `path` is provided and passes basic validation (`path.endsWith('.md')` and `!path.includes('..')`):
+  - Attempt to read the note file via `getVaultClient().readFile(path)`
+  - If the read throws for any reason (not found, network error, etc.) → silently treat as no existing context; summarisation proceeds normally
+  - If the read succeeds: extract the content of the existing `## Email context` section using this logic:
+    1. Find the index of the literal string `\n\n## Email context\n\n` in the file content
+    2. If found: take the substring from after that marker to the next occurrence of `\n\n##` (start of the next heading) or end of file
+    3. `trim()` the extracted substring before use — this strips any trailing newline or whitespace
+    4. If the trimmed result is non-empty: treat as existing context
+- If `path` validation fails → silently treat as no existing context
+- `path` is never required — omitting it produces the same behaviour as today
 
 ### Claude prompt change
 
-When existing context is present, the user message becomes:
+**When existing context is present** (trimmed, non-empty), the user message becomes:
 
 ```
 Je bent een assistent die helpt een persoonlijk kennisbeheersysteem bij te houden.
 
-Hieronder staat de bestaande context over {safeName}, gevolgd door {N} nieuwe e-mails. Schrijf één beknopte, samenhangende contextparagraaf in markdown die de bestaande context integreert met de nieuwe informatie. Focus op:
+Hieronder staat de bestaande context over {safeName}, gevolgd door {bodies.length} nieuwe e-mails. Schrijf één beknopte, samenhangende contextparagraaf in markdown die de bestaande context integreert met de nieuwe informatie. Focus op:
 - Wat is de aard van het contact?
 - Welke projecten of onderwerpen zijn besproken?
 - Relevante afspraken, acties of besluiten?
@@ -41,22 +46,30 @@ Nieuwe e-mails:
 {emailContent}
 ```
 
-When no existing context is present, the prompt is unchanged from today.
+`{bodies.length}` is the count of successfully fetched email bodies (after filtering 404s), matching the existing code's behaviour.
+
+**When no existing context is present**, the prompt is unchanged from today.
 
 ### `POST /api/gmail/append` changes
 
 Instead of always appending at the end of the note, the route now replaces the existing `## Email context` section:
 
-- Split the note content on the first occurrence of `\n\n## Email context\n\n`
-- If the marker exists: take everything before it, append `\n\n## Email context\n\n{summary}\n`
-- If the marker does not exist: behaviour is identical to today (append at the end)
+- Search for the literal string `\n\n## Email context\n\n` in the note content (exact match, same string the route already writes)
+- If found: take `content.slice(0, markerIndex)`, then append `\n\n## Email context\n\n` + `summary.trim()` + `\n`
+- If not found: behaviour is identical to today (`content.trimEnd() + '\n\n## Email context\n\n' + summary.trim() + '\n'`)
 
-This handles the edge case of multiple stacked sections from before this change: only everything before the first marker is kept, collapsing all prior sections into one.
+This handles the edge case of multiple stacked sections from before this change: everything from the first marker onward is replaced, collapsing all prior sections into one.
+
+Notes manually edited in Obsidian may have variant whitespace around the heading. The exact-string match is consistent with what the append route itself writes; notes that were never produced by this route may not match, and will simply be treated as having no prior context (a new section is appended). This is acceptable — correctness is guaranteed for notes written by this app.
 
 ### `GmailModal.tsx` changes
 
 - Pass `path: note.path` in the body of the `POST /api/gmail/summarize` request
 - No other changes
+
+### Regeneration behaviour
+
+When the user clicks "Opnieuw genereren" (triggers a fresh `doSummarize()` call), the summarise endpoint re-reads the note each time. At this point the note has not yet been updated (append only happens when the user confirms), so the existing context read is the same as on the first call. This is the intended behaviour — no special handling needed.
 
 ## Files Affected
 
