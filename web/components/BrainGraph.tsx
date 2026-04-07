@@ -215,6 +215,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     }
   }, [selectedId, graphData])
 
+  const xCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='3' y1='3' x2='17' y2='17' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='17' y1='3' x2='3' y2='17' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='3' y1='3' x2='17' y2='17' stroke='%23374151' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='17' y1='3' x2='3' y2='17' stroke='%23374151' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 10 10, crosshair`
+
   const focusId = hoveredId ?? selectedId
   const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
 
@@ -232,6 +234,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         opacity: graphReady ? 1 : 0,
         transform: graphReady ? 'scale(1)' : 'scale(0.96)',
         transition: 'opacity 0.5s ease, transform 0.5s ease',
+        cursor: hoveredId && hoveredId !== selectedId ? 'pointer'
+          : !hoveredId && selectedId ? xCursor
+          : 'default',
       }}
       onPointerDown={e => { pointerDownPos.current = { x: e.clientX, y: e.clientY } }}
       onPointerUp={e => {
@@ -240,9 +245,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         if (!down) return
         const dx = e.clientX - down.x
         const dy = e.clientY - down.y
-        // Treat as click if movement < 12px, and no node is hovered (background click)
-        if (Math.sqrt(dx * dx + dy * dy) < 12 && hoveredIdRef.current === null) {
-          onSelectNode(null)
+        if (Math.sqrt(dx * dx + dy * dy) < 12) {
+          // Small movement = click: select hovered node or deselect (background)
+          onSelectNode(hoveredIdRef.current)
         }
       }}
     >
@@ -256,8 +261,6 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           d3AlphaDecay={0.04}
           d3VelocityDecay={0.6}
           warmupTicks={100}
-          onNodeClick={(node: any) => onSelectNode(node.id as string)}
-          onBackgroundClick={() => onSelectNode(null)}
           onNodeHover={(node: any) => {
             const id = node?.id ?? null
             setHoveredId(id)
