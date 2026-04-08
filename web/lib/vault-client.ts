@@ -1,4 +1,5 @@
 import { GitHubVaultClient } from './github'
+import { GitLabVaultClient } from './gitlab'
 import { LocalVaultClient } from './local'
 import { resolveVaultSettings } from './vault-config'
 
@@ -11,19 +12,23 @@ export interface VaultClient {
 }
 
 export function getVaultClient(): VaultClient {
-  const settings = resolveVaultSettings()
+  const { mode, remote, local } = resolveVaultSettings()
 
-  if (settings.mode === 'local' && settings.vaultPath) {
-    return new LocalVaultClient(settings.vaultPath)
+  if (mode === 'local' && local) {
+    return new LocalVaultClient(local.path)
   }
 
-  if (settings.mode === 'github' && settings.pat && settings.owner && settings.repo) {
+  if (mode === 'github' && remote?.provider === 'github') {
     return new GitHubVaultClient({
-      pat: settings.pat,
-      owner: settings.owner,
-      repo: settings.repo,
-      branch: settings.branch,
+      pat: remote.token,
+      owner: remote.owner,
+      repo: remote.repo,
+      branch: remote.branch,
     })
+  }
+
+  if (mode === 'gitlab' && remote?.provider === 'gitlab') {
+    return new GitLabVaultClient(remote)
   }
 
   throw new Error('vault_not_configured')

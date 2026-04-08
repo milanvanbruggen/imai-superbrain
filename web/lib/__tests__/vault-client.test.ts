@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { getVaultClient } from '../vault-client'
 import { LocalVaultClient } from '../local'
 import { GitHubVaultClient } from '../github'
+import { GitLabVaultClient } from '../gitlab'
 
 const mockResolveVaultSettings = vi.fn()
 
@@ -18,21 +19,26 @@ describe('getVaultClient', () => {
   })
 
   it('returns LocalVaultClient in local mode', () => {
-    mockResolveVaultSettings.mockReturnValue({ mode: 'local', vaultPath: '/tmp/vault' })
+    mockResolveVaultSettings.mockReturnValue({
+      mode: 'local',
+      local: { path: '/tmp/vault' },
+    })
     expect(getVaultClient()).toBeInstanceOf(LocalVaultClient)
   })
 
   it('returns GitHubVaultClient in github mode', () => {
     mockResolveVaultSettings.mockReturnValue({
-      mode: 'github', pat: 'token', owner: 'owner', repo: 'repo', branch: 'main',
+      mode: 'github',
+      remote: { provider: 'github', token: 'tok', owner: 'owner', repo: 'repo', branch: 'main' },
     })
     expect(getVaultClient()).toBeInstanceOf(GitHubVaultClient)
   })
 
-  it('prefers local mode when both are configured', () => {
+  it('returns GitLabVaultClient in gitlab mode', () => {
     mockResolveVaultSettings.mockReturnValue({
-      mode: 'local', vaultPath: '/tmp/vault', pat: 'token', owner: 'owner', repo: 'repo',
+      mode: 'gitlab',
+      remote: { provider: 'gitlab', token: 'tok', namespace: 'ns', project: 'proj' },
     })
-    expect(getVaultClient()).toBeInstanceOf(LocalVaultClient)
+    expect(getVaultClient()).toBeInstanceOf(GitLabVaultClient)
   })
 })
