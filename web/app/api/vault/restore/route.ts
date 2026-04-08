@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const settings = resolveVaultSettings()
-  if (!settings.pat || !settings.owner || !settings.repo) {
-    return NextResponse.json({ error: 'GitHub vault not configured' }, { status: 400 })
+  if (settings.remote?.provider !== 'github') {
+    return NextResponse.json({ error: 'Restore is only available for GitHub vaults' }, { status: 400 })
   }
 
   const { sha } = await req.json()
@@ -19,12 +19,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'sha is required' }, { status: 400 })
   }
 
+  const remote = settings.remote
   try {
     await restoreToCommit({
-      pat: settings.pat,
-      owner: settings.owner,
-      repo: settings.repo,
-      branch: settings.branch ?? 'main',
+      pat: remote.token,
+      owner: remote.owner,
+      repo: remote.repo,
+      branch: remote.branch ?? 'main',
     }, sha)
     invalidateCache()
     return NextResponse.json({ ok: true })

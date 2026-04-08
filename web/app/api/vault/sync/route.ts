@@ -4,13 +4,13 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { resolveVaultSettings } from '@/lib/vault-config'
 import { LocalVaultClient } from '@/lib/local'
 import { GitHubVaultClient } from '@/lib/github'
+import { GitLabVaultClient } from '@/lib/gitlab'
 import { executeSync, readSnapshot } from '@/lib/vault-sync'
 import { invalidateCache } from '@/lib/graph-cache'
 import { join } from 'path'
 
 const SNAPSHOT_PATH = join(process.cwd(), 'vault-sync-state.json')
 
-// In-memory lock — valid for single-process local server only (non-Vercel is enforced by syncEnabled check upstream)
 let syncInFlight = false
 
 export async function POST() {
@@ -26,19 +26,18 @@ export async function POST() {
     return NextResponse.json({ ok: false, reason: 'sync_in_progress' }, { status: 409 })
   }
 
-  if (!settings.vaultPath || !settings.pat || !settings.owner || !settings.repo) {
-    return NextResponse.json({ ok: false, error: 'Sync requires local vault path and GitHub credentials' }, { status: 422 })
+  if (!settings.local || !settings.remote) {
+    return NextResponse.json({ ok: false, error: 'Sync requires both local and remote vault' }, { status: 422 })
   }
+
+  const { remote, local } = settings
 
   syncInFlight = true
   try {
-    const localClient = new LocalVaultClient(settings.vaultPath)
-    const remoteClient = new GitHubVaultClient({
-      pat: settings.pat,
-      owner: settings.owner,
-      repo: settings.repo,
-      branch: settings.branch,
-    })
+    const localClient = new LocalVaultClient(local.path)
+    const remoteClient = remote.provider === 'github'
+      ? new GitHubVaultClient({ pat: remote.token, owner: remote.owner, repo: remote.repo, branch: remote.branch })
+      : new GitLabVaultClient(remote)
 
     const result = await executeSync(localClient, remoteClient, SNAPSHOT_PATH)
     if (result.pushed > 0 || result.pulled > 0 || result.deleted > 0 || result.conflicts > 0) {
@@ -59,17 +58,11 @@ export async function GET() {
 
   const settings = resolveVaultSettings()
 
-  // On Vercel there is no persistent filesystem — skip snapshot read
   if (process.env.VERCEL) {
-    return NextResponse.json({
-      syncEnabled: false,
-      lastSync: null,
-      fileCount: 0,
-    })
+    return NextResponse.json({ syncEnabled: false, lastSync: null, fileCount: 0 })
   }
 
   const snapshot = readSnapshot(SNAPSHOT_PATH)
-
   return NextResponse.json({
     syncEnabled: settings.syncEnabled,
     lastSync: snapshot.lastSync || null,

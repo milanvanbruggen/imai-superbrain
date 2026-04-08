@@ -9,18 +9,19 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const settings = resolveVaultSettings()
-  if (!settings.pat || !settings.owner || !settings.repo) {
-    return NextResponse.json({ error: 'GitHub vault not configured' }, { status: 400 })
+  if (settings.remote?.provider !== 'github') {
+    return NextResponse.json({ error: 'History is only available for GitHub vaults' }, { status: 400 })
   }
 
+  const remote = settings.remote
   const page = parseInt(req.nextUrl.searchParams.get('page') ?? '1', 10)
 
   try {
     const commits = await listCommits({
-      pat: settings.pat,
-      owner: settings.owner,
-      repo: settings.repo,
-      branch: settings.branch ?? 'main',
+      pat: remote.token,
+      owner: remote.owner,
+      repo: remote.repo,
+      branch: remote.branch ?? 'main',
     }, 50, page)
     return NextResponse.json({ commits })
   } catch (err) {
