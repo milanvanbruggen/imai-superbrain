@@ -1,5 +1,5 @@
 import NextAuth from 'next-auth'
-import type { NextAuthOptions, Provider } from 'next-auth'
+import type { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import { refreshGoogleToken } from '@/lib/google-token-refresh'
@@ -9,7 +9,7 @@ const REFRESH_BUFFER_SECONDS = 60
 
 const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 
-const providers: Provider[] = [
+const providers: NextAuthOptions['providers'] = [
   CredentialsProvider({
     name: 'Password',
     credentials: {
