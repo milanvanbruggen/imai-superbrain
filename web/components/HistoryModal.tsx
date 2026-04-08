@@ -29,6 +29,8 @@ export function HistoryModal({ onClose, onRestored }: Props) {
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
+  const loadingMoreRef = useRef(false)
+  const pageRef = useRef(1)
 
   async function fetchPage(p: number) {
     const res = await fetch(`/api/vault/history?page=${p}`)
@@ -53,22 +55,26 @@ export function HistoryModal({ onClose, onRestored }: Props) {
     if (!sentinel) return
 
     const observer = new IntersectionObserver(entries => {
-      if (!entries[0].isIntersecting || loadingMore) return
-      const nextPage = page + 1
+      if (!entries[0].isIntersecting || loadingMoreRef.current) return
+      loadingMoreRef.current = true
+      const nextPage = pageRef.current + 1
       setLoadingMore(true)
       fetchPage(nextPage)
         .then(items => {
           setCommits(prev => [...prev, ...items])
-          setPage(nextPage)
+          pageRef.current = nextPage
           setHasMore(items.length === 50)
         })
         .catch(() => {})
-        .finally(() => setLoadingMore(false))
+        .finally(() => {
+          loadingMoreRef.current = false
+          setLoadingMore(false)
+        })
     }, { threshold: 1.0 })
 
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasMore, loading, loadingMore, page])
+  }, [hasMore, loading])
 
   async function handleRestore(sha: string) {
     setRestoring(true)
