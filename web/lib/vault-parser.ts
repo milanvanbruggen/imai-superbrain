@@ -4,12 +4,14 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
 export function extractManagedBlock(content: string): string[] {
+  content = content.replace(/\r\n/g, '\n')
   const match = content.match(/<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/)
   if (!match) return []
   return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1])
 }
 
 export function addToManagedBlock(content: string, stem: string): string {
+  content = content.replace(/\r\n/g, '\n')
   const wikilink = `[[${stem}]]`
   const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
   const match = content.match(blockRe)
@@ -23,11 +25,12 @@ export function addToManagedBlock(content: string, stem: string): string {
 }
 
 export function removeFromManagedBlock(content: string, stem: string): string {
+  content = content.replace(/\r\n/g, '\n')
   const wikilink = `[[${stem}]]`
   const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
   const match = content.match(blockRe)
   if (!match) return content
-  const updated = match[1].replace(wikilink, '').replace(/\s+/g, ' ').trim()
+  const updated = match[1].split(/\s+/).filter(p => p !== wikilink).join(' ').trim()
   if (!updated) {
     return content.replace(/\n*<!-- superbrain:related -->\n[\s\S]*?\n<!-- \/superbrain:related -->/, '')
   }

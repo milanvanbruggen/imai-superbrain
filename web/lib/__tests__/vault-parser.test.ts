@@ -217,4 +217,18 @@ Some body.
     const note = parseNote('notes/test.md', raw)
     expect(note.managedLinks).toEqual(['NoteA', 'NoteB'])
   })
+
+  it('managed link stems also appear in wikilinks (graph uses them for edges)', () => {
+    const raw = `---
+title: Test
+---
+
+Some body.
+<!-- superbrain:related -->
+[[NoteA]]
+<!-- /superbrain:related -->`
+    const note = parseNote('notes/test.md', raw)
+    expect(note.managedLinks).toContain('NoteA')
+    expect(note.wikilinks).toContain('NoteA')
+  })
 })
