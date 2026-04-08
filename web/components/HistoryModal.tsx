@@ -232,20 +232,20 @@ export function HistoryModal({ onClose, onRestored }: Props) {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <div className="flex items-center gap-3">
+                    <div
+                      className={`flex items-center gap-3 ${group.count > 1 ? 'cursor-pointer' : ''}`}
+                      onClick={group.count > 1 ? () => setExpandedKey(expandedKey === group.key ? null : group.key) : undefined}
+                    >
                       <span className="font-mono text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{group.restoreShortSha}</span>
                       <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{group.label}</span>
                       {group.count > 1 && (
-                        <button
-                          onClick={() => setExpandedKey(expandedKey === group.key ? null : group.key)}
-                          className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 px-1.5 py-0.5 rounded-full shrink-0 cursor-pointer transition-colors"
-                        >
+                        <span className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full shrink-0">
                           {expandedKey === group.key ? '▴' : '▾'} ×{group.count}
-                        </button>
+                        </span>
                       )}
                       <span className="text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{formatRelativeTime(group.date)}</span>
                       <button
-                        onClick={() => setConfirmingKey(group.key)}
+                        onClick={e => { e.stopPropagation(); setConfirmingKey(group.key) }}
                         className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer shrink-0"
                       >
                         Restore
