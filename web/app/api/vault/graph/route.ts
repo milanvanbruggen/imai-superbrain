@@ -18,7 +18,18 @@ export async function GET() {
     return NextResponse.json({ error: 'vault_not_configured' }, { status: 422 })
   }
 
-  const tree = await client.getMarkdownTree()
+  let tree: { path: string; sha: string }[]
+  try {
+    tree = await client.getMarkdownTree()
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'vault_unreachable', message }, { status: 502 })
+  }
+
+  if (tree.length === 0) {
+    return NextResponse.json({ error: 'vault_empty' }, { status: 422 })
+  }
+
   const vaultHash = computeVaultHash(tree)
 
   const cached = getCachedGraph(vaultHash)
@@ -45,6 +56,9 @@ export async function GET() {
     const graph = buildGraph(files)
     setCachedGraph(graph, vaultHash)
     return NextResponse.json(graph)
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'vault_unreachable', message }, { status: 502 })
   } finally {
     buildInFlight = null
     resolve()
