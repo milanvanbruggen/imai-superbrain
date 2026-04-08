@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { computeSyncActions } from '../vault-sync'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { computeSyncActions, readSnapshot, writeSnapshot, executeSync } from '../vault-sync'
+import { LocalVaultClient } from '../local'
+import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs'
+import { join } from 'path'
+import { tmpdir } from 'os'
 
 describe('computeSyncActions', () => {
   it('returns empty actions when nothing changed', () => {
@@ -111,5 +115,102 @@ describe('computeSyncActions', () => {
     const remote: { path: string; sha: string }[] = []
     const actions = computeSyncActions(local, remote, snapshot)
     expect(actions).toEqual([])
+  })
+})
+
+describe('readSnapshot / writeSnapshot', () => {
+  const dir = join(tmpdir(), `sync-snap-${Date.now()}`)
+
+  beforeEach(() => mkdirSync(dir, { recursive: true }))
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('returns empty snapshot when file does not exist', () => {
+    const snap = readSnapshot(join(dir, 'nonexistent.json'))
+    expect(snap).toEqual({ lastSync: '', files: {} })
+  })
+
+  it('round-trips snapshot data', () => {
+    const path = join(dir, 'state.json')
+    const data = { lastSync: '2026-01-01T00:00:00Z', files: { 'a.md': 'sha1' } }
+    writeSnapshot(path, data)
+    expect(readSnapshot(path)).toEqual(data)
+  })
+})
+
+describe('executeSync', () => {
+  let localDir: string
+  let remoteDir: string
+  let snapshotPath: string
+
+  beforeEach(() => {
+    const base = join(tmpdir(), `sync-exec-${Date.now()}`)
+    localDir = join(base, 'local')
+    remoteDir = join(base, 'remote')
+    snapshotPath = join(base, 'sync-state.json')
+    mkdirSync(localDir, { recursive: true })
+    mkdirSync(remoteDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    rmSync(join(localDir, '..'), { recursive: true, force: true })
+  })
+
+  it('first sync creates snapshot without actions', async () => {
+    writeFileSync(join(localDir, 'a.md'), 'local content')
+    writeFileSync(join(remoteDir, 'b.md'), 'remote content')
+
+    const local = new LocalVaultClient(localDir)
+    const remote = new LocalVaultClient(remoteDir)
+    const result = await executeSync(local, remote, snapshotPath)
+
+    expect(result.pushed).toBe(0)
+    expect(result.pulled).toBe(0)
+    expect(result.conflicts).toBe(0)
+    expect(existsSync(snapshotPath)).toBe(true)
+  })
+
+  it('second sync pushes locally added file', async () => {
+    const local = new LocalVaultClient(localDir)
+    const remote = new LocalVaultClient(remoteDir)
+    await executeSync(local, remote, snapshotPath)
+
+    writeFileSync(join(localDir, 'new.md'), '# New')
+    const result = await executeSync(local, remote, snapshotPath)
+
+    expect(result.pushed).toBe(1)
+    const remoteContent = readFileSync(join(remoteDir, 'new.md'), 'utf-8')
+    expect(remoteContent).toBe('# New')
+  })
+
+  it('second sync pulls remotely added file', async () => {
+    const local = new LocalVaultClient(localDir)
+    const remote = new LocalVaultClient(remoteDir)
+    await executeSync(local, remote, snapshotPath)
+
+    writeFileSync(join(remoteDir, 'remote-new.md'), '# Remote')
+    const result = await executeSync(local, remote, snapshotPath)
+
+    expect(result.pulled).toBe(1)
+    const localContent = readFileSync(join(localDir, 'remote-new.md'), 'utf-8')
+    expect(localContent).toBe('# Remote')
+  })
+
+  it('creates conflict file when both sides changed', async () => {
+    writeFileSync(join(localDir, 'shared.md'), 'original')
+    writeFileSync(join(remoteDir, 'shared.md'), 'original')
+
+    const local = new LocalVaultClient(localDir)
+    const remote = new LocalVaultClient(remoteDir)
+    await executeSync(local, remote, snapshotPath)
+
+    writeFileSync(join(localDir, 'shared.md'), 'local edit')
+    writeFileSync(join(remoteDir, 'shared.md'), 'remote edit')
+    const result = await executeSync(local, remote, snapshotPath)
+
+    expect(result.conflicts).toBe(1)
+    expect(result.conflictFiles).toEqual(['shared.md'])
+    expect(readFileSync(join(localDir, 'shared.md'), 'utf-8')).toBe('local edit')
+    expect(readFileSync(join(localDir, 'shared.conflict.md'), 'utf-8')).toBe('remote edit')
+    expect(readFileSync(join(remoteDir, 'shared.md'), 'utf-8')).toBe('local edit')
   })
 })
