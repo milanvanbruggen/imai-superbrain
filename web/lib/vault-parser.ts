@@ -3,6 +3,37 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
+export function extractManagedBlock(content: string): string[] {
+  const match = content.match(/<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/)
+  if (!match) return []
+  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1])
+}
+
+export function addToManagedBlock(content: string, stem: string): string {
+  const wikilink = `[[${stem}]]`
+  const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
+  const match = content.match(blockRe)
+  if (match) {
+    if (match[1].includes(wikilink)) return content
+    const updated = `${match[1]} ${wikilink}`.trim()
+    return content.replace(blockRe, `<!-- superbrain:related -->\n${updated}\n<!-- /superbrain:related -->`)
+  }
+  const block = `\n<!-- superbrain:related -->\n${wikilink}\n<!-- /superbrain:related -->`
+  return content.trimEnd() + block
+}
+
+export function removeFromManagedBlock(content: string, stem: string): string {
+  const wikilink = `[[${stem}]]`
+  const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
+  const match = content.match(blockRe)
+  if (!match) return content
+  const updated = match[1].replace(wikilink, '').replace(/\s+/g, ' ').trim()
+  if (!updated) {
+    return content.replace(/\n*<!-- superbrain:related -->\n[\s\S]*?\n<!-- \/superbrain:related -->/, '')
+  }
+  return content.replace(blockRe, `<!-- superbrain:related -->\n${updated}\n<!-- /superbrain:related -->`)
+}
+
 const SYSTEM_PATHS = new Set(['CLAUDE.md', 'memory.md'])
 
 function systemType(path: string): 'system' | 'template' | null {
@@ -49,6 +80,7 @@ export function parseNote(path: string, raw: string): VaultNote {
     content,
     relations,
     wikilinks: [...wikilinksInBody],
+    managedLinks: extractManagedBlock(content),
   }
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseNote, buildGraph, resolveWikilink } from '../vault-parser'
+import { parseNote, buildGraph, resolveWikilink, extractManagedBlock, addToManagedBlock, removeFromManagedBlock } from '../vault-parser'
 
 const SAMPLE_NOTE = `---
 title: Alice Johnson
@@ -132,5 +132,89 @@ describe('buildGraph', () => {
     )
     expect(superbrain_to_milan).toHaveLength(1)
     expect(superbrain_to_milan[0].typed).toBe(true)
+  })
+})
+
+describe('extractManagedBlock', () => {
+  it('returns empty array when no block present', () => {
+    expect(extractManagedBlock('just some text')).toEqual([])
+  })
+
+  it('extracts stems from managed block', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[Note1]] [[Note2]]\n<!-- /superbrain:related -->'
+    expect(extractManagedBlock(content)).toEqual(['Note1', 'Note2'])
+  })
+
+  it('returns empty array for empty block', () => {
+    const content = '<!-- superbrain:related -->\n\n<!-- /superbrain:related -->'
+    expect(extractManagedBlock(content)).toEqual([])
+  })
+})
+
+describe('addToManagedBlock', () => {
+  it('creates block when none exists', () => {
+    const result = addToManagedBlock('some content', 'NewNote')
+    expect(result).toContain('<!-- superbrain:related -->')
+    expect(result).toContain('[[NewNote]]')
+    expect(result).toContain('<!-- /superbrain:related -->')
+    expect(result).toContain('some content')
+  })
+
+  it('appends to existing block', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[Existing]]\n<!-- /superbrain:related -->'
+    const result = addToManagedBlock(content, 'NewNote')
+    expect(result).toContain('[[Existing]]')
+    expect(result).toContain('[[NewNote]]')
+  })
+
+  it('does not duplicate if stem already present', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[Note]]\n<!-- /superbrain:related -->'
+    const result = addToManagedBlock(content, 'Note')
+    expect(result.match(/\[\[Note\]\]/g)?.length).toBe(1)
+  })
+})
+
+describe('removeFromManagedBlock', () => {
+  it('removes one stem from block with multiple', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[A]] [[B]]\n<!-- /superbrain:related -->'
+    const result = removeFromManagedBlock(content, 'A')
+    expect(result).not.toContain('[[A]]')
+    expect(result).toContain('[[B]]')
+  })
+
+  it('removes entire block when last stem is removed', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[Only]]\n<!-- /superbrain:related -->'
+    const result = removeFromManagedBlock(content, 'Only')
+    expect(result).not.toContain('superbrain:related')
+    expect(result.trim()).toBe('body')
+  })
+
+  it('returns content unchanged when stem not in block', () => {
+    const content = 'body\n<!-- superbrain:related -->\n[[A]]\n<!-- /superbrain:related -->'
+    expect(removeFromManagedBlock(content, 'Missing')).toBe(content)
+  })
+
+  it('returns content unchanged when no block exists', () => {
+    expect(removeFromManagedBlock('just some text', 'Note')).toBe('just some text')
+  })
+})
+
+describe('parseNote - managedLinks', () => {
+  it('returns empty array when no managed block', () => {
+    const note = parseNote('notes/foo.md', 'just text')
+    expect(note.managedLinks).toEqual([])
+  })
+
+  it('extracts managed links from body block', () => {
+    const raw = `---
+title: Test
+---
+
+Some body.
+<!-- superbrain:related -->
+[[NoteA]] [[NoteB]]
+<!-- /superbrain:related -->`
+    const note = parseNote('notes/test.md', raw)
+    expect(note.managedLinks).toEqual(['NoteA', 'NoteB'])
   })
 })

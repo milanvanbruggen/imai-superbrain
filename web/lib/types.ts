@@ -13,6 +13,7 @@ export interface VaultNote {
   content: string       // raw markdown (body only, no frontmatter)
   relations: TypedRelation[]
   wikilinks: string[]   // stems found in body [[...]]
+  managedLinks: string[]  // stems from <!-- superbrain:related --> block
 }
 
 export interface TypedRelation {
