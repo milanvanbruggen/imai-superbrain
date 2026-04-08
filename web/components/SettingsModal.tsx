@@ -4,12 +4,20 @@ import { useSession, signIn, signOut } from 'next-auth/react'
 
 interface VaultConfig {
   mode: 'local' | 'github' | 'unconfigured'
-  vaultPath?: string
-  owner?: string
-  repo?: string
+  vaultPath?: string | null
+  owner?: string | null
+  repo?: string | null
   branch?: string
-  repoUrl?: string
+  repoUrl?: string | null
   noteCount?: number | null
+  configSource?: 'file' | 'env'
+  syncEnabled?: boolean
+}
+
+interface SyncStatus {
+  syncEnabled: boolean
+  lastSync: string | null
+  fileCount: number
 }
 
 interface Props {
@@ -18,29 +26,131 @@ interface Props {
 
 export function SettingsModal({ onClose }: Props) {
   const [config, setConfig] = useState<VaultConfig | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncDone, setSyncDone] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const { data: session, update } = useSession()
   const [disconnecting, setDisconnecting] = useState(false)
+
+  // Separate edit states
+  const [editingLocal, setEditingLocal] = useState(false)
+  const [editingGithub, setEditingGithub] = useState(false)
+
+  // Sync toggle state
+  const [togglingSync, setTogglingSync] = useState(false)
+  const [showSyncExplainer, setShowSyncExplainer] = useState(false)
+
+  // Editable fields
+  const [editRepoUrl, setEditRepoUrl] = useState('')
+  const [editBranch, setEditBranch] = useState('main')
+  const [editVaultPath, setEditVaultPath] = useState('')
 
   useEffect(() => {
     fetch('/api/vault/config')
       .then(r => r.json())
-      .then(setConfig)
+      .then((c: VaultConfig) => {
+        setConfig(c)
+        setEditVaultPath(c.vaultPath ?? '')
+        setEditRepoUrl(c.owner && c.repo ? `https://github.com/${c.owner}/${c.repo}.git` : '')
+        setEditBranch(c.branch ?? 'main')
+      })
+    fetch('/api/vault/sync').then(r => r.json()).then(setSyncStatus).catch(() => {})
   }, [])
 
-  async function handleRefresh() {
-    setSyncing(true)
-    setSyncDone(false)
-    await fetch('/api/vault/config', { method: 'POST' })
-    // Reload graph after cache invalidation
-    await fetch('/api/vault/graph')
-    const updated = await fetch('/api/vault/config').then(r => r.json())
-    setConfig(updated)
-    setSyncing(false)
-    setSyncDone(true)
-    setTimeout(() => setSyncDone(false), 2000)
+  function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+    const match = url.trim().match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?$/)
+    if (!match) return null
+    return { owner: match[1], repo: match[2] }
   }
+
+  function formatRelativeTime(isoString: string | null): string {
+    if (!isoString) return 'Never'
+    const diff = Date.now() - new Date(isoString).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'Just now'
+    if (mins < 60) return `${mins} min ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+  }
+
+  async function handleSaveLocal() {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const res = await fetch('/api/vault/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'local', vaultPath: editVaultPath }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
+      const updated = await fetch('/api/vault/config').then(r => r.json())
+      setConfig(updated)
+      setEditVaultPath(updated.vaultPath ?? '')
+      setEditingLocal(false)
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSaveGithub() {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      const parsed = parseGitHubUrl(editRepoUrl)
+      if (!parsed) throw new Error('Invalid GitHub URL. Use: https://github.com/owner/repo.git')
+      const res = await fetch('/api/vault/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'github', owner: parsed.owner, repo: parsed.repo, branch: editBranch }),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
+      const updated = await fetch('/api/vault/config').then(r => r.json())
+      setConfig(updated)
+      setEditRepoUrl(updated.owner && updated.repo ? `https://github.com/${updated.owner}/${updated.repo}.git` : '')
+      setEditBranch(updated.branch ?? 'main')
+      setEditingGithub(false)
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleSetPrimary(mode: 'local' | 'github') {
+    const res = await fetch('/api/vault/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, vaultPath: config?.vaultPath, owner: config?.owner, repo: config?.repo, branch: config?.branch }),
+    })
+    if (res.ok) {
+      const updated = await fetch('/api/vault/config').then(r => r.json())
+      setConfig(updated)
+    }
+  }
+
+  async function handleSyncToggle(enabled: boolean) {
+    setTogglingSync(true)
+    try {
+      await fetch('/api/vault/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncEnabled: enabled }),
+      })
+      const [updatedConfig, updatedSync] = await Promise.all([
+        fetch('/api/vault/config').then(r => r.json()),
+        fetch('/api/vault/sync').then(r => r.json()),
+      ])
+      setConfig(updatedConfig)
+      setSyncStatus(updatedSync)
+    } finally {
+      setTogglingSync(false)
+    }
+  }
+
+  const inputClass = 'w-full px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono'
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
@@ -53,11 +163,11 @@ export function SettingsModal({ onClose }: Props) {
           <div className="flex items-center gap-2.5">
             <div className="w-5 h-5 rounded bg-slate-100 dark:bg-gray-800 flex items-center justify-center">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-slate-500 dark:text-gray-400">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                 <circle cx="12" cy="12" r="3"/>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
               </svg>
             </div>
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Vault Settings</h2>
+            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Settings</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -73,112 +183,160 @@ export function SettingsModal({ onClose }: Props) {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Source */}
-            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Source</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  config.mode === 'github'
-                    ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                    : config.mode === 'local'
-                      ? 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-400'
-                      : 'bg-red-100 dark:bg-red-500/15 text-red-600 dark:text-red-400'
-                }`}>
-                  {config.mode === 'github' ? 'GitHub' : config.mode === 'local' ? 'Local' : 'Not configured'}
-                </span>
+            {/* Vault section */}
+            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-4">
+              <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Vault</span>
+
+              {/* Local vault */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Local path</span>
+                  {!editingLocal && (
+                    <button onClick={() => setEditingLocal(true)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {editingLocal ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editVaultPath}
+                      onChange={e => setEditVaultPath(e.target.value)}
+                      placeholder="/Users/you/vault"
+                      className={inputClass}
+                      autoFocus
+                    />
+                    {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setEditingLocal(false); setSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+                      <button onClick={handleSaveLocal} disabled={saving} className="px-3 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-60 cursor-pointer">{saving ? 'Saving...' : 'Save'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-gray-500 font-mono break-all">
+                    {config.vaultPath ?? <span className="italic">Not configured</span>}
+                  </p>
+                )}
               </div>
 
-              {config.mode === 'github' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-slate-400 dark:text-gray-500 shrink-0">
-                      <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                    </svg>
-                    <a
-                      href={config.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-teal-600 dark:text-teal-400 hover:underline font-mono"
-                    >
-                      {config.owner}/{config.repo}
-                    </a>
+              {/* GitHub repository */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">GitHub repository</span>
+                  {!editingGithub && (
+                    <button onClick={() => setEditingGithub(true)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {editingGithub ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editRepoUrl}
+                      onChange={e => setEditRepoUrl(e.target.value)}
+                      placeholder="https://github.com/owner/repo.git"
+                      className={inputClass}
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      value={editBranch}
+                      onChange={e => setEditBranch(e.target.value)}
+                      placeholder="main"
+                      className={inputClass}
+                    />
+                    {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setEditingGithub(false); setSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+                      <button onClick={handleSaveGithub} disabled={saving} className="px-3 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-60 cursor-pointer">{saving ? 'Saving...' : 'Save'}</button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-gray-500">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-                      <path d="M18 9a9 9 0 0 1-9 9"/>
-                    </svg>
-                    branch: <code className="text-slate-600 dark:text-gray-400">{config.branch}</code>
+                ) : (
+                  <div className="space-y-0.5">
+                    {config.owner && config.repo ? (
+                      <>
+                        <p className="text-xs text-slate-500 dark:text-gray-500 font-mono">{config.owner}/{config.repo}</p>
+                        <p className="text-xs text-slate-400 dark:text-gray-600">branch: {config.branch ?? 'main'}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-slate-400 dark:text-gray-600 italic">Not configured</p>
+                    )}
                   </div>
-                </>
-              )}
+                )}
+              </div>
 
-              {config.mode === 'local' && (
-                <p className="text-xs text-slate-500 dark:text-gray-500 font-mono break-all">{config.vaultPath}</p>
-              )}
-
-              {config.noteCount !== null && config.noteCount !== undefined && (
-                <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-gray-600 pt-1 border-t border-slate-200 dark:border-gray-700">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                  {config.noteCount} notes in cache
+              {/* Primary source — only show if both configured */}
+              {config.vaultPath && config.owner && config.repo && (
+                <div className="space-y-1.5 pt-1 border-t border-slate-200 dark:border-gray-700">
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Primary source</span>
+                  <p className="text-xs text-slate-500 dark:text-gray-500">The vault the graph reads from when sync is off.</p>
+                  <div className="flex gap-1 p-0.5 bg-slate-200 dark:bg-gray-700 rounded-md">
+                    {(['local', 'github'] as const).map(m => (
+                      <button
+                        key={m}
+                        onClick={() => handleSetPrimary(m)}
+                        className={`flex-1 text-xs py-1.5 rounded font-medium transition-colors cursor-pointer ${
+                          config.mode === m
+                            ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
+                            : 'text-slate-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {m === 'local' ? 'Local' : 'GitHub'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Change vault instructions */}
-            {config.mode === 'github' && (
-              <div className="rounded-lg border border-slate-200 dark:border-gray-700 p-4 space-y-2">
-                <p className="text-xs font-medium text-slate-600 dark:text-gray-400">Change vault repository</p>
-                <p className="text-xs text-slate-400 dark:text-gray-600 leading-relaxed">
-                  Update <code className="text-slate-500 dark:text-gray-500 bg-slate-100 dark:bg-gray-800 px-1 rounded">GITHUB_VAULT_OWNER</code> and <code className="text-slate-500 dark:text-gray-500 bg-slate-100 dark:bg-gray-800 px-1 rounded">GITHUB_VAULT_REPO</code> in your Vercel project settings, then redeploy.
-                </p>
-                <a
-                  href="https://vercel.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-teal-600 dark:text-teal-400 hover:underline"
-                >
-                  Open Vercel dashboard
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-              </div>
-            )}
+              {/* Auto-sync section */}
+              {(() => {
+                const bothConfigured = !!(config.vaultPath && config.owner && config.repo)
+                const syncOn = syncStatus?.syncEnabled ?? false
 
-            {/* Sync button */}
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={handleRefresh}
-                disabled={syncing}
-                className="flex items-center gap-2 px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors disabled:opacity-60 cursor-pointer"
-              >
-                {syncing ? (
-                  <>
-                    <div className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    Refreshing...
-                  </>
-                ) : syncDone ? (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                    Done
-                  </>
-                ) : (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                    </svg>
-                    Refresh vault
-                  </>
-                )}
-              </button>
+                return (
+                  <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auto-sync</span>
+                        {!bothConfigured && (
+                          <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">Configure both local and GitHub to enable.</p>
+                        )}
+                      </div>
+                      {/* Toggle */}
+                      <button
+                        onClick={() => bothConfigured && !togglingSync && handleSyncToggle(!syncOn)}
+                        disabled={!bothConfigured || togglingSync}
+                        className={`relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-200 ${
+                          syncOn ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
+                        } ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                      >
+                        <span className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${syncOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+
+                    {syncOn && syncStatus && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-slate-500 dark:text-gray-500">
+                          Last sync: {formatRelativeTime(syncStatus.lastSync)}
+                        </p>
+                        <button
+                          onClick={() => setShowSyncExplainer(v => !v)}
+                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                        >
+                          <span>{showSyncExplainer ? '▾' : '▸'}</span> Hoe werkt sync?
+                        </button>
+                        {showSyncExplainer && (
+                          <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
+                            Superbrain vergelijkt elke paar seconden de bestanden in je lokale vault met GitHub. Nieuwe en gewijzigde bestanden worden automatisch gesynchroniseerd. Als hetzelfde bestand op beide plekken is gewijzigd, wint de lokale versie en wordt de remote versie bewaard als .conflict.md bestand.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Account */}
