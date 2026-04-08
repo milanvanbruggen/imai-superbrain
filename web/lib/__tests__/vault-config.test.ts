@@ -157,3 +157,37 @@ describe('resolveVaultSettings — legacy vault-config.json format', () => {
     expect(s.local?.path).toBe('/tmp/old-vault')
   })
 })
+
+describe('vault-config noteTypes', () => {
+  let restore: () => void
+  beforeEach(() => { restore = backupAndReset() })
+  afterEach(() => restore())
+
+  it('reads noteTypes from vault-config.json', async () => {
+    writeFileSync(configPath, JSON.stringify({
+      local: { path: '/tmp/vault' },
+      noteTypes: [{ name: 'klant', color: '#ff0000' }],
+    }))
+    vi.resetModules()
+    const { readVaultConfig } = await import('../vault-config')
+    const config = readVaultConfig()
+    expect(config.noteTypes).toEqual([{ name: 'klant', color: '#ff0000' }])
+  })
+
+  it('returns undefined noteTypes when not set', async () => {
+    writeFileSync(configPath, JSON.stringify({ local: { path: '/tmp/vault' } }))
+    vi.resetModules()
+    const { readVaultConfig } = await import('../vault-config')
+    const config = readVaultConfig()
+    expect(config.noteTypes).toBeUndefined()
+  })
+
+  it('writeVaultConfig preserves noteTypes', async () => {
+    vi.resetModules()
+    const { writeVaultConfig, readVaultConfig } = await import('../vault-config')
+    writeVaultConfig({ local: { path: '/tmp' }, noteTypes: [{ name: 'klant', color: '#ff0000' }] })
+    vi.resetModules()
+    const { readVaultConfig: read2 } = await import('../vault-config')
+    expect(read2().noteTypes).toEqual([{ name: 'klant', color: '#ff0000' }])
+  })
+})

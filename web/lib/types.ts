@@ -4,7 +4,7 @@ export interface VaultNote {
   path: string          // relative path in vault, e.g. "people/Milan.md"
   stem: string          // filename without extension, e.g. "Milan"
   title: string         // from frontmatter.title or stem
-  type: 'person' | 'project' | 'idea' | 'note' | 'resource' | 'meeting' | 'daily' | 'area' | 'group' | 'system' | 'template'
+  type: string
   tags: string[]
   date: string | null
   email?: string

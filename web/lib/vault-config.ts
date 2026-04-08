@@ -24,9 +24,15 @@ export interface LocalConfig {
   path: string
 }
 
+export interface NoteTypeConfig {
+  name: string
+  color: string
+}
+
 export interface VaultConfigFile {
   remote?: RemoteConfig
   local?: LocalConfig
+  noteTypes?: NoteTypeConfig[]
 }
 
 // Legacy format for backward compat on read
