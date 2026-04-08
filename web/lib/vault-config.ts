@@ -1,71 +1,142 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
+export interface GitHubRemote {
+  provider: 'github'
+  token: string
+  owner: string
+  repo: string
+  branch?: string
+}
+
+export interface GitLabRemote {
+  provider: 'gitlab'
+  token: string
+  namespace: string
+  project: string
+  branch?: string
+  url?: string
+}
+
+export type RemoteConfig = GitHubRemote | GitLabRemote
+
+export interface LocalConfig {
+  path: string
+}
+
 export interface VaultConfigFile {
-  mode?: 'local' | 'github'
+  remote?: RemoteConfig
+  local?: LocalConfig
+}
+
+// Legacy format for backward compat on read
+interface LegacyVaultConfigFile {
+  mode?: string
   vaultPath?: string
   owner?: string
   repo?: string
   branch?: string
 }
 
+export type VaultMode = 'local' | 'github' | 'gitlab' | 'unconfigured'
+
+export interface ResolvedVaultSettings {
+  mode: VaultMode
+  remote?: RemoteConfig
+  local?: LocalConfig
+  syncEnabled: boolean
+}
+
 const CONFIG_PATH = join(process.cwd(), 'vault-config.json')
 
-/** Returns true when running on Vercel (or similar serverless with read-only fs). */
 export function isServerless(): boolean {
   return !!process.env.VERCEL
 }
 
-export function readVaultConfig(): VaultConfigFile {
-  try {
-    if (!existsSync(CONFIG_PATH)) return {}
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
-  } catch {
-    return {}
+function parseLegacyConfig(raw: LegacyVaultConfigFile): VaultConfigFile {
+  const result: VaultConfigFile = {}
+  if (raw.owner && raw.repo) {
+    result.remote = {
+      provider: 'github',
+      token: process.env.GITHUB_PAT ?? '',
+      owner: raw.owner,
+      repo: raw.repo,
+      branch: raw.branch ?? 'main',
+    }
   }
+  if (raw.vaultPath) {
+    result.local = { path: raw.vaultPath }
+  }
+  return result
+}
+
+export function readVaultConfig(): VaultConfigFile {
+  // 1. vault-config.json on disk
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      const raw = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
+      // Detect old format by top-level 'owner' or 'mode' field
+      if ('owner' in raw || 'mode' in raw) {
+        return parseLegacyConfig(raw as LegacyVaultConfigFile)
+      }
+      return raw as VaultConfigFile
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2. VAULT_CONFIG env var (JSON)
+  if (process.env.VAULT_CONFIG) {
+    try {
+      return JSON.parse(process.env.VAULT_CONFIG) as VaultConfigFile
+    } catch {
+      // fall through
+    }
+  }
+
+  // 3. Legacy GITHUB_* env vars
+  const pat = process.env.GITHUB_PAT
+  const owner = process.env.GITHUB_VAULT_OWNER
+  const repo = process.env.GITHUB_VAULT_REPO
+  const branch = process.env.GITHUB_VAULT_BRANCH ?? 'main'
+  const vaultPath = process.env.VAULT_PATH
+
+  if (pat && owner && repo) {
+    return {
+      remote: { provider: 'github', token: pat, owner, repo, branch },
+      ...(vaultPath ? { local: { path: vaultPath } } : {}),
+    }
+  }
+
+  if (vaultPath) {
+    return { local: { path: vaultPath } }
+  }
+
+  return {}
 }
 
 export function writeVaultConfig(config: VaultConfigFile): void {
   if (isServerless()) {
     throw new Error(
       'Configuration cannot be saved in a serverless environment. ' +
-      'Set GITHUB_PAT, GITHUB_VAULT_OWNER, GITHUB_VAULT_REPO and GITHUB_VAULT_BRANCH ' +
-      'as environment variables in your Vercel project settings instead.'
+      'Set VAULT_CONFIG as a JSON environment variable in your deployment settings instead.'
     )
   }
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8')
 }
 
-/** Resolve effective vault settings: vault-config.json overrides env vars */
-export function resolveVaultSettings() {
-  const file = readVaultConfig()
+export function resolveVaultSettings(): ResolvedVaultSettings {
+  const { remote, local } = readVaultConfig()
+  const syncEnabled = !!(remote && local && !isServerless())
 
-  const vaultPath = file.vaultPath || process.env.VAULT_PATH || undefined
-  const owner = file.owner || process.env.GITHUB_VAULT_OWNER || undefined
-  const repo = file.repo || process.env.GITHUB_VAULT_REPO || undefined
-  const branch = file.branch || process.env.GITHUB_VAULT_BRANCH || 'main'
-  const pat = process.env.GITHUB_PAT || undefined
-
-  // Sync is automatic: enabled when both local path and GitHub credentials are available
-  const syncEnabled = !!vaultPath
-    && !!owner && !!repo && !!pat
-    && !process.env.VERCEL
-
-  // Explicit mode from config file takes priority
-  if (file.mode === 'local' && vaultPath) {
-    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
+  if (remote?.provider === 'github') {
+    return { mode: 'github', remote, local, syncEnabled }
   }
-  if (file.mode === 'github' && owner && repo) {
-    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
+  if (remote?.provider === 'gitlab') {
+    return { mode: 'gitlab', remote, local, syncEnabled }
   }
-
-  // Auto-detect from available values
-  if (vaultPath) {
-    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
+  if (local) {
+    return { mode: 'local', local, syncEnabled: false }
   }
-  if (pat && owner && repo) {
-    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
-  }
-
-  return { mode: 'unconfigured' as const, vaultPath, owner, repo, branch, pat, syncEnabled: false } // unconfigured: sync requires a local path
+  return { mode: 'unconfigured', syncEnabled: false }
 }
