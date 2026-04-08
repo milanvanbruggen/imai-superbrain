@@ -11,7 +11,7 @@ const TYPE_FOLDER: Record<NoteType, string> = {
   idea: 'ideas',
   resource: 'resources',
   area: 'areas',
-  note: 'inbox',
+  note: 'notes',
 }
 
 function todayISO(): string {
@@ -24,17 +24,17 @@ function generateFrontmatter(type: NoteType, title: string): string {
     case 'person':
       return `---\ntitle: "${title}"\ntype: person\ntags: []\nrelations: []\n---\n`
     case 'project':
-      return `---\ntitle: "${title}"\ntype: project\ndate: ${date}\ntags: []\nstatus: active\nrelations: []\n---\n\n## Doel\n\n## Voortgang\n\n## Open punten\n`
+      return `---\ntitle: "${title}"\ntype: project\ndate: ${date}\ntags: []\nstatus: active\nrelations: []\n---\n\n## Goal\n\n## Progress\n\n## Open items\n`
     case 'area':
-      return `---\ntitle: "${title}"\ntype: area\ntags: []\nrelations: []\n---\n\n## Beschrijving\n\n## Standaard en doelen\n`
+      return `---\ntitle: "${title}"\ntype: area\ntags: []\nrelations: []\n---\n\n## Description\n\n## Standards and goals\n`
     case 'idea':
       return `---\ntitle: "${title}"\ntype: idea\ndate: ${date}\ntags: []\nrelations: []\n---\n`
     case 'resource':
       return `---\ntitle: "${title}"\ntype: resource\ntags: []\nsource: ""\nrelations: []\n---\n`
     case 'meeting':
-      return `---\ntitle: "${title}"\ntype: meeting\ndate: ${date}\ntags: []\nattendees: []\nrelations: []\n---\n\n## Agenda\n\n## Notities\n\n## Actiepunten\n`
+      return `---\ntitle: "${title}"\ntype: meeting\ndate: ${date}\ntags: []\nattendees: []\nrelations: []\n---\n\n## Agenda\n\n## Notes\n\n## Action items\n`
     case 'daily':
-      return `---\ntitle: ${date}\ntype: daily\ndate: ${date}\ntags: []\n---\n\n## Focus vandaag\n\n## Log\n\n## Reflectie\n`
+      return `---\ntitle: ${date}\ntype: daily\ndate: ${date}\ntags: []\n---\n\n## Focus today\n\n## Log\n\n## Reflection\n`
     case 'note':
     default:
       return `---\ntitle: "${title}"\ntype: note\ntags: []\n---\n`
@@ -130,7 +130,7 @@ export function NewNoteModal({ onClose, onCreated }: Props) {
               onChange={e => handleTypeChange(e.target.value as NoteType)}
               className="w-full bg-slate-50 dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded-md px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-teal-400 dark:focus:border-teal-600 transition-colors cursor-pointer"
             >
-              <option value="note">Note (inbox)</option>
+              <option value="note">Note</option>
               <option value="idea">Idea</option>
               <option value="project">Project</option>
               <option value="person">Person</option>

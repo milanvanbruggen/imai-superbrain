@@ -43,15 +43,15 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: note.title, email: email || undefined }),
       })
-      if (res.status === 401) { setError('Sessie verlopen — herlaad de pagina.'); setPhase('error'); return }
-      if (res.status === 429) { setError('Probeer het over een moment opnieuw.'); setPhase('error'); return }
-      if (!res.ok) { setError('Gmail kon niet worden bereikt. Probeer opnieuw.'); setPhase('error'); return }
+      if (res.status === 401) { setError('Session expired — reload the page.'); setPhase('error'); return }
+      if (res.status === 429) { setError('Please try again in a moment.'); setPhase('error'); return }
+      if (!res.ok) { setError('Could not reach Gmail. Please try again.'); setPhase('error'); return }
       const data = await res.json()
       setMessages(data.messages ?? [])
       setNextPageToken(data.nextPageToken ?? null)
       setPhase('results')
     } catch {
-      setError('Verbindingsfout. Probeer opnieuw.')
+      setError('Connection error. Please try again.')
       setPhase('error')
     }
   }
@@ -70,12 +70,12 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           pageToken: nextPageToken,
         }),
       })
-      if (!res.ok) { setError('Meer laden mislukt. Probeer opnieuw.'); return }
+      if (!res.ok) { setError('Failed to load more. Please try again.'); return }
       const data = await res.json()
       setMessages(prev => [...prev, ...(data.messages ?? [])])
       setNextPageToken(data.nextPageToken ?? null)
     } catch {
-      setError('Verbindingsfout. Probeer opnieuw.')
+      setError('Connection error. Please try again.')
     } finally {
       setLoadingMore(false)
     }
@@ -126,15 +126,15 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messageIds: Array.from(selected), personName: note.title, path: note.path }),
       })
-      if (res.status === 401) { setError('Sessie verlopen — herlaad de pagina.'); setPhase('error'); return }
-      if (res.status === 429) { setError('Probeer het over een moment opnieuw.'); setPhase('results'); return }
-      if (res.status === 422) { setError('De geselecteerde emails konden niet worden opgehaald.'); setPhase('results'); return }
-      if (!res.ok) { setError('Samenvatting mislukt. Probeer opnieuw.'); setPhase('results'); return }
+      if (res.status === 401) { setError('Session expired — reload the page.'); setPhase('error'); return }
+      if (res.status === 429) { setError('Please try again in a moment.'); setPhase('results'); return }
+      if (res.status === 422) { setError('Could not fetch the selected emails.'); setPhase('results'); return }
+      if (!res.ok) { setError('Summary failed. Please try again.'); setPhase('results'); return }
       const data = await res.json()
       setSummary(data.summary)
       setPhase('summary')
     } catch {
-      setError('Verbindingsfout. Probeer opnieuw.')
+      setError('Connection error. Please try again.')
       setPhase('results')
     }
   }
@@ -148,12 +148,12 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: note.path, summary }),
       })
-      if (res.status === 409) { setError('De notitie is tegelijkertijd gewijzigd. Probeer opnieuw.'); return }
-      if (!res.ok) { setError('Opslaan mislukt. De samenvatting staat hieronder nog zodat je hem kunt kopiëren.'); return }
+      if (res.status === 409) { setError('The note was changed concurrently. Please try again.'); return }
+      if (!res.ok) { setError('Save failed. The summary is still shown below so you can copy it.'); return }
       onAppended()
       onClose()
     } catch {
-      setError('Verbindingsfout. De samenvatting staat hieronder nog.')
+      setError('Connection error. The summary is still shown below.')
     } finally {
       setAppending(false)
     }
@@ -186,10 +186,10 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           {/* Consent notice */}
           {showConsent && (
             <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg text-xs text-amber-800 dark:text-amber-300 space-y-3">
-              <p>De inhoud van de geselecteerde emails wordt naar Claude gestuurd om een samenvatting te genereren. Emails worden niet opgeslagen.</p>
+              <p>The content of the selected emails will be sent to Claude to generate a summary. Emails are not stored.</p>
               <div className="flex gap-2">
-                <button onClick={handleConsentAccept} className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-500 cursor-pointer">Akkoord</button>
-                <button onClick={() => setShowConsent(false)} className="px-3 py-1.5 text-amber-700 dark:text-amber-400 hover:underline text-xs cursor-pointer">Annuleer</button>
+                <button onClick={handleConsentAccept} className="px-3 py-1.5 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-500 cursor-pointer">Accept</button>
+                <button onClick={() => setShowConsent(false)} className="px-3 py-1.5 text-amber-700 dark:text-amber-400 hover:underline text-xs cursor-pointer">Cancel</button>
               </div>
             </div>
           )}
@@ -203,14 +203,14 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           {phase === 'email-input' && (
             <div className="space-y-4 py-4">
               <p className="text-sm text-slate-500 dark:text-gray-400">
-                Voeg het emailadres van <span className="font-medium text-gray-800 dark:text-gray-200">{note.title}</span> toe voor nauwkeurigere resultaten.
+                Add the email address of <span className="font-medium text-gray-800 dark:text-gray-200">{note.title}</span> for more accurate results.
               </p>
               <input
                 type="email"
                 value={emailInput}
                 onChange={e => setEmailInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleEmailSubmit()}
-                placeholder="naam@voorbeeld.com"
+                placeholder="name@example.com"
                 autoFocus
                 className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-slate-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
@@ -220,25 +220,25 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           {phase === 'loading' && (
             <div className="flex items-center gap-2 text-sm text-slate-400 py-8 justify-center">
               <div className="w-4 h-4 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
-              Zoeken in Gmail...
+              Searching Gmail...
             </div>
           )}
 
           {phase === 'summarizing' && (
             <div className="flex items-center gap-2 text-sm text-slate-400 py-8 justify-center">
               <div className="w-4 h-4 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
-              Samenvatting genereren...
+              Generating summary...
             </div>
           )}
 
           {phase === 'error' && (
             <div className="py-8 text-center">
-              <button onClick={() => searchEmails(emailInput.trim() || undefined)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">Opnieuw proberen</button>
+              <button onClick={() => searchEmails(emailInput.trim() || undefined)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">Try again</button>
             </div>
           )}
 
           {phase === 'results' && messages.length === 0 && (
-            <p className="text-sm text-slate-400 dark:text-gray-500 py-8 text-center">Geen emails gevonden voor deze persoon.</p>
+            <p className="text-sm text-slate-400 dark:text-gray-500 py-8 text-center">No emails found for this person.</p>
           )}
 
           {phase === 'results' && messages.length > 0 && (
@@ -278,7 +278,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
 
           {phase === 'summary' && (
             <div className="space-y-3">
-              <p className="text-xs text-slate-500 dark:text-gray-500 font-medium uppercase tracking-wider">Gegenereerde samenvatting</p>
+              <p className="text-xs text-slate-500 dark:text-gray-500 font-medium uppercase tracking-wider">Generated summary</p>
               <div className="p-4 bg-slate-50 dark:bg-gray-800/50 rounded-lg text-sm text-gray-800 dark:text-gray-200 prose prose-sm dark:prose-invert max-w-none">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{summary}</ReactMarkdown>
               </div>
@@ -290,38 +290,38 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         <div className="flex justify-between items-center p-4 border-t border-slate-100 dark:border-gray-800 shrink-0">
           {phase === 'email-input' && (
             <>
-              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</button>
+              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</button>
               <button
                 onClick={handleEmailSubmit}
                 className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors cursor-pointer"
               >
-                Zoeken
+                Search
               </button>
             </>
           )}
 
           {phase === 'results' && (
             <>
-              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</button>
+              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</button>
               <button
                 onClick={handleSummarizeClick}
                 disabled={selected.size === 0}
                 className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                Samenvatting genereren ({selected.size})
+                Generate summary ({selected.size})
               </button>
             </>
           )}
 
           {phase === 'summary' && (
             <>
-              <button onClick={() => { setPhase('results'); setSummary('') }} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Opnieuw genereren</button>
+              <button onClick={() => { setPhase('results'); setSummary('') }} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Regenerate</button>
               <button
                 onClick={handleAppend}
                 disabled={appending}
                 className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-60 transition-colors cursor-pointer"
               >
-                {appending ? 'Opslaan...' : 'Toevoegen aan notitie'}
+                {appending ? 'Saving...' : 'Add to note'}
               </button>
             </>
           )}

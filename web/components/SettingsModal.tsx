@@ -327,11 +327,11 @@ export function SettingsModal({ onClose }: Props) {
                       onClick={() => setShowSyncExplainer(v => !v)}
                       className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
                     >
-                      <span>{showSyncExplainer ? '▾' : '▸'}</span> Hoe werkt sync?
+                      <span>{showSyncExplainer ? '▾' : '▸'}</span> How does sync work?
                     </button>
                     {showSyncExplainer && (
                       <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
-                        Superbrain vergelijkt elke paar seconden de bestanden in je lokale vault met GitHub. Nieuwe en gewijzigde bestanden worden automatisch gesynchroniseerd. Als hetzelfde bestand op beide plekken is gewijzigd, wint de lokale versie en wordt de remote versie bewaard als .conflict.md bestand.
+                        Superbrain compares your local vault with GitHub every few seconds and automatically syncs new and changed files. If the same file was changed in both places, the local version wins and the remote version is saved as a .conflict.md file.
                       </p>
                     )}
                   </div>
@@ -376,22 +376,22 @@ export function SettingsModal({ onClose }: Props) {
                     disabled={disconnecting}
                     className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-50 cursor-pointer transition-colors"
                   >
-                    {disconnecting ? 'Ontkoppelen...' : 'Ontkoppel'}
+                    {disconnecting ? 'Disconnecting...' : 'Disconnect'}
                   </button>
                 ) : (
                   <button
                     onClick={() => signIn('google', { callbackUrl: window.location.origin })}
                     className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-colors cursor-pointer"
                   >
-                    Koppel Gmail
+                    Connect Gmail
                   </button>
                 )}
               </div>
 
               {(session as any)?.googleError === 'RefreshTokenError' && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Gmail-verbinding verlopen.{' '}
-                  <button onClick={() => signIn('google', { callbackUrl: window.location.origin })} className="underline cursor-pointer">Herverbind</button>
+                  Gmail connection expired.{' '}
+                  <button onClick={() => signIn('google', { callbackUrl: window.location.origin })} className="underline cursor-pointer">Reconnect</button>
                 </p>
               )}
             </div>
