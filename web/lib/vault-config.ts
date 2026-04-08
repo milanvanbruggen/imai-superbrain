@@ -53,12 +53,24 @@ export function isServerless(): boolean {
   return !!process.env.VERCEL
 }
 
+function getLegacyGitHubToken(): string {
+  if (process.env.GITHUB_PAT) return process.env.GITHUB_PAT
+  // Fall back to token in VAULT_CONFIG env var (transitional: old vault-config.json + new env var)
+  if (process.env.VAULT_CONFIG) {
+    try {
+      const vc = JSON.parse(process.env.VAULT_CONFIG) as VaultConfigFile
+      if (vc?.remote?.provider === 'github') return (vc.remote as GitHubRemote).token
+    } catch {}
+  }
+  return ''
+}
+
 function parseLegacyConfig(raw: LegacyVaultConfigFile): VaultConfigFile {
   const result: VaultConfigFile = {}
   if (raw.owner && raw.repo) {
     result.remote = {
       provider: 'github',
-      token: process.env.GITHUB_PAT ?? '',
+      token: getLegacyGitHubToken(),
       owner: raw.owner,
       repo: raw.repo,
       branch: raw.branch ?? 'main',
