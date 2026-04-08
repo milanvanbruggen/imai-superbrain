@@ -34,7 +34,7 @@ The app runs as a Next.js web application — locally for development and on Ver
 
 Create a **new private GitHub repository** (e.g. `your-username/superbrain-vault`).
 
-You can start with an empty repo — the app has an "Initialize vault" button that creates a starter structure. Or create it manually:
+You can start with an empty repo — the app has a **Setup Wizard** that walks you through connecting your GitHub repo and optionally initializes a starter folder structure with system files for AI context. Or create it manually:
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/superbrain-vault.git ~/superbrain-vault

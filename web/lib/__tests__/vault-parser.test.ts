@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseNote, buildGraph, resolveWikilink } from '../vault-parser'
 
 const SAMPLE_NOTE = `---
-title: Milan van Bruggen
+title: Alice Johnson
 type: person
 tags: [founder, indie]
 date: 2026-01-01
@@ -17,20 +17,20 @@ Also related to [[Superbrain]] again.
 
 describe('parseNote', () => {
   it('extracts frontmatter fields', () => {
-    const note = parseNote('people/Milan van Bruggen.md', SAMPLE_NOTE)
-    expect(note.title).toBe('Milan van Bruggen')
+    const note = parseNote('people/Alice Johnson.md', SAMPLE_NOTE)
+    expect(note.title).toBe('Alice Johnson')
     expect(note.type).toBe('person')
     expect(note.tags).toEqual(['founder', 'indie'])
     expect(note.date).toBe('2026-01-01')
   })
 
   it('extracts typed relations from frontmatter', () => {
-    const note = parseNote('people/Milan van Bruggen.md', SAMPLE_NOTE)
+    const note = parseNote('people/Alice Johnson.md', SAMPLE_NOTE)
     expect(note.relations).toEqual([{ target: 'Superbrain', type: 'works_with' }])
   })
 
   it('extracts unique wikilinks from body', () => {
-    const note = parseNote('people/Milan van Bruggen.md', SAMPLE_NOTE)
+    const note = parseNote('people/Alice Johnson.md', SAMPLE_NOTE)
     expect(note.wikilinks).toEqual(['Superbrain', 'ambient computing'])
   })
 
@@ -69,14 +69,14 @@ describe('parseNote', () => {
 
 describe('resolveWikilink', () => {
   const notes = [
-    { stem: 'milan van bruggen', path: 'people/Milan van Bruggen.md' },
+    { stem: 'alice johnson', path: 'people/Alice Johnson.md' },
     { stem: 'superbrain', path: 'projects/Superbrain.md' },
     { stem: 'ambient computing', path: 'ideas/Ambient Computing.md' },
   ]
 
   it('resolves case-insensitively', () => {
-    expect(resolveWikilink('Milan van Bruggen', notes)).toBe('milan van bruggen')
-    expect(resolveWikilink('MILAN VAN BRUGGEN', notes)).toBe('milan van bruggen')
+    expect(resolveWikilink('Alice Johnson', notes)).toBe('alice johnson')
+    expect(resolveWikilink('ALICE JOHNSON', notes)).toBe('alice johnson')
   })
 
   it('returns null for unresolved links', () => {

@@ -6,7 +6,20 @@
 
 set -uo pipefail
 
-V="/Users/milanvanbruggen/Library/Mobile Documents/iCloud~md~obsidian/Documents/Milan's Brain"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../web/.env.local"
+
+# Load VAULT_PATH from env or web/.env.local
+if [[ -z "${VAULT_PATH:-}" && -f "$ENV_FILE" ]]; then
+  VAULT_PATH="$(grep '^VAULT_PATH=' "$ENV_FILE" 2>/dev/null | cut -d '=' -f2- | sed "s/^['\"]//; s/['\"]$//" || true)"
+fi
+
+if [[ -z "${VAULT_PATH:-}" ]]; then
+  echo "Error: VAULT_PATH is not set and could not be loaded from web/.env.local" >&2
+  exit 1
+fi
+
+V="$VAULT_PATH"
 LOG_PREFIX="[$(date '+%Y-%m-%d %H:%M:%S')]"
 
 # Stage all local changes

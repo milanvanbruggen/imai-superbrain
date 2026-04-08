@@ -9,7 +9,7 @@ describe('parseMarkdown', () => {
 
   it('falls back to stem for title', () => {
     const result = parseMarkdown('notes/my-note.md', 'Hello world')
-    expect(result.title).toBe('my-note')
+    expect(result.title).toBe('My Note')
   })
 
   it('extracts tags as array', () => {
@@ -31,12 +31,12 @@ describe('extractWikilinks', () => {
 
 describe('resolveWikilink', () => {
   const notes = [
-    { stem: 'Milan van Bruggen', path: 'people/Milan van Bruggen.md' },
+    { stem: 'Alice Johnson', path: 'people/Alice Johnson.md' },
     { stem: 'Superbrain', path: 'projects/Superbrain.md' },
   ]
 
   it('resolves case-insensitively', () => {
-    expect(resolveWikilink('milan van bruggen', notes)?.stem).toBe('Milan van Bruggen')
+    expect(resolveWikilink('alice johnson', notes)?.stem).toBe('Alice Johnson')
     expect(resolveWikilink('SUPERBRAIN', notes)?.stem).toBe('Superbrain')
   })
 

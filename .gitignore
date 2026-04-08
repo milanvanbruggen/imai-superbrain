@@ -10,3 +10,7 @@ npm-debug.log*
 .vercel
 .worktrees/
 .superpowers/
+.claude/settings.local.json
+certs/
+docs/superpowers/
+mcp/dist/

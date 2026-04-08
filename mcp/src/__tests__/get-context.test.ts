@@ -23,11 +23,11 @@ describe('get_context', () => {
       path: 'projects/superbrain.md',
       title: 'Superbrain',
       content: 'A knowledge graph that runs locally. It reads the Obsidian vault and exposes it via MCP.',
-      wikilinks: ['Milan van Bruggen', 'Obsidian'],
+      wikilinks: ['Alice Johnson', 'Obsidian'],
     },
     {
       path: 'people/milan.md',
-      title: 'Milan van Bruggen',
+      title: 'Alice Johnson',
       content: 'AI Catalyst helping teams adopt AI through practical tools.',
       wikilinks: ['Superbrain'],
     },
@@ -39,7 +39,7 @@ describe('get_context', () => {
     expect(result.results).toHaveLength(1)
     expect(result.results[0].path).toBe('projects/superbrain.md')
     expect(result.results[0].excerpt).toContain('knowledge graph')
-    expect(result.results[0].links).toEqual(['Milan van Bruggen', 'Obsidian'])
+    expect(result.results[0].links).toEqual(['Alice Johnson', 'Obsidian'])
   })
 
   it('is case-insensitive', async () => {
@@ -50,7 +50,7 @@ describe('get_context', () => {
 
   it('returns excerpt from content start when match is title-only', async () => {
     const tool = createGetContextTool(makeVault(notes))
-    const result = await tool.execute({ query: 'Milan van Bruggen' })
+    const result = await tool.execute({ query: 'Alice Johnson' })
     expect(result.results).toHaveLength(1)
     expect(result.results[0].excerpt).toContain('AI Catalyst')
   })

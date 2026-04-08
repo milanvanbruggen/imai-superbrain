@@ -16,7 +16,7 @@ export function createReadTool(vault: VaultReader) {
     inputSchema: {
       type: 'object' as const,
       properties: {
-        path: { type: 'string', description: 'Relative path, e.g. people/Milan.md' },
+        path: { type: 'string', description: 'Relative path, e.g. people/Alice.md' },
         title: { type: 'string', description: 'Note title or stem (case-insensitive)' },
         full: { type: 'boolean', description: 'Return full content without truncation (default: false)' },
       },

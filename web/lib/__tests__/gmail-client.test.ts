@@ -7,7 +7,7 @@ describe('sanitizeQueryTerm', () => {
   })
 
   it('preserves normal alphanumeric and spaces', () => {
-    expect(sanitizeQueryTerm('Milan van Bruggen')).toBe('Milan van Bruggen')
+    expect(sanitizeQueryTerm('Alice Johnson')).toBe('Alice Johnson')
   })
 
   it('returns empty string for empty input', () => {
@@ -17,11 +17,11 @@ describe('sanitizeQueryTerm', () => {
 
 describe('buildGmailQuery', () => {
   it('builds query with name only', () => {
-    expect(buildGmailQuery('Milan van Bruggen', undefined)).toBe('"Milan van Bruggen"')
+    expect(buildGmailQuery('Alice Johnson', undefined)).toBe('"Alice Johnson"')
   })
 
   it('builds query with name and email', () => {
-    expect(buildGmailQuery('Milan van Bruggen', 'milan@example.com')).toBe('"Milan van Bruggen" OR "milan@example.com"')
+    expect(buildGmailQuery('Alice Johnson', 'alice@example.com')).toBe('"Alice Johnson" OR "alice@example.com"')
   })
 
   it('sanitizes inputs before building', () => {

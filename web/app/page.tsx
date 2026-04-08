@@ -7,6 +7,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
+import { SetupWizard } from '@/components/SetupWizard'
 
 function McpStatus() {
   const [isLocal, setIsLocal] = useState(false)
@@ -270,14 +271,16 @@ export default function BrainPage() {
     )
   }
 
+  if (vaultError === 'not_configured') {
+    return <SetupWizard onComplete={loadGraph} />
+  }
+
   if (vaultError) {
     const titles: Record<string, string> = {
-      not_configured: 'No vault configured',
       unreachable: 'Vault not reachable',
       empty: 'Empty vault',
     }
     const descriptions: Record<string, string> = {
-      not_configured: 'Set up a GitHub repository or local vault path to get started.',
       unreachable: vaultErrorMessage ?? 'The configured vault could not be reached. Check your settings or try again.',
       empty: 'This folder has no markdown files yet. Initialize it as a new vault or choose a different folder.',
     }

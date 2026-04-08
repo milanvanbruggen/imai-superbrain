@@ -155,7 +155,7 @@ function createMcpServer() {
     'read_note',
     'Read a note by its path or title',
     {
-      path: z.string().optional().describe('Relative path, e.g. people/Milan van Bruggen.md'),
+      path: z.string().optional().describe('Relative path, e.g. people/Alice Johnson.md'),
       title: z.string().optional().describe('Note title (case-insensitive)'),
     },
     async ({ path, title }) => {
@@ -178,9 +178,9 @@ function createMcpServer() {
   // write_note
   server.tool(
     'write_note',
-    'Create or update a note in the vault. Use kebab-case for the filename (e.g. groups/digital-dialogues-bestuur.md), but always set a readable "title" field in the frontmatter with spaces and proper capitalisation (e.g. title: Digital Dialogues Bestuur).',
+    'Create or update a note in the vault. Use kebab-case for the filename (e.g. groups/engineering-team.md), but always set a readable "title" field in the frontmatter with spaces and proper capitalisation (e.g. title: Engineering Team).',
     {
-      path: z.string().describe('Relative path using kebab-case, e.g. groups/digital-dialogues-bestuur.md'),
+      path: z.string().describe('Relative path using kebab-case, e.g. groups/engineering-team.md'),
       content: z.string().describe('Full markdown content including frontmatter. The frontmatter title must use spaces and Title Case, not the kebab-case filename.'),
     },
     async ({ path, content }) => {
