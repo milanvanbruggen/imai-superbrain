@@ -8,6 +8,7 @@ import { NewNoteModal } from '@/components/NewNoteModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
 import { SetupWizard } from '@/components/SetupWizard'
+import { HistoryModal } from '@/components/HistoryModal'
 
 function McpStatus() {
   const [isLocal, setIsLocal] = useState(false)
@@ -73,6 +74,8 @@ export default function BrainPage() {
   const [vaultErrorMessage, setVaultErrorMessage] = useState<string | null>(null)
   const [showNewNote, setShowNewNote] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [hasGitHub, setHasGitHub] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [showSystemNodes, setShowSystemNodes] = useState(false)
 
@@ -226,7 +229,13 @@ export default function BrainPage() {
     }
   }
 
-  useEffect(() => { loadGraph() }, [])
+  useEffect(() => {
+    loadGraph()
+    fetch('/api/vault/config')
+      .then(r => r.json().catch(() => null))
+      .then(c => { if (c?.owner && c?.repo) setHasGitHub(true) })
+      .catch(() => {})
+  }, [])
 
   // Poll vault hash every 5 seconds for background updates
   useEffect(() => {
@@ -430,6 +439,18 @@ export default function BrainPage() {
           >
             + New Note
           </button>
+          {hasGitHub && (
+            <button
+              onClick={() => setShowHistory(true)}
+              className="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+              History
+            </button>
+          )}
           <button
             onClick={() => setShowSettings(true)}
             className="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700"
@@ -537,6 +558,12 @@ export default function BrainPage() {
         <NewNoteModal
           onClose={() => setShowNewNote(false)}
           onCreated={handleNoteCreated}
+        />
+      )}
+      {showHistory && (
+        <HistoryModal
+          onClose={() => setShowHistory(false)}
+          onRestored={loadGraph}
         />
       )}
     </div>
