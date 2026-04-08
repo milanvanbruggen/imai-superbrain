@@ -17,6 +17,7 @@ interface CommitGroup {
   date: string | null    // date of the oldest (first) commit in the group
   count: number
   type: CommitType
+  commits: CommitEntry[]
 }
 
 function getCommitType(message: string): CommitType {
@@ -59,6 +60,7 @@ function groupCommits(commits: CommitEntry[]): CommitGroup[] {
       last.date = commit.date
       last.count++
       last.label = GROUP_LABEL[type](last.count)
+      last.commits.push(commit)
     } else {
       groups.push({
         key: commit.sha,
@@ -68,6 +70,7 @@ function groupCommits(commits: CommitEntry[]): CommitGroup[] {
         date: commit.date,
         count: 1,
         type,
+        commits: [commit],
       })
     }
   }
@@ -92,6 +95,7 @@ export function HistoryModal({ onClose, onRestored }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [confirmingKey, setConfirmingKey] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
@@ -227,21 +231,37 @@ export function HistoryModal({ onClose, onRestored }: Props) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{group.restoreShortSha}</span>
-                    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{group.label}</span>
-                    {group.count > 1 && (
-                      <span className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full shrink-0">
-                        ×{group.count}
-                      </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{group.restoreShortSha}</span>
+                      <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{group.label}</span>
+                      {group.count > 1 && (
+                        <button
+                          onClick={() => setExpandedKey(expandedKey === group.key ? null : group.key)}
+                          className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-200 dark:bg-gray-700 hover:bg-slate-300 dark:hover:bg-gray-600 px-1.5 py-0.5 rounded-full shrink-0 cursor-pointer transition-colors"
+                        >
+                          {expandedKey === group.key ? '▴' : '▾'} ×{group.count}
+                        </button>
+                      )}
+                      <span className="text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{formatRelativeTime(group.date)}</span>
+                      <button
+                        onClick={() => setConfirmingKey(group.key)}
+                        className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer shrink-0"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                    {expandedKey === group.key && (
+                      <div className="mt-1.5 ml-3 space-y-0.5 border-l-2 border-slate-200 dark:border-gray-700 pl-3">
+                        {group.commits.map(commit => (
+                          <div key={commit.sha} className="flex items-center gap-2 py-0.5">
+                            <span className="font-mono text-[10px] text-slate-400 dark:text-gray-600 shrink-0">{commit.shortSha}</span>
+                            <span className="text-[11px] text-slate-500 dark:text-gray-400 flex-1 truncate">{commit.message}</span>
+                            <span className="text-[10px] text-slate-400 dark:text-gray-600 shrink-0">{formatRelativeTime(commit.date)}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                    <span className="text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{formatRelativeTime(group.date)}</span>
-                    <button
-                      onClick={() => setConfirmingKey(group.key)}
-                      className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer shrink-0"
-                    >
-                      Restore
-                    </button>
                   </div>
                 )}
               </div>
