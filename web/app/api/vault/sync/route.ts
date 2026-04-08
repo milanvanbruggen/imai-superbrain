@@ -58,6 +58,16 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const settings = resolveVaultSettings()
+
+  // On Vercel there is no persistent filesystem — skip snapshot read
+  if (process.env.VERCEL) {
+    return NextResponse.json({
+      syncEnabled: false,
+      lastSync: null,
+      fileCount: 0,
+    })
+  }
+
   const snapshot = readSnapshot(SNAPSHOT_PATH)
 
   return NextResponse.json({

@@ -12,9 +12,14 @@ export interface VaultConfigFile {
 
 const CONFIG_PATH = join(process.cwd(), 'vault-config.json')
 
+/** Returns true when running on Vercel (or similar serverless with read-only fs). */
+export function isServerless(): boolean {
+  return !!process.env.VERCEL
+}
+
 export function readVaultConfig(): VaultConfigFile {
-  if (!existsSync(CONFIG_PATH)) return {}
   try {
+    if (!existsSync(CONFIG_PATH)) return {}
     return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
   } catch {
     return {}
@@ -22,6 +27,13 @@ export function readVaultConfig(): VaultConfigFile {
 }
 
 export function writeVaultConfig(config: VaultConfigFile): void {
+  if (isServerless()) {
+    throw new Error(
+      'Configuration cannot be saved in a serverless environment. ' +
+      'Set GITHUB_PAT, GITHUB_VAULT_OWNER, GITHUB_VAULT_REPO and GITHUB_VAULT_BRANCH ' +
+      'as environment variables in your Vercel project settings instead.'
+    )
+  }
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8')
 }
 

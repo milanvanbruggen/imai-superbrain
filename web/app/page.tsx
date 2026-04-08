@@ -353,7 +353,7 @@ export default function BrainPage() {
         {showSettings && (
           <SettingsModal onClose={() => {
             setShowSettings(false)
-            fetch('/api/vault/sync').then(r => r.json()).then(d => { syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
+            fetch('/api/vault/sync').then(r => r.json().catch(() => null)).then(d => { if (d) syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
             loadGraph()
           }} />
         )}
@@ -527,7 +527,7 @@ export default function BrainPage() {
       {showSettings && (
         <SettingsModal onClose={() => {
           setShowSettings(false)
-          fetch('/api/vault/sync').then(r => r.json()).then(d => { syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
+          fetch('/api/vault/sync').then(r => r.json().catch(() => null)).then(d => { if (d) syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
         }} />
       )}
       {showNewNote && (

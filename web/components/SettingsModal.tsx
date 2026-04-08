@@ -12,6 +12,7 @@ interface VaultConfig {
   noteCount?: number | null
   configSource?: 'file' | 'env'
   syncEnabled?: boolean
+  isServerless?: boolean
 }
 
 interface SyncStatus {
@@ -48,14 +49,15 @@ export function SettingsModal({ onClose }: Props) {
 
   useEffect(() => {
     fetch('/api/vault/config')
-      .then(r => r.json())
-      .then((c: VaultConfig) => {
+      .then(r => r.json().catch(() => null))
+      .then((c: VaultConfig | null) => {
+        if (!c) return
         setConfig(c)
         setEditVaultPath(c.vaultPath ?? '')
         setEditRepoUrl(c.owner && c.repo ? `https://github.com/${c.owner}/${c.repo}.git` : '')
         setEditBranch(c.branch ?? 'main')
       })
-    fetch('/api/vault/sync').then(r => r.json()).then(setSyncStatus).catch(() => {})
+    fetch('/api/vault/sync').then(r => r.json().catch(() => null)).then(d => { if (d) setSyncStatus(d) }).catch(() => {})
   }, [])
 
   function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
@@ -84,11 +86,15 @@ export function SettingsModal({ onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'local', vaultPath: editVaultPath }),
       })
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
-      // API preserves the other connection's fields via currentConfig spread
-      const updated = await fetch('/api/vault/config').then(r => r.json())
-      setConfig(updated)
-      setEditVaultPath(updated.vaultPath ?? '')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Failed to save')
+      }
+      const updated = await fetch('/api/vault/config').then(r => r.json().catch(() => null))
+      if (updated) {
+        setConfig(updated)
+        setEditVaultPath(updated.vaultPath ?? '')
+      }
       setEditingLocal(false)
     } catch (e: unknown) {
       setLocalSaveError(e instanceof Error ? e.message : 'Failed to save')
@@ -108,12 +114,16 @@ export function SettingsModal({ onClose }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'github', owner: parsed.owner, repo: parsed.repo, branch: editBranch }),
       })
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
-      // API preserves the other connection's fields via currentConfig spread
-      const updated = await fetch('/api/vault/config').then(r => r.json())
-      setConfig(updated)
-      setEditRepoUrl(updated.owner && updated.repo ? `https://github.com/${updated.owner}/${updated.repo}.git` : '')
-      setEditBranch(updated.branch ?? 'main')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Failed to save')
+      }
+      const updated = await fetch('/api/vault/config').then(r => r.json().catch(() => null))
+      if (updated) {
+        setConfig(updated)
+        setEditRepoUrl(updated.owner && updated.repo ? `https://github.com/${updated.owner}/${updated.repo}.git` : '')
+        setEditBranch(updated.branch ?? 'main')
+      }
       setEditingGithub(false)
     } catch (e: unknown) {
       setGithubSaveError(e instanceof Error ? e.message : 'Failed to save')
@@ -129,8 +139,8 @@ export function SettingsModal({ onClose }: Props) {
       body: JSON.stringify({ mode, vaultPath: config?.vaultPath, owner: config?.owner, repo: config?.repo, branch: config?.branch }),
     })
     if (res.ok) {
-      const updated = await fetch('/api/vault/config').then(r => r.json())
-      setConfig(updated)
+      const updated = await fetch('/api/vault/config').then(r => r.json().catch(() => null))
+      if (updated) setConfig(updated)
     }
   }
 
@@ -143,11 +153,11 @@ export function SettingsModal({ onClose }: Props) {
         body: JSON.stringify({ syncEnabled: enabled }),
       })
       const [updatedConfig, updatedSync] = await Promise.all([
-        fetch('/api/vault/config').then(r => r.json()),
-        fetch('/api/vault/sync').then(r => r.json()),
+        fetch('/api/vault/config').then(r => r.json().catch(() => null)),
+        fetch('/api/vault/sync').then(r => r.json().catch(() => null)),
       ])
-      setConfig(updatedConfig)
-      setSyncStatus(updatedSync)
+      if (updatedConfig) setConfig(updatedConfig)
+      if (updatedSync) setSyncStatus(updatedSync)
     } finally {
       setTogglingSync(false)
     }
@@ -194,11 +204,19 @@ export function SettingsModal({ onClose }: Props) {
             <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-4">
               <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Vault</span>
 
+              {config.isServerless && (
+                <div className="rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3">
+                  <p className="text-xs text-amber-700 dark:text-amber-400 leading-relaxed">
+                    <strong>Serverless mode</strong> — Configuration is read from environment variables. To change vault settings, update <code className="text-[10px] bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 rounded">GITHUB_PAT</code>, <code className="text-[10px] bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 rounded">GITHUB_VAULT_OWNER</code>, <code className="text-[10px] bg-amber-100 dark:bg-amber-500/20 px-1 py-0.5 rounded">GITHUB_VAULT_REPO</code> in your Vercel project settings.
+                  </p>
+                </div>
+              )}
+
               {/* Local vault */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Local path</span>
-                  {!editingLocal && (
+                  {!editingLocal && !config.isServerless && (
                     <button onClick={() => setEditingLocal(true)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">
                       Edit
                     </button>
@@ -231,7 +249,7 @@ export function SettingsModal({ onClose }: Props) {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">GitHub repository</span>
-                  {!editingGithub && (
+                  {!editingGithub && !config.isServerless && (
                     <button onClick={() => setEditingGithub(true)} className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer">
                       Edit
                     </button>
