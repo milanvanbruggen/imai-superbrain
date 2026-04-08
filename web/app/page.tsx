@@ -1,7 +1,8 @@
 'use client'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
-import { BrainGraph, TYPE_COLORS } from '@/components/BrainGraph'
+import { BrainGraph, DEFAULT_TYPE_COLORS } from '@/components/BrainGraph'
+import { NoteTypesModal } from '@/components/NoteTypesModal'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
 import { NewNoteModal } from '@/components/NewNoteModal'
@@ -76,6 +77,8 @@ export default function BrainPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [hasGitHub, setHasGitHub] = useState(false)
+  const [noteTypes, setNoteTypes] = useState<{name: string, color: string}[]>([])
+  const [showNoteTypes, setShowNoteTypes] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [showSystemNodes, setShowSystemNodes] = useState(false)
 
@@ -252,7 +255,11 @@ export default function BrainPage() {
     loadGraph()
     fetch('/api/vault/config')
       .then(r => r.json().catch(() => null))
-      .then(c => { if (c?.remote?.provider === 'github') setHasGitHub(true) })
+      .then(c => {
+        if (!c) return
+        if (c.remote?.provider === 'github') setHasGitHub(true)
+        if (Array.isArray(c.noteTypes)) setNoteTypes(c.noteTypes)
+      })
       .catch(() => {})
   }, [])
 
@@ -283,10 +290,17 @@ export default function BrainPage() {
   const selectedNode = graph?.nodes.find(n => n.id === selectedId) ?? null
   const selectedNote = selectedId && graph ? (graph.notesByStem[selectedId] ?? null) : null
 
-  const availableTypes = useMemo(
-    () => graph ? [...new Set(graph.nodes.map(n => n.type))].sort() : [],
-    [graph]
-  )
+  const availableTypes = useMemo(() => {
+    const fromGraph = graph ? graph.nodes.map(n => n.type) : []
+    const fromConfig = noteTypes.map(t => t.name)
+    return [...new Set([...fromGraph, ...fromConfig])].sort()
+  }, [graph, noteTypes])
+
+  const typeColors = useMemo(() => {
+    const base = { ...DEFAULT_TYPE_COLORS }
+    for (const t of noteTypes) base[t.name] = t.color
+    return base
+  }, [noteTypes])
 
   if (loading) {
     return (
@@ -493,6 +507,7 @@ export default function BrainPage() {
             selectedId={selectedId}
             onSelectNode={setSelectedId}
             activeTypes={activeTypes}
+            typeColors={typeColors}
           />
 
           {/* System files toggle — top right */}
@@ -520,7 +535,7 @@ export default function BrainPage() {
           <div className="absolute top-3 left-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none pr-28" style={{ scrollbarWidth: 'none' }}>
             {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => {
               const isActive = activeTypes.size === 0 || activeTypes.has(type)
-              const color = TYPE_COLORS[type] ?? '#94a3b8'
+              const color = typeColors[type] ?? '#94a3b8'
               return (
                 <button
                   key={type}
@@ -540,6 +555,12 @@ export default function BrainPage() {
                 </button>
               )
             })}
+            <button
+              onClick={() => setShowNoteTypes(true)}
+              className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              Edit
+            </button>
           </div>
         </main>
 
@@ -583,6 +604,17 @@ export default function BrainPage() {
         <HistoryModal
           onClose={() => setShowHistory(false)}
           onRestored={loadGraph}
+        />
+      )}
+      {showNoteTypes && (
+        <NoteTypesModal
+          onClose={() => setShowNoteTypes(false)}
+          onSaved={() => {
+            fetch('/api/vault/config')
+              .then(r => r.json().catch(() => null))
+              .then(c => { if (c && Array.isArray(c.noteTypes)) setNoteTypes(c.noteTypes) })
+              .catch(() => {})
+          }}
         />
       )}
     </div>
