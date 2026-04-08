@@ -22,16 +22,20 @@ export async function POST() {
   }
 
   if (syncInFlight) {
-    return NextResponse.json({ ok: false, reason: 'sync_in_progress' })
+    return NextResponse.json({ ok: false, reason: 'sync_in_progress' }, { status: 409 })
+  }
+
+  if (!settings.vaultPath || !settings.pat || !settings.owner || !settings.repo) {
+    return NextResponse.json({ ok: false, error: 'Sync requires local vault path and GitHub credentials' }, { status: 422 })
   }
 
   syncInFlight = true
   try {
-    const localClient = new LocalVaultClient(settings.vaultPath!)
+    const localClient = new LocalVaultClient(settings.vaultPath)
     const remoteClient = new GitHubVaultClient({
-      pat: settings.pat!,
-      owner: settings.owner!,
-      repo: settings.repo!,
+      pat: settings.pat,
+      owner: settings.owner,
+      repo: settings.repo,
       branch: settings.branch,
     })
 
