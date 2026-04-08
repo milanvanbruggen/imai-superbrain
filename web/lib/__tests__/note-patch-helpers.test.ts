@@ -42,6 +42,13 @@ describe('applyAddRelation', () => {
     const result = applyAddRelation(raw, 'Superbrain', 'part_of')
     expect(result.match(/target:/g)?.length).toBe(1)
   })
+
+  it('does not add duplicate wikilink to managed block when called twice for same target', () => {
+    const raw = '---\ntitle: Test\n---\n\nBody.'
+    const afterFirst = applyAddRelation(raw, 'Superbrain', null)
+    const afterSecond = applyAddRelation(afterFirst, 'Superbrain', null)
+    expect(afterSecond.match(/\[\[Superbrain\]\]/g)?.length).toBe(1)
+  })
 })
 
 describe('applyRemoveRelation', () => {

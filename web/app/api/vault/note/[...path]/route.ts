@@ -15,9 +15,9 @@ export function applySetType(raw: string, type: string): string {
 export function applyAddRelation(raw: string, target: string, relationType: string | null): string {
   const { data, content } = matter(raw)
   if (relationType) {
-    const relations: any[] = data.relations ?? []
+    const relations: any[] = Array.isArray(data.relations) ? data.relations : []
     const alreadyPresent = relations.some(
-      (r: any) => (r.target as string).replace(/^\[\[|\]\]$/g, '') === target
+      (r: any) => typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '') === target
     )
     if (!alreadyPresent) {
       relations.push({ target: `[[${target}]]`, type: relationType })
@@ -126,12 +126,21 @@ export async function PATCH(
   let message: string
 
   if (body.operation === 'set-type') {
+    if (typeof body.type !== 'string' || !body.type.trim()) {
+      return NextResponse.json({ error: 'type required' }, { status: 400 })
+    }
     updated = applySetType(raw, body.type)
     message = `brain: set type of [[${stem}]] to ${body.type}`
   } else if (body.operation === 'add-relation') {
+    if (typeof body.target !== 'string' || !body.target.trim()) {
+      return NextResponse.json({ error: 'target required' }, { status: 400 })
+    }
     updated = applyAddRelation(raw, body.target, body.relationType ?? null)
     message = `brain: link [[${stem}]] → [[${body.target}]]`
   } else if (body.operation === 'remove-relation') {
+    if (typeof body.target !== 'string' || !body.target.trim()) {
+      return NextResponse.json({ error: 'target required' }, { status: 400 })
+    }
     updated = applyRemoveRelation(raw, body.target)
     message = `brain: unlink [[${stem}]] → [[${body.target}]]`
   } else if (typeof body.title === 'string') {
