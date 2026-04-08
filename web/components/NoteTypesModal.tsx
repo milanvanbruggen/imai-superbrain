@@ -29,13 +29,15 @@ interface NoteType {
 interface Props {
   onClose: () => void
   onSaved: (savedTypes: { name: string; color: string }[]) => void
+  noteCounts: Record<string, number>
 }
 
-export function NoteTypesModal({ onClose, onSaved }: Props) {
+export function NoteTypesModal({ onClose, onSaved, noteCounts }: Props) {
   const [types, setTypes] = useState<NoteType[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null) // _key of type pending delete
 
   useEffect(() => {
     fetch('/api/vault/config')
@@ -51,10 +53,6 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
       .catch(() => setLoading(false))
   }, [])
 
-  function isDefault(name: string) {
-    return DEFAULT_TYPE_NAMES.includes(name)
-  }
-
   function updateColor(index: number, color: string) {
     setTypes(prev => prev.map((t, i) => i === index ? { ...t, color } : t))
   }
@@ -63,8 +61,17 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
     setTypes(prev => prev.map((t, i) => i === index ? { ...t, name } : t))
   }
 
-  function deleteType(index: number) {
-    setTypes(prev => prev.filter((_, i) => i !== index))
+  function requestDelete(key: string) {
+    setConfirmDelete(key)
+  }
+
+  function cancelDelete() {
+    setConfirmDelete(null)
+  }
+
+  function confirmDeleteType(key: string) {
+    setTypes(prev => prev.filter(t => t._key !== key))
+    setConfirmDelete(null)
   }
 
   function addType() {
@@ -72,9 +79,9 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
   }
 
   async function handleSave() {
-    const invalid = types.some(t => !isDefault(t.name) && t.name.trim() === '')
+    const invalid = types.some(t => t.name.trim() === '')
     if (invalid) {
-      setError('All custom types must have a name.')
+      setError('All types must have a name.')
       return
     }
     setSaving(true)
@@ -127,30 +134,61 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
           </div>
         ) : (
           <>
-            <div className="overflow-y-auto flex-1 space-y-2 mb-4 pr-1">
-              {types.map((type, i) => (
-                <div key={type._key} className="flex items-center gap-2.5">
-                  <input
-                    type="color"
-                    value={type.color}
-                    onChange={e => updateColor(i, e.target.value)}
-                    className="w-7 h-7 rounded cursor-pointer border border-slate-200 dark:border-gray-700 p-0.5 bg-transparent shrink-0"
-                    title="Pick color"
-                  />
-                  {isDefault(type.name) ? (
-                    <span className="flex-1 text-sm text-gray-700 dark:text-gray-300">{type.name}</span>
-                  ) : (
+            <div className="overflow-y-auto flex-1 space-y-2 mb-4 px-0.5 py-0.5 -mx-0.5 -my-0.5">
+              {types.map((type, i) => {
+                const isPendingDelete = confirmDelete === type._key
+                const count = noteCounts[type.name] ?? 0
+
+                if (isPendingDelete) {
+                  return (
+                    <div key={type._key} className="rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 px-3 py-2.5 space-y-2">
+                      <p className="text-xs text-red-700 dark:text-red-300">
+                        {count > 0
+                          ? `${count} note${count === 1 ? '' : 's'} use this type and will become uncoupled.`
+                          : 'No notes use this type.'}
+                        {' '}Delete <span className="font-semibold">{type.name || 'this type'}</span>?
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => confirmDeleteType(type._key)}
+                          className="px-2.5 py-1 text-xs bg-red-600 text-white rounded font-medium hover:bg-red-500 cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={cancelDelete}
+                          className="px-2.5 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={type._key} className="flex items-center gap-2.5">
                     <input
-                      type="text"
-                      value={type.name}
-                      onChange={e => updateName(i, e.target.value)}
-                      placeholder="type name"
-                      className="flex-1 px-2 py-1 text-sm rounded border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                      type="color"
+                      value={type.color}
+                      onChange={e => updateColor(i, e.target.value)}
+                      className="w-7 h-7 rounded cursor-pointer border border-slate-200 dark:border-gray-700 p-0.5 bg-transparent shrink-0"
+                      title="Pick color"
                     />
-                  )}
-                  {!isDefault(type.name) && (
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={type.name}
+                        onChange={e => updateName(i, e.target.value)}
+                        placeholder="type name"
+                        className="w-full px-2 py-1 text-sm rounded border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-500 pr-8"
+                      />
+                      {count > 0 && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 dark:text-gray-500 tabular-nums pointer-events-none">{count}</span>
+                      )}
+                    </div>
                     <button
-                      onClick={() => deleteType(i)}
+                      onClick={() => requestDelete(type._key)}
                       className="text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0"
                       title="Remove type"
                     >
@@ -158,9 +196,9 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
                         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                       </svg>
                     </button>
-                  )}
-                </div>
-              ))}
+                  </div>
+                )
+              })}
             </div>
 
             <button

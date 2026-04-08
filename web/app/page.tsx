@@ -292,9 +292,8 @@ export default function BrainPage() {
 
   const availableTypes = useMemo(() => {
     const fromGraph = graph ? graph.nodes.map(n => n.type) : []
-    const fromConfig = noteTypes.map(t => t.name)
-    return [...new Set([...fromGraph, ...fromConfig])].sort()
-  }, [graph, noteTypes])
+    return [...new Set(fromGraph)].sort()
+  }, [graph])
 
   const typeColors = useMemo(() => {
     const base = { ...DEFAULT_TYPE_COLORS }
@@ -610,6 +609,7 @@ export default function BrainPage() {
         <NoteTypesModal
           onClose={() => setShowNoteTypes(false)}
           onSaved={(saved) => setNoteTypes(saved)}
+          noteCounts={graph ? graph.nodes.reduce((acc, n) => { acc[n.type] = (acc[n.type] ?? 0) + 1; return acc }, {} as Record<string, number>) : {}}
         />
       )}
     </div>
