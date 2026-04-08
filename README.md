@@ -51,10 +51,31 @@ If running for the first time without GitHub configured, the **Setup Wizard** wi
 ADMIN_PASSWORD=choose-a-strong-password
 NEXTAUTH_SECRET=<run: openssl rand -base64 32>
 NEXTAUTH_URL=http://localhost:3000
-GITHUB_PAT=github_pat_xxxx
-GITHUB_VAULT_OWNER=your-username
-GITHUB_VAULT_REPO=superbrain-vault
+VAULT_CONFIG={"remote":{"provider":"github","token":"github_pat_xxxx","owner":"your-username","repo":"superbrain-vault","branch":"main"}}
 ```
+
+### Vault configuration
+
+Vault sources are configured via a single `VAULT_CONFIG` JSON environment variable. At least one source (local or remote) must be set.
+
+**GitHub:**
+```env
+VAULT_CONFIG={"remote":{"provider":"github","token":"github_pat_xxxx","owner":"yourusername","repo":"your-vault-repo","branch":"main"}}
+```
+
+**GitLab (self-hosted):**
+```env
+VAULT_CONFIG={"remote":{"provider":"gitlab","token":"glpat-xxxx","namespace":"yourusername","project":"your-vault-repo","branch":"main","url":"https://gitlab.yourcompany.com"}}
+```
+
+**Local + GitHub sync** (bidirectional sync, localhost only):
+```env
+VAULT_CONFIG={"remote":{"provider":"github","token":"github_pat_xxxx","owner":"yourusername","repo":"your-vault-repo","branch":"main"},"local":{"path":"/Users/you/my-vault"}}
+```
+
+On **localhost**, the Setup Wizard writes `vault-config.json` automatically — no manual editing needed. On **Vercel**, set `VAULT_CONFIG` as an environment variable in your project settings.
+
+The legacy `GITHUB_PAT`, `GITHUB_VAULT_OWNER`, `GITHUB_VAULT_REPO`, `GITHUB_VAULT_BRANCH`, and `VAULT_PATH` env vars are still supported for backward compatibility.
 
 ---
 
