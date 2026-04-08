@@ -102,4 +102,4 @@ cd mcp && npm test
 
 ## License
 
-MIT
+[Business Source License 1.1](LICENSE) — free for non-production use. Converts to MIT four years after each release.
