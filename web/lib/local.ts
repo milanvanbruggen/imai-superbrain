@@ -4,7 +4,13 @@ import { createHash } from 'crypto'
 import type { VaultClient } from './vault-client'
 
 function sha1(content: string): string {
-  return createHash('sha1').update(content).digest('hex')
+  // Must match Git's blob SHA format so local SHAs equal GitHub SHAs
+  // for identical content: sha1("blob <byteLength>\0<content>")
+  const buf = Buffer.from(content)
+  return createHash('sha1')
+    .update(`blob ${buf.length}\0`)
+    .update(buf)
+    .digest('hex')
 }
 
 export class LocalVaultClient implements VaultClient {
