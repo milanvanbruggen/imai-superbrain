@@ -1,10 +1,78 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CommitEntry } from '@/lib/vault-history'
 
 interface Props {
   onClose: () => void
   onRestored: () => void
+}
+
+type CommitType = 'create' | 'update' | 'delete' | 'rename' | 'sync' | 'restore' | 'other'
+
+interface CommitGroup {
+  key: string            // newest commit sha — unique React key
+  restoreSha: string     // oldest commit sha — the restore point
+  restoreShortSha: string
+  label: string
+  date: string | null    // date of the oldest (first) commit in the group
+  count: number
+  type: CommitType
+}
+
+function getCommitType(message: string): CommitType {
+  if (/^brain: create\b/.test(message)) return 'create'
+  if (/^brain: update\b/.test(message)) return 'update'
+  if (/^brain: delete\b/.test(message)) return 'delete'
+  if (/^brain: rename\b/.test(message)) return 'rename'
+  if (/^sync: delete\b/.test(message)) return 'delete'
+  if (/^sync: push\b/.test(message)) return 'sync'
+  if (/^vault: auto-sync\b/.test(message)) return 'sync'
+  if (/^restore:/.test(message)) return 'restore'
+  return 'other'
+}
+
+const GROUPABLE: CommitType[] = ['create', 'update', 'delete', 'rename', 'sync']
+
+const GROUP_LABEL: Record<CommitType, (n: number) => string> = {
+  create:  n => `Created ${n} notes`,
+  update:  n => `Updated ${n} notes`,
+  delete:  n => `Deleted ${n} notes`,
+  rename:  n => `Renamed ${n} notes`,
+  sync:    n => `Synced ${n} files`,
+  restore: () => '',
+  other:   () => '',
+}
+
+function groupCommits(commits: CommitEntry[]): CommitGroup[] {
+  // GitHub returns commits newest-first. We iterate in that order, so as we
+  // extend a group we keep updating restoreSha to the current (older) commit —
+  // ending up with the oldest commit in the group as the restore point.
+  const groups: CommitGroup[] = []
+
+  for (const commit of commits) {
+    const type = getCommitType(commit.message)
+    const last = groups[groups.length - 1]
+
+    if (last && GROUPABLE.includes(type) && last.type === type) {
+      last.restoreSha = commit.sha
+      last.restoreShortSha = commit.shortSha
+      last.date = commit.date
+      last.count++
+      last.label = GROUP_LABEL[type](last.count)
+    } else {
+      groups.push({
+        key: commit.sha,
+        restoreSha: commit.sha,
+        restoreShortSha: commit.shortSha,
+        label: commit.message,
+        date: commit.date,
+        count: 1,
+        type,
+      })
+    }
+  }
+
+  return groups
 }
 
 function formatRelativeTime(isoString: string | null): string {
@@ -23,14 +91,15 @@ export function HistoryModal({ onClose, onRestored }: Props) {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
-  const [page, setPage] = useState(1)
   const [error, setError] = useState<string | null>(null)
-  const [confirmingSha, setConfirmingSha] = useState<string | null>(null)
+  const [confirmingKey, setConfirmingKey] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
   const loadingMoreRef = useRef(false)
   const pageRef = useRef(1)
+
+  const groups = useMemo(() => groupCommits(commits), [commits])
 
   async function fetchPage(p: number) {
     const res = await fetch(`/api/vault/history?page=${p}`)
@@ -132,24 +201,24 @@ export function HistoryModal({ onClose, onRestored }: Props) {
           <p className="text-xs text-red-500 py-4">{error}</p>
         ) : (
           <div className="overflow-y-auto flex-1 -mx-2 px-2 space-y-1" style={{ overflowAnchor: 'none' }}>
-            {commits.map(commit => (
-              <div key={commit.sha} className="rounded-lg border border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 px-3 py-2.5">
-                {confirmingSha === commit.sha ? (
+            {groups.map(group => (
+              <div key={group.key} className="rounded-lg border border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 px-3 py-2.5">
+                {confirmingKey === group.key ? (
                   <div className="space-y-2">
                     <p className="text-xs text-gray-700 dark:text-gray-300">
-                      Restore vault to <span className="font-mono text-[11px] bg-slate-200 dark:bg-gray-700 px-1 py-0.5 rounded">{commit.shortSha}</span>? This creates a new commit — your current history stays intact.
+                      Restore vault to <span className="font-mono text-[11px] bg-slate-200 dark:bg-gray-700 px-1 py-0.5 rounded">{group.restoreShortSha}</span>? This creates a new commit — your current history stays intact.
                     </p>
                     {restoreError && <p className="text-xs text-red-500">{restoreError}</p>}
                     <div className="flex gap-2 justify-end">
                       <button
-                        onClick={() => { setConfirmingSha(null); setRestoreError(null) }}
+                        onClick={() => { setConfirmingKey(null); setRestoreError(null) }}
                         disabled={restoring}
                         className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer disabled:opacity-50"
                       >
                         Cancel
                       </button>
                       <button
-                        onClick={() => handleRestore(commit.sha)}
+                        onClick={() => handleRestore(group.restoreSha)}
                         disabled={restoring}
                         className="px-3 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-60 cursor-pointer"
                       >
@@ -159,11 +228,16 @@ export function HistoryModal({ onClose, onRestored }: Props) {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{commit.shortSha}</span>
-                    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{commit.message}</span>
-                    <span className="text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{formatRelativeTime(commit.date)}</span>
+                    <span className="font-mono text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{group.restoreShortSha}</span>
+                    <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{group.label}</span>
+                    {group.count > 1 && (
+                      <span className="text-[10px] font-medium text-slate-400 dark:text-gray-500 bg-slate-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full shrink-0">
+                        ×{group.count}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-slate-400 dark:text-gray-500 shrink-0">{formatRelativeTime(group.date)}</span>
                     <button
-                      onClick={() => setConfirmingSha(commit.sha)}
+                      onClick={() => setConfirmingKey(group.key)}
                       className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer shrink-0"
                     >
                       Restore
