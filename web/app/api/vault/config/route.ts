@@ -41,23 +41,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { mode, vaultPath, owner, repo, branch, syncEnabled } = body
+  const { mode, vaultPath, owner, repo, branch } = body
 
   const currentConfig = readVaultConfig()
 
-  // Toggle-only: just updating syncEnabled without changing mode
-  if (mode === undefined && syncEnabled !== undefined) {
-    try {
-      writeVaultConfig({ ...currentConfig, syncEnabled })
-    } catch (e: unknown) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : 'Failed to save configuration' },
-        { status: 500 },
-      )
-    }
-    invalidateCache()
-    return NextResponse.json({ ok: true })
-  }
 
   if (mode === 'local') {
     if (!vaultPath || typeof vaultPath !== 'string') {
@@ -68,7 +55,6 @@ export async function POST(req: NextRequest) {
         ...currentConfig,
         mode: 'local',
         vaultPath: vaultPath.trim(),
-        ...(syncEnabled !== undefined ? { syncEnabled } : {}),
       })
     } catch (e: unknown) {
       return NextResponse.json(
@@ -87,7 +73,6 @@ export async function POST(req: NextRequest) {
         owner: owner.trim(),
         repo: repo.trim(),
         branch: (branch ?? 'main').trim(),
-        ...(syncEnabled !== undefined ? { syncEnabled } : {}),
       })
     } catch (e: unknown) {
       return NextResponse.json(

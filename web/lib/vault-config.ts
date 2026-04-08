@@ -7,7 +7,6 @@ export interface VaultConfigFile {
   owner?: string
   repo?: string
   branch?: string
-  syncEnabled?: boolean
 }
 
 const CONFIG_PATH = join(process.cwd(), 'vault-config.json')
@@ -47,26 +46,25 @@ export function resolveVaultSettings() {
   const branch = file.branch || process.env.GITHUB_VAULT_BRANCH || 'main'
   const pat = process.env.GITHUB_PAT || undefined
 
-  // Sync requires both a local path (to read/write filesystem) and GitHub credentials
-  const syncCandidate = file.syncEnabled === true
-    && !!vaultPath
+  // Sync is automatic: enabled when both local path and GitHub credentials are available
+  const syncEnabled = !!vaultPath
     && !!owner && !!repo && !!pat
     && !process.env.VERCEL
 
   // Explicit mode from config file takes priority
   if (file.mode === 'local' && vaultPath) {
-    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled: syncCandidate }
+    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
   }
   if (file.mode === 'github' && owner && repo) {
-    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled: syncCandidate }
+    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
   }
 
   // Auto-detect from available values
   if (vaultPath) {
-    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled: syncCandidate }
+    return { mode: 'local' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
   }
   if (pat && owner && repo) {
-    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled: syncCandidate }
+    return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled }
   }
 
   return { mode: 'unconfigured' as const, vaultPath, owner, repo, branch, pat, syncEnabled: false } // unconfigured: sync requires a local path

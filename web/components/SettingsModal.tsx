@@ -36,8 +36,7 @@ export function SettingsModal({ onClose }: Props) {
   // Local vault edit state (only used on localhost)
   const [editingLocal, setEditingLocal] = useState(false)
 
-  // Sync toggle state
-  const [togglingSync, setTogglingSync] = useState(false)
+  // Sync explainer
   const [showSyncExplainer, setShowSyncExplainer] = useState(false)
 
   // Editable fields
@@ -105,30 +104,11 @@ export function SettingsModal({ onClose }: Props) {
     }
   }
 
-  async function handleSyncToggle(enabled: boolean) {
-    setTogglingSync(true)
-    try {
-      await fetch('/api/vault/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncEnabled: enabled }),
-      })
-      const [updatedConfig, updatedSync] = await Promise.all([
-        fetch('/api/vault/config').then(r => r.json().catch(() => null)),
-        fetch('/api/vault/sync').then(r => r.json().catch(() => null)),
-      ])
-      if (updatedConfig) setConfig(updatedConfig)
-      if (updatedSync) setSyncStatus(updatedSync)
-    } finally {
-      setTogglingSync(false)
-    }
-  }
 
   const inputClass = 'w-full px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono'
 
-  // Auto-sync section variables
-  const bothConfigured = !!(config?.vaultPath && config?.owner && config?.repo)
-  const syncOn = syncStatus?.syncEnabled ?? false
+  // Auto-sync is automatic when both local and GitHub are configured
+  const syncActive = !!(config?.syncEnabled)
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
@@ -249,49 +229,49 @@ export function SettingsModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* Auto-sync section — only on localhost */}
-              {!config.isServerless && (
-                <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auto-sync</span>
-                      {!bothConfigured && (
-                        <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">Configure both local and GitHub to enable.</p>
-                      )}
-                    </div>
-                    {/* Toggle */}
-                    <label className={`relative inline-flex items-center ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={syncOn}
-                        disabled={!bothConfigured || togglingSync}
-                        onChange={e => handleSyncToggle(e.target.checked)}
-                      />
-                      <div className="w-9 h-5 rounded-full bg-gray-300 dark:bg-gray-600 peer-checked:bg-teal-500 peer-disabled:cursor-not-allowed transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-4" />
-                    </label>
-                  </div>
-
-                  {syncOn && syncStatus && (
-                    <div className="space-y-1">
-                      <p className="text-xs text-slate-500 dark:text-gray-500">
-                        Last sync: {formatRelativeTime(syncStatus.lastSync)}
-                      </p>
-                      <button
-                        onClick={() => setShowSyncExplainer(v => !v)}
-                        className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <span>{showSyncExplainer ? '▾' : '▸'}</span> How does sync work?
-                      </button>
-                      {showSyncExplainer && (
-                        <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
-                          Superbrain compares your local vault with GitHub every few seconds and automatically syncs new and changed files. If the same file was changed in both places, the local version wins and the remote version is saved as a .conflict.md file.
-                        </p>
-                      )}
-                    </div>
+              {/* Auto-sync status */}
+              <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auto-sync</span>
+                  {config.isServerless ? (
+                    <span className="text-[11px] text-slate-400 dark:text-gray-600">via local instance</span>
+                  ) : syncActive ? (
+                    <span className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Active
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 dark:text-gray-600">Inactive</span>
                   )}
                 </div>
-              )}
+
+                {config.isServerless ? (
+                  <p className="text-xs text-slate-400 dark:text-gray-600">
+                    Changes sync automatically between your local Obsidian vault and GitHub when the app is running on localhost.
+                  </p>
+                ) : syncActive && syncStatus ? (
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 dark:text-gray-500">
+                      Last sync: {formatRelativeTime(syncStatus.lastSync)}
+                    </p>
+                    <button
+                      onClick={() => setShowSyncExplainer(v => !v)}
+                      className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{showSyncExplainer ? '▾' : '▸'}</span> How does sync work?
+                    </button>
+                    {showSyncExplainer && (
+                      <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
+                        Superbrain compares your local vault with GitHub every few seconds and automatically syncs new and changed files. If the same file was changed in both places, the local version wins and the remote version is saved as a .conflict.md file.
+                      </p>
+                    )}
+                  </div>
+                ) : !config.isServerless ? (
+                  <p className="text-xs text-slate-400 dark:text-gray-600">
+                    Configure both a local path and GitHub env vars to enable automatic sync.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             {/* Account */}
