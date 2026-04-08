@@ -4,6 +4,41 @@ import matter from 'gray-matter'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
+import { addToManagedBlock, removeFromManagedBlock } from '@/lib/vault-parser'
+
+export function applySetType(raw: string, type: string): string {
+  const { data, content } = matter(raw)
+  data.type = type
+  return matter.stringify(content, data)
+}
+
+export function applyAddRelation(raw: string, target: string, relationType: string | null): string {
+  const { data, content } = matter(raw)
+  if (relationType) {
+    const relations: any[] = data.relations ?? []
+    const alreadyPresent = relations.some(
+      (r: any) => (r.target as string).replace(/^\[\[|\]\]$/g, '') === target
+    )
+    if (!alreadyPresent) {
+      relations.push({ target: `[[${target}]]`, type: relationType })
+      data.relations = relations
+    }
+  }
+  const updatedContent = addToManagedBlock(content, target)
+  return matter.stringify(updatedContent, data)
+}
+
+export function applyRemoveRelation(raw: string, target: string): string {
+  const { data, content } = matter(raw)
+  if (Array.isArray(data.relations)) {
+    data.relations = (data.relations as any[]).filter(
+      (r: any) => (r.target as string).replace(/^\[\[|\]\]$/g, '') !== target
+    )
+    if (data.relations.length === 0) delete data.relations
+  }
+  const updatedContent = removeFromManagedBlock(content, target)
+  return matter.stringify(updatedContent, data)
+}
 
 export async function GET(
   req: NextRequest,
@@ -81,17 +116,34 @@ export async function PATCH(
 
   const { path: pathSegments } = await params
   const filePath = pathSegments.join('/')
-  const { title } = await req.json()
+  const body = await req.json()
 
   const client = getVaultClient()
   const { content: raw, sha } = await client.readFile(filePath)
-  const { data, content } = matter(raw)
-  data.title = title
-  const updated = matter.stringify(content, data)
-
   const stem = filePath.split('/').pop()?.replace(/\.md$/, '') ?? filePath
-  await client.writeFile(filePath, updated, sha, `brain: rename [[${stem}]] to ${title}`)
-  invalidateCache()
 
+  let updated: string
+  let message: string
+
+  if (body.operation === 'set-type') {
+    updated = applySetType(raw, body.type)
+    message = `brain: set type of [[${stem}]] to ${body.type}`
+  } else if (body.operation === 'add-relation') {
+    updated = applyAddRelation(raw, body.target, body.relationType ?? null)
+    message = `brain: link [[${stem}]] → [[${body.target}]]`
+  } else if (body.operation === 'remove-relation') {
+    updated = applyRemoveRelation(raw, body.target)
+    message = `brain: unlink [[${stem}]] → [[${body.target}]]`
+  } else if (typeof body.title === 'string') {
+    const { data, content } = matter(raw)
+    data.title = body.title
+    updated = matter.stringify(content, data)
+    message = `brain: rename [[${stem}]] to ${body.title}`
+  } else {
+    return NextResponse.json({ error: 'Unknown operation' }, { status: 400 })
+  }
+
+  await client.writeFile(filePath, updated, sha, message)
+  invalidateCache()
   return NextResponse.json({ ok: true })
 }
