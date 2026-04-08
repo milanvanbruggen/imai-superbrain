@@ -28,7 +28,8 @@ export function SettingsModal({ onClose }: Props) {
   const [config, setConfig] = useState<VaultConfig | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [localSaveError, setLocalSaveError] = useState<string | null>(null)
+  const [githubSaveError, setGithubSaveError] = useState<string | null>(null)
   const { data: session, update } = useSession()
   const [disconnecting, setDisconnecting] = useState(false)
 
@@ -76,7 +77,7 @@ export function SettingsModal({ onClose }: Props) {
 
   async function handleSaveLocal() {
     setSaving(true)
-    setSaveError(null)
+    setLocalSaveError(null)
     try {
       const res = await fetch('/api/vault/config', {
         method: 'POST',
@@ -84,12 +85,13 @@ export function SettingsModal({ onClose }: Props) {
         body: JSON.stringify({ mode: 'local', vaultPath: editVaultPath }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
+      // API preserves the other connection's fields via currentConfig spread
       const updated = await fetch('/api/vault/config').then(r => r.json())
       setConfig(updated)
       setEditVaultPath(updated.vaultPath ?? '')
       setEditingLocal(false)
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Failed to save')
+      setLocalSaveError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -97,7 +99,7 @@ export function SettingsModal({ onClose }: Props) {
 
   async function handleSaveGithub() {
     setSaving(true)
-    setSaveError(null)
+    setGithubSaveError(null)
     try {
       const parsed = parseGitHubUrl(editRepoUrl)
       if (!parsed) throw new Error('Invalid GitHub URL. Use: https://github.com/owner/repo.git')
@@ -107,13 +109,14 @@ export function SettingsModal({ onClose }: Props) {
         body: JSON.stringify({ mode: 'github', owner: parsed.owner, repo: parsed.repo, branch: editBranch }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save')
+      // API preserves the other connection's fields via currentConfig spread
       const updated = await fetch('/api/vault/config').then(r => r.json())
       setConfig(updated)
       setEditRepoUrl(updated.owner && updated.repo ? `https://github.com/${updated.owner}/${updated.repo}.git` : '')
       setEditBranch(updated.branch ?? 'main')
       setEditingGithub(false)
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Failed to save')
+      setGithubSaveError(e instanceof Error ? e.message : 'Failed to save')
     } finally {
       setSaving(false)
     }
@@ -151,6 +154,10 @@ export function SettingsModal({ onClose }: Props) {
   }
 
   const inputClass = 'w-full px-3 py-1.5 text-sm rounded-md border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono'
+
+  // Auto-sync section variables
+  const bothConfigured = !!(config?.vaultPath && config?.owner && config?.repo)
+  const syncOn = syncStatus?.syncEnabled ?? false
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
@@ -207,9 +214,9 @@ export function SettingsModal({ onClose }: Props) {
                       className={inputClass}
                       autoFocus
                     />
-                    {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+                    {localSaveError && <p className="text-xs text-red-500">{localSaveError}</p>}
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => { setEditingLocal(false); setSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+                      <button onClick={() => { setEditingLocal(false); setLocalSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
                       <button onClick={handleSaveLocal} disabled={saving} className="px-3 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-60 cursor-pointer">{saving ? 'Saving...' : 'Save'}</button>
                     </div>
                   </div>
@@ -247,9 +254,9 @@ export function SettingsModal({ onClose }: Props) {
                       placeholder="main"
                       className={inputClass}
                     />
-                    {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+                    {githubSaveError && <p className="text-xs text-red-500">{githubSaveError}</p>}
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => { setEditingGithub(false); setSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
+                      <button onClick={() => { setEditingGithub(false); setGithubSaveError(null) }} className="px-3 py-1 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">Cancel</button>
                       <button onClick={handleSaveGithub} disabled={saving} className="px-3 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-60 cursor-pointer">{saving ? 'Saving...' : 'Save'}</button>
                     </div>
                   </div>
@@ -291,52 +298,45 @@ export function SettingsModal({ onClose }: Props) {
               )}
 
               {/* Auto-sync section */}
-              {(() => {
-                const bothConfigured = !!(config.vaultPath && config.owner && config.repo)
-                const syncOn = syncStatus?.syncEnabled ?? false
-
-                return (
-                  <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auto-sync</span>
-                        {!bothConfigured && (
-                          <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">Configure both local and GitHub to enable.</p>
-                        )}
-                      </div>
-                      {/* Toggle */}
-                      <button
-                        onClick={() => bothConfigured && !togglingSync && handleSyncToggle(!syncOn)}
-                        disabled={!bothConfigured || togglingSync}
-                        className={`relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-200 ${
-                          syncOn ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
-                        } ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-                      >
-                        <span className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${syncOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-
-                    {syncOn && syncStatus && (
-                      <div className="space-y-1">
-                        <p className="text-xs text-slate-500 dark:text-gray-500">
-                          Last sync: {formatRelativeTime(syncStatus.lastSync)}
-                        </p>
-                        <button
-                          onClick={() => setShowSyncExplainer(v => !v)}
-                          className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          <span>{showSyncExplainer ? '▾' : '▸'}</span> Hoe werkt sync?
-                        </button>
-                        {showSyncExplainer && (
-                          <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
-                            Superbrain vergelijkt elke paar seconden de bestanden in je lokale vault met GitHub. Nieuwe en gewijzigde bestanden worden automatisch gesynchroniseerd. Als hetzelfde bestand op beide plekken is gewijzigd, wint de lokale versie en wordt de remote versie bewaard als .conflict.md bestand.
-                          </p>
-                        )}
-                      </div>
+              <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Auto-sync</span>
+                    {!bothConfigured && (
+                      <p className="text-xs text-slate-400 dark:text-gray-600 mt-0.5">Configure both local and GitHub to enable.</p>
                     )}
                   </div>
-                )
-              })()}
+                  {/* Toggle */}
+                  <button
+                    onClick={() => bothConfigured && !togglingSync && handleSyncToggle(!syncOn)}
+                    disabled={!bothConfigured || togglingSync}
+                    className={`relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-200 ${
+                      syncOn ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
+                    } ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <span className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${syncOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                {syncOn && syncStatus && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 dark:text-gray-500">
+                      Last sync: {formatRelativeTime(syncStatus.lastSync)}
+                    </p>
+                    <button
+                      onClick={() => setShowSyncExplainer(v => !v)}
+                      className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>{showSyncExplainer ? '▾' : '▸'}</span> Hoe werkt sync?
+                    </button>
+                    {showSyncExplainer && (
+                      <p className="text-xs text-slate-500 dark:text-gray-500 leading-relaxed bg-slate-100 dark:bg-gray-800 rounded p-2">
+                        Superbrain vergelijkt elke paar seconden de bestanden in je lokale vault met GitHub. Nieuwe en gewijzigde bestanden worden automatisch gesynchroniseerd. Als hetzelfde bestand op beide plekken is gewijzigd, wint de lokale versie en wordt de remote versie bewaard als .conflict.md bestand.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Account */}
