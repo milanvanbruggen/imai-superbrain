@@ -10,6 +10,7 @@ import { join } from 'path'
 
 const SNAPSHOT_PATH = join(process.cwd(), 'vault-sync-state.json')
 
+// In-memory lock — valid for single-process local server only (non-Vercel is enforced by syncEnabled check upstream)
 let syncInFlight = false
 
 export async function POST() {
@@ -40,7 +41,7 @@ export async function POST() {
     })
 
     const result = await executeSync(localClient, remoteClient, SNAPSHOT_PATH)
-    if (result.pushed > 0 || result.pulled > 0 || result.deleted > 0) {
+    if (result.pushed > 0 || result.pulled > 0 || result.deleted > 0 || result.conflicts > 0) {
       invalidateCache()
     }
     return NextResponse.json(result)

@@ -188,8 +188,9 @@ export async function executeSync(
           break
         }
       }
-    } catch {
+    } catch (e) {
       // Individual file error — skip, retry next cycle
+      console.warn(`[vault-sync] Failed to execute ${action.type} for ${action.path}:`, e)
     }
   }
 
