@@ -160,10 +160,13 @@ export default function BrainPage() {
         .then(data => { syncEnabledRef.current = data.syncEnabled ?? false })
         .catch(() => {})
 
-      // Seed the hash so polling doesn't immediately re-fetch
+      // Seed the hash and remote-sync timestamp so polling doesn't trigger immediately
       fetch('/api/vault/hash')
         .then(r => r.json())
-        .then(({ hash }) => { if (hash) vaultHashRef.current = hash })
+        .then(({ hash }) => {
+          if (hash) vaultHashRef.current = hash
+          lastRemoteSyncRef.current = Date.now()
+        })
         .catch(() => {})
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load graph')
