@@ -191,14 +191,30 @@ export default function BrainPage() {
   // Silent background reload — no loading spinner
   const vaultHashRef = useRef<string | null>(null)
   const syncEnabledRef = useRef(false)
+  const lastRemoteSyncRef = useRef<number>(0)
 
   async function refreshGraphSilently() {
     try {
       if (syncEnabledRef.current) {
-        // Sync mode: call the sync endpoint which handles both directions
+        // Check local hash first — only sync if something changed locally,
+        // or if 60 seconds have passed (to catch remote changes).
+        const hashRes = await fetch('/api/vault/hash')
+        if (!hashRes.ok) return
+        const { hash } = await hashRes.json()
+
+        const localChanged = hash && hash !== vaultHashRef.current
+        const remoteCheckDue = Date.now() - lastRemoteSyncRef.current >= 60_000
+
+        if (!localChanged && !remoteCheckDue) return
+
         const syncRes = await fetch('/api/vault/sync', { method: 'POST' })
         if (!syncRes.ok) return
         const syncData = await syncRes.json()
+
+        // Update refs after a successful sync
+        if (hash) vaultHashRef.current = hash
+        lastRemoteSyncRef.current = Date.now()
+
         // Reload graph if anything changed
         if (syncData.pushed > 0 || syncData.pulled > 0 || syncData.deleted > 0 || syncData.conflicts > 0) {
           const graphRes = await fetch('/api/vault/graph')
@@ -211,7 +227,7 @@ export default function BrainPage() {
         return
       }
 
-      // Hash-based polling for non-sync mode
+      // Hash-based polling for non-sync mode (unchanged)
       const res = await fetch('/api/vault/hash')
       if (!res.ok) return
       const { hash } = await res.json()
