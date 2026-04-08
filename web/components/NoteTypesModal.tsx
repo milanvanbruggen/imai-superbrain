@@ -28,7 +28,7 @@ interface NoteType {
 
 interface Props {
   onClose: () => void
-  onSaved: () => void
+  onSaved: (savedTypes: { name: string; color: string }[]) => void
 }
 
 export function NoteTypesModal({ onClose, onSaved }: Props) {
@@ -89,7 +89,7 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? 'Failed to save')
       }
-      onSaved()
+      onSaved(types.map(({ name, color }) => ({ name, color })))
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save')

@@ -67,8 +67,24 @@ export async function POST(req: NextRequest) {
   if (vaultPath !== undefined && typeof vaultPath !== 'string') {
     return NextResponse.json({ error: 'vaultPath must be a string' }, { status: 400 })
   }
-  if (noteTypes !== undefined && !Array.isArray(noteTypes)) {
-    return NextResponse.json({ error: 'noteTypes must be an array' }, { status: 400 })
+  if (noteTypes !== undefined) {
+    if (!Array.isArray(noteTypes)) {
+      return NextResponse.json({ error: 'noteTypes must be an array' }, { status: 400 })
+    }
+    const valid = noteTypes.every(
+      (t: unknown) =>
+        t !== null &&
+        typeof t === 'object' &&
+        typeof (t as Record<string, unknown>).name === 'string' &&
+        ((t as Record<string, unknown>).name as string).trim() !== '' &&
+        typeof (t as Record<string, unknown>).color === 'string',
+    )
+    if (!valid) {
+      return NextResponse.json(
+        { error: 'Each noteType must have a non-empty name and a color string' },
+        { status: 400 },
+      )
+    }
   }
 
   const currentConfig = readVaultConfig()

@@ -609,12 +609,7 @@ export default function BrainPage() {
       {showNoteTypes && (
         <NoteTypesModal
           onClose={() => setShowNoteTypes(false)}
-          onSaved={() => {
-            fetch('/api/vault/config')
-              .then(r => r.json().catch(() => null))
-              .then(c => { if (c && Array.isArray(c.noteTypes)) setNoteTypes(c.noteTypes) })
-              .catch(() => {})
-          }}
+          onSaved={(saved) => setNoteTypes(saved)}
         />
       )}
     </div>
