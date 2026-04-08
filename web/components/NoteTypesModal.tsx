@@ -23,6 +23,7 @@ const DEFAULT_COLORS: Record<string, string> = {
 interface NoteType {
   name: string
   color: string
+  _key: string
 }
 
 interface Props {
@@ -41,9 +42,9 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
       .then(r => r.json().catch(() => null))
       .then(c => {
         if (c?.noteTypes && Array.isArray(c.noteTypes) && c.noteTypes.length > 0) {
-          setTypes(c.noteTypes)
+          setTypes(c.noteTypes.map((t: { name: string; color: string }) => ({ ...t, _key: crypto.randomUUID() })))
         } else {
-          setTypes(DEFAULT_TYPE_NAMES.map(name => ({ name, color: DEFAULT_COLORS[name] ?? '#94a3b8' })))
+          setTypes(DEFAULT_TYPE_NAMES.map(name => ({ name, color: DEFAULT_COLORS[name] ?? '#94a3b8', _key: crypto.randomUUID() })))
         }
         setLoading(false)
       })
@@ -67,17 +68,22 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
   }
 
   function addType() {
-    setTypes(prev => [...prev, { name: '', color: '#94a3b8' }])
+    setTypes(prev => [...prev, { name: '', color: '#94a3b8', _key: crypto.randomUUID() }])
   }
 
   async function handleSave() {
+    const invalid = types.some(t => !isDefault(t.name) && t.name.trim() === '')
+    if (invalid) {
+      setError('All custom types must have a name.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       const res = await fetch('/api/vault/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteTypes: types }),
+        body: JSON.stringify({ noteTypes: types.map(({ name, color }) => ({ name, color })) }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -123,7 +129,7 @@ export function NoteTypesModal({ onClose, onSaved }: Props) {
           <>
             <div className="overflow-y-auto flex-1 space-y-2 mb-4 pr-1">
               {types.map((type, i) => (
-                <div key={i} className="flex items-center gap-2.5">
+                <div key={type._key} className="flex items-center gap-2.5">
                   <input
                     type="color"
                     value={type.color}
