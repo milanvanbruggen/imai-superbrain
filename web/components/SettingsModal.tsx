@@ -307,15 +307,16 @@ export function SettingsModal({ onClose }: Props) {
                     )}
                   </div>
                   {/* Toggle */}
-                  <button
-                    onClick={() => bothConfigured && !togglingSync && handleSyncToggle(!syncOn)}
-                    disabled={!bothConfigured || togglingSync}
-                    className={`relative inline-flex items-center h-5 w-9 rounded-full transition-colors duration-200 ${
-                      syncOn ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
-                    } ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-                  >
-                    <span className={`absolute h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${syncOn ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                  </button>
+                  <label className={`relative inline-flex items-center ${(!bothConfigured || togglingSync) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={syncOn}
+                      disabled={!bothConfigured || togglingSync}
+                      onChange={e => handleSyncToggle(e.target.checked)}
+                    />
+                    <div className="w-9 h-5 rounded-full bg-gray-300 dark:bg-gray-600 peer-checked:bg-teal-500 peer-disabled:cursor-not-allowed transition-colors duration-200 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-4" />
+                  </label>
                 </div>
 
                 {syncOn && syncStatus && (
