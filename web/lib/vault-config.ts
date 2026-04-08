@@ -35,6 +35,7 @@ export function resolveVaultSettings() {
   const branch = file.branch || process.env.GITHUB_VAULT_BRANCH || 'main'
   const pat = process.env.GITHUB_PAT || undefined
 
+  // Sync requires both a local path (to read/write filesystem) and GitHub credentials
   const syncCandidate = file.syncEnabled === true
     && !!vaultPath
     && !!owner && !!repo && !!pat
@@ -56,5 +57,5 @@ export function resolveVaultSettings() {
     return { mode: 'github' as const, vaultPath, owner, repo, branch, pat, syncEnabled: syncCandidate }
   }
 
-  return { mode: 'unconfigured' as const, vaultPath, owner, repo, branch, pat, syncEnabled: false }
+  return { mode: 'unconfigured' as const, vaultPath, owner, repo, branch, pat, syncEnabled: false } // unconfigured: sync requires a local path
 }
