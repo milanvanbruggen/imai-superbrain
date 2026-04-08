@@ -271,7 +271,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
                 {loadingMore && (
                   <div className="w-3 h-3 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
                 )}
-                {loadingMore ? 'Laden...' : 'Laad meer'}
+                {loadingMore ? 'Loading...' : 'Load more'}
               </button>
             </div>
           )}

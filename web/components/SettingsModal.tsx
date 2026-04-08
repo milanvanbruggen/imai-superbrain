@@ -348,7 +348,7 @@ export function SettingsModal({ onClose }: Props) {
                   onClick={() => signOut({ callbackUrl: '/login' })}
                   className="text-xs text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                 >
-                  Uitloggen
+                  Sign out
                 </button>
               </div>
             </div>
