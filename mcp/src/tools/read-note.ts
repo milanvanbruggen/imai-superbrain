@@ -4,7 +4,7 @@ const MAX_CHARS = 2000
 
 function truncateContent(content: string): { content: string; truncated?: true } {
   if (content.length <= MAX_CHARS) return { content }
-  const lastNewline = content.lastIndexOf('\n', MAX_CHARS)
+  const lastNewline = content.lastIndexOf('\n', MAX_CHARS - 1)
   const cutAt = lastNewline > 0 ? lastNewline + 1 : MAX_CHARS
   return { content: content.slice(0, cutAt), truncated: true }
 }

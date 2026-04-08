@@ -49,6 +49,16 @@ describe('read_note truncation', () => {
     expect(result.truncated).toBeUndefined()
   })
 
+  it('stays within 2000 chars when newline falls at exactly position 2000', async () => {
+    // 2000 chars of 'a' + newline at position 2000 + more content
+    const content = 'a'.repeat(2000) + '\n' + 'b'.repeat(500)
+    const vault = makeVault([{ path: 'notes/boundary.md', content }])
+    const t = createReadTool(vault)
+    const result = await t.execute({ path: 'notes/boundary.md' }) as any
+    expect(result.content.length).toBeLessThanOrEqual(2000)
+    expect(result.truncated).toBe(true)
+  })
+
   it('hard-cuts at 2000 when no newline exists before limit', async () => {
     const noNewlines = 'a'.repeat(3000)
     const vault = makeVault([{ path: 'notes/no-nl.md', content: noNewlines }])
