@@ -15,9 +15,10 @@ interface Props {
   selectedId: string | null
   onSelectNode: (id: string | null) => void
   activeTypes: Set<string>
+  typeColors: Record<string, string>
 }
 
-export const TYPE_COLORS: Record<string, string> = {
+export const DEFAULT_TYPE_COLORS: Record<string, string> = {
   person: '#60a5fa',
   project: '#34d399',
   idea: '#f59e0b',
@@ -94,7 +95,7 @@ function createCollideForce(minDist: number) {
   return force
 }
 
-export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes }: Props) {
+export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes, typeColors }: Props) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -197,13 +198,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       const deg = degreeById[n.id] ?? 0
       return {
         ...n,
-        color: TYPE_COLORS[n.type] ?? '#94a3b8',
+        color: typeColors[n.type] ?? '#94a3b8',
         // Degree-proportional size: hub is visibly larger
         val: deg === 0 ? 0.4 : Math.min(0.6 + deg * 0.15, 3),
       }
     }),
     links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
-  }), [nodes, edges, degreeById])
+  }), [nodes, edges, degreeById, typeColors])
 
   // Center graph on selected node whenever selectedId changes.
   // graphData.nodes are mutated in-place by the d3 simulation, so they carry current x/y.
