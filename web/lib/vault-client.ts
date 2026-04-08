@@ -1,5 +1,6 @@
 import { GitHubVaultClient } from './github'
 import { LocalVaultClient } from './local'
+import { resolveVaultSettings } from './vault-config'
 
 export interface VaultClient {
   getMarkdownTree(): Promise<{ path: string; sha: string }[]>
@@ -10,24 +11,20 @@ export interface VaultClient {
 }
 
 export function getVaultClient(): VaultClient {
-  const vaultPath = process.env.VAULT_PATH
-  if (vaultPath) {
-    return new LocalVaultClient(vaultPath)
+  const settings = resolveVaultSettings()
+
+  if (settings.mode === 'local' && settings.vaultPath) {
+    return new LocalVaultClient(settings.vaultPath)
   }
 
-  const pat = process.env.GITHUB_PAT
-  const owner = process.env.GITHUB_VAULT_OWNER
-  const repo = process.env.GITHUB_VAULT_REPO
-  if (pat && owner && repo) {
+  if (settings.mode === 'github' && settings.pat && settings.owner && settings.repo) {
     return new GitHubVaultClient({
-      pat,
-      owner,
-      repo,
-      branch: process.env.GITHUB_VAULT_BRANCH,
+      pat: settings.pat,
+      owner: settings.owner,
+      repo: settings.repo,
+      branch: settings.branch,
     })
   }
 
-  throw new Error(
-    'No vault configured. Set VAULT_PATH for local mode, or GITHUB_PAT + GITHUB_VAULT_OWNER + GITHUB_VAULT_REPO for GitHub mode.'
-  )
+  throw new Error('vault_not_configured')
 }

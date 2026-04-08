@@ -1,48 +1,38 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { getVaultClient } from '../vault-client'
+import { LocalVaultClient } from '../local'
+import { GitHubVaultClient } from '../github'
+
+const mockResolveVaultSettings = vi.fn()
+
+vi.mock('../vault-config', () => ({
+  resolveVaultSettings: () => mockResolveVaultSettings(),
+}))
 
 describe('getVaultClient', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.resetModules() // required: prevents module cache from leaking stubbed env vars between tests
-  })
+  beforeEach(() => mockResolveVaultSettings.mockReset())
 
-  it('throws when neither VAULT_PATH nor GitHub vars are set', async () => {
-    vi.stubEnv('VAULT_PATH', '')
-    vi.stubEnv('GITHUB_PAT', '')
-    vi.stubEnv('GITHUB_VAULT_OWNER', '')
-    vi.stubEnv('GITHUB_VAULT_REPO', '')
-    const { getVaultClient } = await import('../vault-client')
+  it('throws when vault is unconfigured', () => {
+    mockResolveVaultSettings.mockReturnValue({ mode: 'unconfigured' })
     expect(() => getVaultClient()).toThrow()
   })
 
-  it('returns LocalVaultClient when VAULT_PATH is set', async () => {
-    vi.stubEnv('VAULT_PATH', '/tmp/vault')
-    vi.stubEnv('GITHUB_PAT', '')
-    const { getVaultClient } = await import('../vault-client')
-    const { LocalVaultClient } = await import('../local')
-    const client = getVaultClient()
-    expect(client).toBeInstanceOf(LocalVaultClient)
+  it('returns LocalVaultClient in local mode', () => {
+    mockResolveVaultSettings.mockReturnValue({ mode: 'local', vaultPath: '/tmp/vault' })
+    expect(getVaultClient()).toBeInstanceOf(LocalVaultClient)
   })
 
-  it('returns GitHubVaultClient when only GitHub vars are set', async () => {
-    vi.stubEnv('VAULT_PATH', '')
-    vi.stubEnv('GITHUB_PAT', 'token')
-    vi.stubEnv('GITHUB_VAULT_OWNER', 'owner')
-    vi.stubEnv('GITHUB_VAULT_REPO', 'repo')
-    const { getVaultClient } = await import('../vault-client')
-    const { GitHubVaultClient } = await import('../github')
-    const client = getVaultClient()
-    expect(client).toBeInstanceOf(GitHubVaultClient)
+  it('returns GitHubVaultClient in github mode', () => {
+    mockResolveVaultSettings.mockReturnValue({
+      mode: 'github', pat: 'token', owner: 'owner', repo: 'repo', branch: 'main',
+    })
+    expect(getVaultClient()).toBeInstanceOf(GitHubVaultClient)
   })
 
-  it('VAULT_PATH takes priority over GitHub vars when both are set', async () => {
-    vi.stubEnv('VAULT_PATH', '/tmp/vault')
-    vi.stubEnv('GITHUB_PAT', 'token')
-    vi.stubEnv('GITHUB_VAULT_OWNER', 'owner')
-    vi.stubEnv('GITHUB_VAULT_REPO', 'repo')
-    const { getVaultClient } = await import('../vault-client')
-    const { LocalVaultClient } = await import('../local')
-    const client = getVaultClient()
-    expect(client).toBeInstanceOf(LocalVaultClient)
+  it('prefers local mode when both are configured', () => {
+    mockResolveVaultSettings.mockReturnValue({
+      mode: 'local', vaultPath: '/tmp/vault', pat: 'token', owner: 'owner', repo: 'repo',
+    })
+    expect(getVaultClient()).toBeInstanceOf(LocalVaultClient)
   })
 })

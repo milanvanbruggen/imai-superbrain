@@ -11,7 +11,13 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const client = getVaultClient()
+  let client
+  try {
+    client = getVaultClient()
+  } catch {
+    return NextResponse.json({ error: 'vault_not_configured' }, { status: 422 })
+  }
+
   const tree = await client.getMarkdownTree()
   const vaultHash = computeVaultHash(tree)
 
