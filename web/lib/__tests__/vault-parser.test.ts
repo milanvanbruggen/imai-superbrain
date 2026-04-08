@@ -65,6 +65,16 @@ describe('parseNote', () => {
     const note = parseNote('areas/health.md', '---\ntype: area\n---\n')
     expect(note.type).toBe('area')
   })
+
+  it('accepts a custom type not in the default list', () => {
+    const note = parseNote('notes/foo.md', '---\ntype: klant\n---\n')
+    expect(note.type).toBe('klant')
+  })
+
+  it('falls back to note when type is empty string', () => {
+    const note = parseNote('notes/foo.md', '---\ntype: ""\n---\n')
+    expect(note.type).toBe('note')
+  })
 })
 
 describe('resolveWikilink', () => {
