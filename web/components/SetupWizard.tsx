@@ -125,9 +125,14 @@ export function SetupWizard({ onComplete }: Props) {
     setSaving(true)
     setError(null)
     try {
-      const body = data.provider === 'gitlab'
-        ? { action: 'setup', provider: 'gitlab', token: data.gitlabToken, namespace: data.gitlabNamespace, project: data.gitlabProject, branch: data.gitlabBranch, url: data.gitlabUrl, userName: data.userName, userRole: data.userRole, vaultPath: data.vaultPath || undefined, useTemplate: data.useTemplate }
-        : { action: 'setup', provider: 'github', token: data.githubToken, owner: data.githubOwner, repo: data.githubRepo, branch: data.githubBranch, userName: data.userName, userRole: data.userRole, vaultPath: data.vaultPath || undefined, useTemplate: data.useTemplate }
+      let body: Record<string, unknown>
+      if (data.provider === 'gitlab') {
+        body = { action: 'setup', provider: 'gitlab', token: data.gitlabToken, namespace: data.gitlabNamespace, project: data.gitlabProject, branch: data.gitlabBranch, url: data.gitlabUrl, userName: data.userName, userRole: data.userRole, vaultPath: data.vaultPath || undefined, useTemplate: data.useTemplate }
+      } else if (data.provider === 'local') {
+        body = { action: 'setup', provider: 'local', vaultPath: data.vaultPath, userName: data.userName, userRole: data.userRole, useTemplate: data.useTemplate }
+      } else {
+        body = { action: 'setup', provider: 'github', token: data.githubToken, owner: data.githubOwner, repo: data.githubRepo, branch: data.githubBranch, userName: data.userName, userRole: data.userRole, vaultPath: data.vaultPath || undefined, useTemplate: data.useTemplate }
+      }
       const res = await fetch('/api/vault/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,7 +162,7 @@ export function SetupWizard({ onComplete }: Props) {
     if (step === 2) {
       if (data.provider === 'github') return !!(data.githubOwner && data.githubRepo && data.githubToken)
       if (data.provider === 'gitlab') return !!(data.gitlabNamespace && data.gitlabProject && data.gitlabToken)
-      return true // local
+      return !!data.vaultPath // local requires path
     }
     return true
   }
@@ -546,14 +551,24 @@ export function SetupWizard({ onComplete }: Props) {
           {/* Navigation */}
           <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100 dark:border-gray-800">
             {step > 0 ? (
-              <button onClick={() => setStep(s => s - 1)} className="px-4 py-2 text-xs text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium cursor-pointer transition-colors">
+              <button onClick={() => setStep(s => {
+                const prev = s - 1
+                // Skip "Local vault" step for local provider when going back
+                if (prev === 3 && data.provider === 'local') return prev - 1
+                return prev
+              })} className="px-4 py-2 text-xs text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 font-medium cursor-pointer transition-colors">
                 ← Back
               </button>
             ) : <div />}
 
             {step < STEPS.length - 1 ? (
               <button
-                onClick={() => setStep(s => s + 1)}
+                onClick={() => setStep(s => {
+                  const next = s + 1
+                  // Skip "Local vault" step for local provider (already collected on step 2)
+                  if (next === 3 && data.provider === 'local') return next + 1
+                  return next
+                })}
                 disabled={!canProceed()}
                 className="px-5 py-2.5 text-xs bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
