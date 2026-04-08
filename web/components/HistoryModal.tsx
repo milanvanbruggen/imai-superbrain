@@ -1,12 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-
-interface CommitEntry {
-  sha: string
-  shortSha: string
-  message: string
-  date: string | null
-}
+import type { CommitEntry } from '@/lib/vault-history'
 
 interface Props {
   onClose: () => void

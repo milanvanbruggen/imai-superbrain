@@ -14,11 +14,11 @@ describe('listCommits', () => {
       ok: true,
       json: async () => ([
         {
-          sha: 'abc1234567890',
+          sha: 'abc1234567890abcdef1234567890abcdef123456',
           commit: { message: 'brain: update [[Note]]\n\nDetails', author: { date: '2026-04-08T10:00:00Z' } },
         },
         {
-          sha: 'def9876543210',
+          sha: 'def9876543210def9876543210def9876543210d',
           commit: { message: 'brain: create [[Other]]', author: { date: '2026-04-07T09:00:00Z' } },
         },
       ]),
@@ -28,7 +28,7 @@ describe('listCommits', () => {
 
     expect(commits).toHaveLength(2)
     expect(commits[0]).toEqual({
-      sha: 'abc1234567890',
+      sha: 'abc1234567890abcdef1234567890abcdef123456',
       shortSha: 'abc1234',
       message: 'brain: update [[Note]]',
       date: '2026-04-08T10:00:00Z',
@@ -62,7 +62,7 @@ describe('restoreToCommit', () => {
     // 4. Update branch ref
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({}) })
 
-    await restoreToCommit(creds, 'abc1234567890')
+    await restoreToCommit(creds, 'abc1234567890abcdef1234567890abcdef123456')
 
     expect(fetchMock).toHaveBeenCalledTimes(4)
 
@@ -84,6 +84,6 @@ describe('restoreToCommit', () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ object: { sha: 'head' } }) })
     fetchMock.mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({}) })
 
-    await expect(restoreToCommit(creds, 'abc1234567890')).rejects.toThrow('422')
+    await expect(restoreToCommit(creds, 'abc1234567890abcdef1234567890abcdef123456')).rejects.toThrow('422')
   })
 })

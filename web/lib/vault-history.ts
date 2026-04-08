@@ -20,7 +20,7 @@ const ghHeaders = (pat: string) => ({
 
 export async function listCommits(creds: GitHubCreds, limit = 50): Promise<CommitEntry[]> {
   const base = `https://api.github.com/repos/${creds.owner}/${creds.repo}`
-  const res = await fetch(`${base}/commits?per_page=${limit}`, {
+  const res = await fetch(`${base}/commits?sha=${creds.branch ?? 'main'}&per_page=${limit}`, {
     headers: ghHeaders(creds.pat),
   })
   if (!res.ok) throw new Error(`GitHub commits failed: ${res.status}`)
@@ -35,7 +35,7 @@ export async function listCommits(creds: GitHubCreds, limit = 50): Promise<Commi
 }
 
 export async function restoreToCommit(creds: GitHubCreds, sha: string): Promise<void> {
-  if (!sha || sha.length < 7) throw new Error('Invalid SHA')
+  if (!sha || sha.length < 40) throw new Error('Invalid SHA')
   const base = `https://api.github.com/repos/${creds.owner}/${creds.repo}`
   const headers = ghHeaders(creds.pat)
   const shortSha = sha.slice(0, 7)
