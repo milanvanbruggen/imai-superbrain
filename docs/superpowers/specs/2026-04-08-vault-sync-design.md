@@ -66,7 +66,7 @@ interface SyncResult {
 
 ### First sync (no snapshot)
 
-When `vault-sync-state.json` does not exist, the engine creates an initial snapshot from both vaults without performing any sync actions. The next cycle will then detect actual changes. This prevents mass duplication when sync is first enabled.
+When `vault-sync-state.json` does not exist, the engine creates an initial snapshot from both vaults without performing any sync actions. Files that already exist on both sides with different content are recorded as-is — their divergence is accepted as the baseline. The next cycle will then detect actual changes relative to this baseline. This prevents mass duplication when sync is first enabled.
 
 ## Config & Toggle
 
@@ -127,9 +127,9 @@ Returns the last sync result (from `vault-sync-state.json`) without triggering a
 The existing 5-second hash polling in `page.tsx` is extended:
 
 1. Poll `/api/vault/hash` — detects local changes
-2. If sync is enabled: call `POST /api/vault/sync` instead of just reloading the graph
-3. The sync cycle itself also checks the remote side (GitHub tree), so remote changes are picked up regardless of local hash changes
-4. After sync: reload the graph
+2. If sync is enabled: call `POST /api/vault/sync` (which also checks remote changes via the GitHub tree)
+3. After sync completes: reload the graph to reflect any changes
+4. If sync is disabled: fall back to the existing behavior (reload graph on hash change only)
 
 ## Error Handling
 
