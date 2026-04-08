@@ -5,9 +5,7 @@ A personal knowledge graph app that visualises your markdown vault as an interac
 ## Prerequisites
 
 - Node.js 18+
-- A GitHub account with:
-  - **One repository to host the app** (this repo, deployed or run locally)
-  - **One repository as your vault** — a repo containing markdown files (can be a new empty repo)
+- A GitHub repository to use as your vault — containing markdown files (can be a new empty repo)
 
 ---
 
@@ -46,24 +44,13 @@ These must be set for the app to start and authenticate.
 
 | Variable | Description |
 |---|---|
-| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
-| `ALLOWED_GITHUB_USER_ID` | Your numeric GitHub user ID — only this account can sign in |
+| `ADMIN_PASSWORD` | Password to log in to the app |
 | `NEXTAUTH_SECRET` | Random secret for session encryption (`openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | The URL the app is running on (e.g. `http://localhost:3000`) |
 
-**Creating a GitHub OAuth App:**
-Go to GitHub → Settings → Developer Settings → OAuth Apps → New OAuth App.
-Set the callback URL to `<NEXTAUTH_URL>/api/auth/callback/github`.
-
-**Finding your GitHub user ID:**
-```bash
-curl https://api.github.com/users/YOUR_USERNAME | grep '"id"'
-```
-
 ### Required for vault access
 
-The app needs to read your vault. You can configure this via the Settings screen in the app after logging in, or set it upfront via env vars.
+The app needs to read your vault. You can configure this via the Settings screen in the app after logging in — no env vars needed. Alternatively, set them upfront:
 
 | Variable | Description |
 |---|---|
@@ -75,6 +62,8 @@ The app needs to read your vault. You can configure this via the Settings screen
 **Creating a PAT:**
 Go to GitHub → Settings → Developer Settings → Personal access tokens → Fine-grained tokens.
 Grant **Contents: Read and write** access to the vault repository only.
+
+If you configure the vault via the Settings screen instead, these env vars are not needed.
 
 ### Optional — Gmail integration
 

@@ -1,19 +1,26 @@
 import NextAuth from 'next-auth'
 import type { NextAuthOptions, Provider } from 'next-auth'
-import GitHubProvider from 'next-auth/providers/github'
+import CredentialsProvider from 'next-auth/providers/credentials'
 import GoogleProvider from 'next-auth/providers/google'
 import { refreshGoogleToken } from '@/lib/google-token-refresh'
 
-const ALLOWED_GITHUB_USER_ID = process.env.ALLOWED_GITHUB_USER_ID ?? ''
 // Refresh 60 seconds before actual expiry to avoid mid-flight failures
 const REFRESH_BUFFER_SECONDS = 60
 
 const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 
 const providers: Provider[] = [
-  GitHubProvider({
-    clientId: process.env.GITHUB_CLIENT_ID ?? '',
-    clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+  CredentialsProvider({
+    name: 'Password',
+    credentials: {
+      password: { label: 'Password', type: 'password' },
+    },
+    async authorize(credentials) {
+      const adminPassword = process.env.ADMIN_PASSWORD
+      if (!adminPassword) return null
+      if (credentials?.password !== adminPassword) return null
+      return { id: 'admin', name: 'Admin' }
+    },
   }),
 ]
 
@@ -33,15 +40,8 @@ if (googleEnabled) {
 
 export const authOptions: NextAuthOptions = {
   providers,
+  session: { strategy: 'jwt' },
   callbacks: {
-    async signIn({ account, profile }) {
-      // GitHub: only allow Milan's account
-      if (account?.provider === 'github') {
-        return String((profile as any).id) === ALLOWED_GITHUB_USER_ID
-      }
-      // Google: always allow (user must already have a GitHub session to reach settings)
-      return true
-    },
     async jwt({ token, account }) {
       // Store Google tokens when user connects Google
       if (account?.provider === 'google') {
