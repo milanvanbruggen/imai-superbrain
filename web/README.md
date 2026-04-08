@@ -48,22 +48,30 @@ These must be set for the app to start and authenticate.
 | `NEXTAUTH_SECRET` | Random secret for session encryption (`openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | The URL the app is running on (e.g. `http://localhost:3000`) |
 
-### Required for vault access
+### Vault access
 
-The app needs to read your vault. You can configure this via the Settings screen in the app after logging in — no env vars needed. Alternatively, set them upfront:
+Configure at least one vault source. This can also be done (or overridden) via the Settings screen in the app after logging in.
+
+**Option A — local folder:**
 
 | Variable | Description |
 |---|---|
-| `GITHUB_PAT` | Fine-grained GitHub personal access token with read/write access to the vault repo |
+| `VAULT_PATH` | Absolute path to a local folder containing markdown files |
+
+**Option B — GitHub repository:**
+
+| Variable | Description |
+|---|---|
+| `GITHUB_PAT` | Fine-grained GitHub PAT with Contents: Read and write on the vault repo |
 | `GITHUB_VAULT_OWNER` | GitHub username that owns the vault repo |
 | `GITHUB_VAULT_REPO` | Name of the vault repository |
 | `GITHUB_VAULT_BRANCH` | Branch to use (default: `main`) |
 
+Both can be set at the same time to enable auto-sync between them.
+
 **Creating a PAT:**
 Go to GitHub → Settings → Developer Settings → Personal access tokens → Fine-grained tokens.
 Grant **Contents: Read and write** access to the vault repository only.
-
-If you configure the vault via the Settings screen instead, these env vars are not needed.
 
 ### Optional — Gmail integration
 
