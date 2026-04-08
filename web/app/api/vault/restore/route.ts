@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
     invalidateCache()
     return NextResponse.json({ ok: true })
   } catch (err) {
-    return NextResponse.json({ error: 'Failed to restore' }, { status: 500 })
+    const msg = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[vault/restore] Failed:', msg)
+    return NextResponse.json({ error: `Failed to restore: ${msg}` }, { status: 500 })
   }
 }

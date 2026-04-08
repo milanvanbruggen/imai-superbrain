@@ -119,6 +119,12 @@ export async function POST(req: NextRequest) {
   // --- Validate connection ---
   if (action === 'validate') {
     const { provider, token, owner, repo, branch, namespace, project, url } = body
+
+    // Local provider has no remote to validate
+    if (provider === 'local') {
+      return NextResponse.json({ ok: true, message: 'Local vault — no remote connection needed.' })
+    }
+
     try {
       let client: VaultClient
       if (provider === 'gitlab') {
@@ -126,12 +132,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'token, namespace, and project are required' }, { status: 400 })
         }
         client = new GitLabVaultClient({ provider: 'gitlab', token, namespace, project, branch: branch || 'main', url })
-      } else {
-        // Default: github
+      } else if (provider === 'github') {
         if (!owner || !repo || !token) {
           return NextResponse.json({ error: 'token, owner, and repo are required' }, { status: 400 })
         }
         client = new GitHubVaultClient({ pat: token, owner, repo, branch: branch || 'main' })
+      } else {
+        return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 400 })
       }
       await client.getMarkdownTree()
       const label = provider === 'gitlab' ? `${namespace}/${project}` : `${owner}/${repo}`
@@ -152,6 +159,18 @@ export async function POST(req: NextRequest) {
   if (action === 'setup') {
     const { provider, token, owner, repo, branch, namespace, project, url, userName, userRole, vaultPath, useTemplate } = body
 
+    // --- Local-only setup ---
+    if (provider === 'local') {
+      if (!vaultPath) {
+        return NextResponse.json({ error: 'vaultPath is required for local provider' }, { status: 400 })
+      }
+      if (!isServerless()) {
+        writeVaultConfig({ local: { path: vaultPath } })
+      }
+      invalidateCache()
+      return NextResponse.json({ ok: true })
+    }
+
     let remote: RemoteConfig
     let client: VaultClient
 
@@ -161,12 +180,14 @@ export async function POST(req: NextRequest) {
       }
       remote = { provider: 'gitlab', token, namespace, project, branch: branch || 'main', url }
       client = new GitLabVaultClient(remote)
-    } else {
+    } else if (provider === 'github') {
       if (!token || !owner || !repo) {
         return NextResponse.json({ error: 'token, owner, and repo are required' }, { status: 400 })
       }
       remote = { provider: 'github', token, owner, repo, branch: branch || 'main' }
       client = new GitHubVaultClient({ pat: token, owner, repo, branch: branch || 'main' })
+    } else {
+      return NextResponse.json({ error: `Unknown provider: ${provider}` }, { status: 400 })
     }
 
     try {

@@ -42,13 +42,19 @@ export async function restoreToCommit(creds: GitHubCreds, sha: string): Promise<
 
   // 1. Get the tree SHA of the target commit
   const commitRes = await fetch(`${base}/git/commits/${sha}`, { headers })
-  if (!commitRes.ok) throw new Error(`Failed to get commit: ${commitRes.status}`)
+  if (!commitRes.ok) {
+    const body = await commitRes.text().catch(() => '')
+    throw new Error(`Failed to get commit ${shortSha}: ${commitRes.status} ${body}`)
+  }
   const commitData = await commitRes.json()
   const treeSha = commitData.tree.sha
 
   // 2. Get current HEAD SHA
   const refRes = await fetch(`${base}/git/refs/heads/${creds.branch ?? 'main'}`, { headers })
-  if (!refRes.ok) throw new Error(`Failed to get ref: ${refRes.status}`)
+  if (!refRes.ok) {
+    const body = await refRes.text().catch(() => '')
+    throw new Error(`Failed to get ref: ${refRes.status} ${body}`)
+  }
   const refData = await refRes.json()
   const headSha = refData.object.sha
 
@@ -62,7 +68,10 @@ export async function restoreToCommit(creds: GitHubCreds, sha: string): Promise<
       parents: [headSha],
     }),
   })
-  if (!newCommitRes.ok) throw new Error(`Failed to create commit: ${newCommitRes.status}`)
+  if (!newCommitRes.ok) {
+    const body = await newCommitRes.text().catch(() => '')
+    throw new Error(`Failed to create commit: ${newCommitRes.status} ${body}`)
+  }
   const newCommit = await newCommitRes.json()
 
   // 4. Update branch ref to new commit
@@ -71,5 +80,8 @@ export async function restoreToCommit(creds: GitHubCreds, sha: string): Promise<
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ sha: newCommit.sha }),
   })
-  if (!updateRes.ok) throw new Error(`Failed to update ref: ${updateRes.status}`)
+  if (!updateRes.ok) {
+    const body = await updateRes.text().catch(() => '')
+    throw new Error(`Failed to update ref: ${updateRes.status} ${body}`)
+  }
 }
