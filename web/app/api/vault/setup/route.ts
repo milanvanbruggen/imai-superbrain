@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { writeVaultConfig, isServerless } from '@/lib/vault-config'
+import type { RemoteConfig, LocalConfig } from '@/lib/vault-config'
 import { invalidateCache } from '@/lib/graph-cache'
 import { GitHubVaultClient } from '@/lib/github'
+import { GitLabVaultClient } from '@/lib/gitlab'
+import type { VaultClient } from '@/lib/vault-client'
 
 // Template files for "Start with template" option
 function profileTemplate(name: string, role: string): string {
@@ -113,24 +116,33 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { action } = body
 
-  // --- Validate GitHub connection ---
+  // --- Validate connection ---
   if (action === 'validate') {
-    const { owner, repo, branch, pat } = body
-    if (!owner || !repo || !pat) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
+    const { provider, token, owner, repo, branch, namespace, project, url } = body
     try {
-      const client = new GitHubVaultClient({ pat, owner, repo, branch: branch || 'main' })
-      // Try to access the repo (this will throw if PAT is invalid or repo doesn't exist)
+      let client: VaultClient
+      if (provider === 'gitlab') {
+        if (!token || !namespace || !project) {
+          return NextResponse.json({ error: 'token, namespace, and project are required' }, { status: 400 })
+        }
+        client = new GitLabVaultClient({ provider: 'gitlab', token, namespace, project, branch: branch || 'main', url })
+      } else {
+        // Default: github
+        if (!owner || !repo || !token) {
+          return NextResponse.json({ error: 'token, owner, and repo are required' }, { status: 400 })
+        }
+        client = new GitHubVaultClient({ pat: token, owner, repo, branch: branch || 'main' })
+      }
       await client.getMarkdownTree()
-      return NextResponse.json({ ok: true, message: `Connected to ${owner}/${repo} successfully!` })
+      const label = provider === 'gitlab' ? `${namespace}/${project}` : `${owner}/${repo}`
+      return NextResponse.json({ ok: true, message: `Connected to ${label} successfully!` })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
       if (msg.includes('404') || msg.includes('Not Found')) {
-        return NextResponse.json({ error: `Repository "${owner}/${repo}" not found. Make sure it exists and the PAT has access.` }, { status: 400 })
+        return NextResponse.json({ error: 'Repository not found. Check the name and token permissions.' }, { status: 400 })
       }
-      if (msg.includes('401') || msg.includes('Bad credentials')) {
-        return NextResponse.json({ error: 'Invalid PAT. Check that the token is correct and not expired.' }, { status: 400 })
+      if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('Bad credentials')) {
+        return NextResponse.json({ error: 'Invalid token. Check that it is correct and not expired.' }, { status: 400 })
       }
       return NextResponse.json({ error: `Connection failed: ${msg}` }, { status: 400 })
     }
@@ -138,60 +150,63 @@ export async function POST(req: NextRequest) {
 
   // --- Full setup ---
   if (action === 'setup') {
-    const { owner, repo, branch, pat, userName, userRole, vaultPath, useTemplate } = body
-    if (!owner || !repo || !pat) {
-      return NextResponse.json({ error: 'GitHub owner, repo, and PAT are required' }, { status: 400 })
+    const { provider, token, owner, repo, branch, namespace, project, url, userName, userRole, vaultPath, useTemplate } = body
+
+    let remote: RemoteConfig
+    let client: VaultClient
+
+    if (provider === 'gitlab') {
+      if (!token || !namespace || !project) {
+        return NextResponse.json({ error: 'token, namespace, and project are required' }, { status: 400 })
+      }
+      remote = { provider: 'gitlab', token, namespace, project, branch: branch || 'main', url }
+      client = new GitLabVaultClient(remote)
+    } else {
+      if (!token || !owner || !repo) {
+        return NextResponse.json({ error: 'token, owner, and repo are required' }, { status: 400 })
+      }
+      remote = { provider: 'github', token, owner, repo, branch: branch || 'main' }
+      client = new GitHubVaultClient({ pat: token, owner, repo, branch: branch || 'main' })
     }
 
     try {
-      // 1. Validate connection first
-      const client = new GitHubVaultClient({ pat, owner, repo, branch: branch || 'main' })
       const existingTree = await client.getMarkdownTree()
 
-      // 2. Write vault-config.json (only on localhost)
+      // Write vault-config.json only on localhost
       if (!isServerless()) {
-        const configPayload: Record<string, string> = {
-          mode: vaultPath ? 'local' : 'github',
-          owner,
-          repo,
-          branch: branch || 'main',
-        }
-        if (vaultPath) configPayload.vaultPath = vaultPath
-        writeVaultConfig(configPayload as any)
+        const local: LocalConfig | undefined = vaultPath ? { path: vaultPath } : undefined
+        writeVaultConfig({ remote, ...(local ? { local } : {}) })
       }
 
-      // 3. Initialize vault if empty
+      // Initialize vault if empty
       if (existingTree.length === 0) {
         if (useTemplate) {
-          // Create folder structure via .gitkeep files + system files
           const filesToCreate: { path: string; content: string }[] = []
-
-          // Folder .gitkeep files
           for (const folder of TEMPLATE_FOLDERS) {
             filesToCreate.push({ path: `${folder}/.gitkeep`, content: '' })
           }
-
-          // System files
           filesToCreate.push({ path: 'Claude/profile.md', content: profileTemplate(userName, userRole) })
           filesToCreate.push({ path: 'Claude/active-projects.md', content: ACTIVE_PROJECTS_TEMPLATE })
           filesToCreate.push({ path: 'templates/person.md', content: PERSON_TEMPLATE })
           filesToCreate.push({ path: 'Welcome.md', content: WELCOME_TEMPLATE })
-
-          // Write all files
           for (const file of filesToCreate) {
             try {
               await client.writeFile(file.path, file.content, null, `brain: setup ${file.path}`)
-            } catch {
-              // Skip if file already exists
-            }
+            } catch { /* skip if file exists */ }
           }
         } else {
-          // Fresh start — just a welcome note
           await client.writeFile('Welcome.md', WELCOME_TEMPLATE, null, 'brain: create [[Welcome]]')
         }
       }
 
       invalidateCache()
+
+      // On Vercel: return the VAULT_CONFIG JSON for the user to copy
+      if (isServerless()) {
+        const configForCopy = { remote, ...(vaultPath ? { local: { path: vaultPath } } : {}) }
+        return NextResponse.json({ ok: true, vaultConfig: JSON.stringify(configForCopy) })
+      }
+
       return NextResponse.json({ ok: true })
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
