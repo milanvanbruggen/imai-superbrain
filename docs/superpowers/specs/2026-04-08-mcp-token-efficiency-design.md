@@ -13,7 +13,9 @@ Three targeted improvements to the local MCP server, inspired by LinkedIn feedba
 2. **B1 — `get_context(query)` tool** — replaces the search → read → get_related chain with a single smart call
 3. **C2 — `get_index()` tool** — gives Claude a machine-readable map of the entire vault in one call
 
-All changes are purely in `mcp/src/`. No external dependencies added. Backwards compatible where possible.
+All changes are purely in `mcp/src/`. No external dependencies added.
+
+**Note on A2 backwards compatibility:** Adding a default truncation to `read_note` is a conscious behaviour change. Any caller that relied on receiving full content without passing `full: true` will now receive truncated content. This is intentional — the new default is the safer option.
 
 ---
 
@@ -23,22 +25,25 @@ All changes are purely in `mcp/src/`. No external dependencies added. Backwards 
 
 **Problem:** `read_note` always returns full note content. Large notes or repeated calls silently consume the context window (Jeroen Rinzema's observation).
 
-**Change:** Add optional `full` boolean to the input schema (default: `false`).
+**Change:** Add optional `full` boolean to the input schema.
 
-- `full: false` (default): content is truncated at **2,000 characters**; response includes `truncated: true`
-- `full: true`: full content returned, no truncation
-
-Existing callers that omit `full` automatically get the safer truncated version. Claude can always request the full note explicitly when needed.
+- `full: false` (default): content is truncated at **2,000 UTF-16 code units** (JavaScript `string.length`). Truncation snaps to the nearest newline at or before the 2,000-char boundary; if no newline exists before that point, it hard-cuts at exactly 2,000 chars. Response includes `truncated: true`.
+- `full: true`: full content returned, no truncation. `truncated` field is absent from the response.
+- If the note content is shorter than 2,000 chars, no truncation occurs and `truncated` is absent.
 
 **Input schema addition:**
 ```
-full?: boolean   — return full content (default: false, truncates at 2000 chars)
+full?: boolean   — return full content without truncation (default: false)
 ```
 
-**Response change:**
+**Response:**
 ```
+path: string
+title: string
+type: string
+tags: string[]
 content: string       — note content (possibly truncated)
-truncated?: boolean   — present and true when content was cut
+truncated?: boolean   — present and true only when content was cut; absent otherwise
 ```
 
 ---
@@ -51,9 +56,16 @@ truncated?: boolean   — present and true when content was cut
 
 **Input schema:**
 ```
-query: string      — search term (required)
-limit?: number     — max results to return (default: 5, max: 10)
+query: string      — search term (required); matched case-insensitively
+limit?: number     — max results (default: 5; silently clamped to 10)
 ```
+
+**Matching behaviour:** Same as `search_notes` — both `title` and `content` are lowercased before matching. A note matches if the lowercased query appears in either.
+
+**Excerpt construction:**
+- If the query appears in `content`: find the first occurrence (case-insensitive). Extract 100 chars before and 100 chars after the match centre (200 chars total). Prepend `...` only if the excerpt start is not at position 0. Append `...` only if the excerpt end does not reach the end of content.
+- If the query appears only in `title` (not in `content`): use the first 200 chars of `content` as the excerpt, with a trailing `...` if content is longer than 200 chars.
+- If `content` is empty: excerpt is an empty string.
 
 **Response per result:**
 ```
@@ -61,11 +73,11 @@ path: string
 title: string
 type: string
 tags: string[]
-excerpt: string        — ~200 chars surrounding the match, bounded by "..."
-outgoing_links: string[]  — stems of wikilinks found in this note
+excerpt: string    — ~200 chars surrounding the match (see above)
+links: string[]    — raw wikilink stems from ParsedNote.wikilinks (e.g. ["Milan van Bruggen", "Project X"])
 ```
 
-**Implementation:** Reuses the full-text search logic from `search_notes`. For each match, finds the character position of the query in the content and extracts 100 chars before and after, trimmed to word boundaries and prefixed/suffixed with `...` where content is cut. Results are capped at `limit` (default 5).
+**Note on `links` field:** These are the raw wikilink texts extracted from `[[...]]` syntax, as stored in `ParsedNote.wikilinks` — not resolved paths. This is deliberate: the field is for orientation (what does this note reference?) not for navigation (use `get_related` or `read_note` for resolved paths).
 
 ---
 
@@ -84,12 +96,20 @@ notes: Array of {
   title: string
   type: string
   tags: string[]
-  link_count: number     — number of outgoing wikilinks
-  links: string[]        — stems of outgoing wikilinks
+  link_count: number   — number of outgoing wikilinks (= links.length)
+  links: string[]      — raw wikilink stems (same source as get_context: ParsedNote.wikilinks)
 }
 ```
 
 No content, no excerpts. Claude can identify hub notes (high `link_count`), explore by type or tag, and plan targeted reads — all without a single `read_note` call.
+
+**Known size trade-off:** For a vault of ≤1,000 notes, the response is acceptably compact (stems are short strings). This is the expected vault size per the original design doc. If the vault grows significantly beyond that, response size may need to be revisited.
+
+---
+
+## Naming consistency
+
+Both `get_context` and `get_index` use `links: string[]` to refer to raw outgoing wikilink stems from `ParsedNote.wikilinks`. This is consistent across both tools.
 
 ---
 
@@ -100,7 +120,7 @@ No content, no excerpts. Claude can identify hub notes (high `link_count`), expl
 | `mcp/src/tools/read-note.ts` | Add `full` param, truncation logic, `truncated` flag |
 | `mcp/src/tools/get-context.ts` | New file |
 | `mcp/src/tools/get-index.ts` | New file |
-| `mcp/src/index.ts` | Register two new tools |
+| `mcp/src/index.ts` | Register two new tools in the `tools` array |
 
 ---
 
