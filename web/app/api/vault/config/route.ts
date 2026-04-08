@@ -11,6 +11,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const settings = resolveVaultSettings()
+  const rawConfig = readVaultConfig()
   const graph = getCachedGraphIfAvailable()
 
   const configSource = existsSync(join(process.cwd(), 'vault-config.json')) ? 'file' : 'env'
@@ -41,6 +42,7 @@ export async function GET() {
     configSource,
     syncEnabled: settings.syncEnabled,
     isServerless: isServerless(),
+    noteTypes: rawConfig.noteTypes ?? [],
   })
 }
 
@@ -57,19 +59,30 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { vaultPath } = body
+  const { vaultPath, noteTypes } = body
 
-  if (typeof vaultPath !== 'string') {
+  if (vaultPath === undefined && noteTypes === undefined) {
+    return NextResponse.json({ error: 'vaultPath or noteTypes required' }, { status: 400 })
+  }
+  if (vaultPath !== undefined && typeof vaultPath !== 'string') {
     return NextResponse.json({ error: 'vaultPath must be a string' }, { status: 400 })
+  }
+  if (noteTypes !== undefined && !Array.isArray(noteTypes)) {
+    return NextResponse.json({ error: 'noteTypes must be an array' }, { status: 400 })
   }
 
   const currentConfig = readVaultConfig()
+  const newConfig = { ...currentConfig }
+
+  if (typeof vaultPath === 'string') {
+    newConfig.local = vaultPath.trim() ? { path: vaultPath.trim() } : undefined
+  }
+  if (Array.isArray(noteTypes)) {
+    newConfig.noteTypes = noteTypes
+  }
 
   try {
-    writeVaultConfig({
-      ...currentConfig,
-      local: vaultPath.trim() ? { path: vaultPath.trim() } : undefined,
-    })
+    writeVaultConfig(newConfig)
   } catch (e: unknown) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : 'Failed to save configuration' },
