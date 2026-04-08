@@ -30,8 +30,8 @@ describe('get_index', () => {
     const tool = createGetIndexTool(makeVault(notes))
     const result = await tool.execute()
     const milan = result.notes.find((n: any) => n.path === 'people/milan.md')
-    expect(milan.link_count).toBe(2)
-    expect(milan.links).toEqual(['Superbrain', 'Obsidian'])
+    expect(milan!.link_count).toBe(2)
+    expect(milan!.links).toEqual(['Superbrain', 'Obsidian'])
   })
 
   it('does not include content field', async () => {
@@ -46,7 +46,7 @@ describe('get_index', () => {
     const tool = createGetIndexTool(makeVault(notes))
     const result = await tool.execute()
     const empty = result.notes.find((n: any) => n.path === 'notes/empty.md')
-    expect(empty.link_count).toBe(0)
-    expect(empty.links).toEqual([])
+    expect(empty!.link_count).toBe(0)
+    expect(empty!.links).toEqual([])
   })
 })

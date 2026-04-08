@@ -31,20 +31,20 @@ describe('read_note truncation', () => {
   })
 
   it('truncates content at nearest newline before 2000 chars by default', async () => {
-    const result = await tool.execute({ path: 'notes/long.md' })
+    const result = await tool.execute({ path: 'notes/long.md' }) as any
     expect(result.content.length).toBeLessThanOrEqual(2000)
     expect(result.content.endsWith('\n')).toBe(true)
     expect(result.truncated).toBe(true)
   })
 
   it('returns full content when full=true', async () => {
-    const result = await tool.execute({ path: 'notes/long.md', full: true })
+    const result = await tool.execute({ path: 'notes/long.md', full: true }) as any
     expect(result.content).toBe(longContent)
     expect(result.truncated).toBeUndefined()
   })
 
   it('does not truncate short content', async () => {
-    const result = await tool.execute({ path: 'notes/short.md' })
+    const result = await tool.execute({ path: 'notes/short.md' }) as any
     expect(result.content).toBe(shortContent)
     expect(result.truncated).toBeUndefined()
   })
@@ -53,7 +53,7 @@ describe('read_note truncation', () => {
     const noNewlines = 'a'.repeat(3000)
     const vault = makeVault([{ path: 'notes/no-nl.md', content: noNewlines }])
     const t = createReadTool(vault)
-    const result = await t.execute({ path: 'notes/no-nl.md' })
+    const result = await t.execute({ path: 'notes/no-nl.md' }) as any
     expect(result.content.length).toBe(2000)
     expect(result.truncated).toBe(true)
   })
