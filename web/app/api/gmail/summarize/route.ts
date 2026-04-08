@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { messageIds, personName, path } = await req.json()
   const safeName = typeof personName === 'string'
     ? personName.slice(0, 200)
-    : 'deze persoon'
+    : 'this person'
   if (!Array.isArray(messageIds) || messageIds.length === 0) {
     return NextResponse.json({ error: 'messageIds is required' }, { status: 400 })
   }
@@ -78,30 +78,30 @@ export async function POST(req: NextRequest) {
         {
           role: 'user',
           content: existingContext
-            ? `Je bent een assistent die helpt een persoonlijk kennisbeheersysteem bij te houden.
+            ? `You are an assistant helping to maintain a personal knowledge management system.
 
-Hieronder staat de bestaande context over ${safeName}, gevolgd door ${bodies.length} nieuwe e-mails. Schrijf één beknopte, samenhangende contextparagraaf in markdown die de bestaande context integreert met de nieuwe informatie. Focus op:
-- Wat is de aard van het contact?
-- Welke projecten of onderwerpen zijn besproken?
-- Relevante afspraken, acties of besluiten?
+Below is the existing context about ${safeName}, followed by ${bodies.length} new emails. Write one concise, coherent context paragraph in markdown that integrates the existing context with the new information. Focus on:
+- What is the nature of the contact?
+- What projects or topics have been discussed?
+- Relevant agreements, action items, or decisions?
 
-Schrijf geen opsomming van emails. Schrijf een vloeiende paragraaf, maximaal 150 woorden. Begin direct met de inhoud (geen "Hier is de samenvatting:" of vergelijkbaar).
+Do not list individual emails. Write a flowing paragraph, maximum 150 words. Start directly with the content (no "Here is the summary:" or similar).
 
-Bestaande context:
+Existing context:
 ${existingContext}
 
-Nieuwe e-mails:
+New emails:
 ${emailContent}`
-            : `Je bent een assistent die helpt een persoonlijk kennisbeheersysteem bij te houden.
+            : `You are an assistant helping to maintain a personal knowledge management system.
 
-Hieronder staan ${bodies.length} e-mails die gerelateerd zijn aan ${safeName}. Schrijf een beknopte contextparagraaf in markdown die toegevoegd kan worden aan de notitie over deze persoon. Focus op:
-- Wat is de aard van het contact?
-- Welke projecten of onderwerpen zijn besproken?
-- Relevante afspraken, acties of besluiten?
+Below are ${bodies.length} emails related to ${safeName}. Write a concise context paragraph in markdown that can be added to the note about this person. Focus on:
+- What is the nature of the contact?
+- What projects or topics have been discussed?
+- Relevant agreements, action items, or decisions?
 
-Schrijf geen opsomming van emails. Schrijf een vloeiende paragraaf, maximaal 150 woorden. Begin direct met de inhoud (geen "Hier is de samenvatting:" of vergelijkbaar).
+Do not list individual emails. Write a flowing paragraph, maximum 150 words. Start directly with the content (no "Here is the summary:" or similar).
 
-E-mails:
+Emails:
 ${emailContent}`,
         },
       ],
