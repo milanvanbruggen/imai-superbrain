@@ -235,11 +235,11 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   </svg>
                 </button>
               )}
-              {note?.type === 'person' && (
+              {note?.type === 'person' && (session as any)?.googleEnabled && (
                 (session as any)?.googleConnected ? (
                   <button
                     onClick={() => setGmailOpen(true)}
-                    title="Zoek emails in Gmail"
+                    title="Search emails in Gmail"
                     className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

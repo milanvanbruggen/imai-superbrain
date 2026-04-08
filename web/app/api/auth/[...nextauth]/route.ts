@@ -1,5 +1,5 @@
 import NextAuth from 'next-auth'
-import type { NextAuthOptions } from 'next-auth'
+import type { NextAuthOptions, Provider } from 'next-auth'
 import GitHubProvider from 'next-auth/providers/github'
 import GoogleProvider from 'next-auth/providers/google'
 import { refreshGoogleToken } from '@/lib/google-token-refresh'
@@ -8,24 +8,31 @@ const ALLOWED_GITHUB_USER_ID = process.env.ALLOWED_GITHUB_USER_ID ?? ''
 // Refresh 60 seconds before actual expiry to avoid mid-flight failures
 const REFRESH_BUFFER_SECONDS = 60
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID ?? '',
-      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
-    }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      authorization: {
-        params: {
-          scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
-          prompt: 'consent',
-          access_type: 'offline',
-        },
+const googleEnabled = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
+
+const providers: Provider[] = [
+  GitHubProvider({
+    clientId: process.env.GITHUB_CLIENT_ID ?? '',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET ?? '',
+  }),
+]
+
+if (googleEnabled) {
+  providers.push(GoogleProvider({
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    authorization: {
+      params: {
+        scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
+        prompt: 'consent',
+        access_type: 'offline',
       },
-    }),
-  ],
+    },
+  }))
+}
+
+export const authOptions: NextAuthOptions = {
+  providers,
   callbacks: {
     async signIn({ account, profile }) {
       // GitHub: only allow Milan's account
@@ -61,8 +68,9 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       // ONLY expose connection status — never the token itself
+      ;(session as any).googleEnabled = googleEnabled
       ;(session as any).googleConnected =
-        !!token.google_access_token && token.google_error !== 'RefreshTokenError'
+        googleEnabled && !!token.google_access_token && token.google_error !== 'RefreshTokenError'
       ;(session as any).googleError = token.google_error ?? null
       return session
     },

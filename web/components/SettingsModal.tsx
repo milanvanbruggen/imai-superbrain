@@ -353,9 +353,9 @@ export function SettingsModal({ onClose }: Props) {
               </div>
             </div>
 
-            {/* Integraties */}
-            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
-              <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Integraties</span>
+            {/* Integrations — only shown when Google OAuth is configured */}
+            {(session as any)?.googleEnabled && <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+              <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Integrations</span>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export function SettingsModal({ onClose }: Props) {
                   <button onClick={() => signIn('google', { callbackUrl: window.location.origin })} className="underline cursor-pointer">Reconnect</button>
                 </p>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>
