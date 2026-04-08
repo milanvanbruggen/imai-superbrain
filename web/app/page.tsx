@@ -233,7 +233,7 @@ export default function BrainPage() {
     loadGraph()
     fetch('/api/vault/config')
       .then(r => r.json().catch(() => null))
-      .then(c => { if (c?.owner && c?.repo) setHasGitHub(true) })
+      .then(c => { if (c?.remote?.provider === 'github') setHasGitHub(true) })
       .catch(() => {})
   }, [])
 

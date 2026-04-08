@@ -3,7 +3,18 @@ import { useEffect, useState } from 'react'
 import { useSession, signIn, signOut } from 'next-auth/react'
 
 interface VaultConfig {
-  mode: 'local' | 'github' | 'unconfigured'
+  mode: 'local' | 'github' | 'gitlab' | 'unconfigured'
+  remote?: {
+    provider: 'github' | 'gitlab'
+    owner?: string
+    repo?: string
+    namespace?: string
+    project?: string
+    url?: string
+    branch?: string
+  } | null
+  local?: { path: string } | null
+  // Legacy fields (still returned by API for compat)
   vaultPath?: string | null
   owner?: string | null
   repo?: string | null
@@ -188,46 +199,34 @@ export function SettingsModal({ onClose }: Props) {
                 </div>
               )}
 
-              {/* GitHub repository — always read-only, configured via env vars */}
+              {/* Remote vault */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">GitHub repository</span>
-                  <span className="text-[10px] text-slate-400 dark:text-gray-600">via env vars</span>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                    {config.remote?.provider === 'gitlab' ? 'GitLab repository' : 'GitHub repository'}
+                  </span>
+                  <span className="text-[10px] text-slate-400 dark:text-gray-600">
+                    {config.configSource === 'file' ? 'via vault-config.json' : 'via VAULT_CONFIG'}
+                  </span>
                 </div>
                 <div className="space-y-0.5">
-                  {config.owner && config.repo ? (
+                  {config.remote ? (
                     <>
-                      <p className="text-xs text-slate-500 dark:text-gray-500 font-mono">{config.owner}/{config.repo}</p>
-                      <p className="text-xs text-slate-400 dark:text-gray-600">branch: {config.branch ?? 'main'}</p>
+                      <p className="text-xs text-slate-500 dark:text-gray-500 font-mono">
+                        {config.remote.provider === 'gitlab'
+                          ? `${config.remote.namespace}/${config.remote.project}`
+                          : `${config.remote.owner}/${config.remote.repo}`}
+                      </p>
+                      {config.remote.provider === 'gitlab' && config.remote.url && (
+                        <p className="text-xs text-slate-400 dark:text-gray-600">{config.remote.url}</p>
+                      )}
+                      <p className="text-xs text-slate-400 dark:text-gray-600">branch: {config.remote.branch ?? 'main'}</p>
                     </>
                   ) : (
-                    <p className="text-xs text-slate-400 dark:text-gray-600 italic">Not configured — set GITHUB_VAULT_OWNER and GITHUB_VAULT_REPO env vars</p>
+                    <p className="text-xs text-slate-400 dark:text-gray-600 italic">Not configured — set VAULT_CONFIG env var</p>
                   )}
                 </div>
               </div>
-
-              {/* Primary source — only on localhost when both configured */}
-              {!config.isServerless && config.vaultPath && config.owner && config.repo && (
-                <div className="space-y-1.5 pt-1 border-t border-slate-200 dark:border-gray-700">
-                  <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Primary source</span>
-                  <p className="text-xs text-slate-500 dark:text-gray-500">The vault the graph reads from when sync is off.</p>
-                  <div className="flex gap-1 p-0.5 bg-slate-200 dark:bg-gray-700 rounded-md">
-                    {(['local', 'github'] as const).map(m => (
-                      <button
-                        key={m}
-                        onClick={() => handleSetPrimary(m)}
-                        className={`flex-1 text-xs py-1.5 rounded font-medium transition-colors cursor-pointer ${
-                          config.mode === m
-                            ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm'
-                            : 'text-slate-500 dark:text-gray-400'
-                        }`}
-                      >
-                        {m === 'local' ? 'Local' : 'GitHub'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Auto-sync status */}
               <div className="space-y-2 pt-1 border-t border-slate-200 dark:border-gray-700">
