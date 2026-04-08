@@ -75,6 +75,16 @@ describe('parseNote', () => {
     const note = parseNote('notes/foo.md', '---\ntype: ""\n---\n')
     expect(note.type).toBe('note')
   })
+
+  it('falls back to note when type is whitespace only', () => {
+    const note = parseNote('notes/foo.md', '---\ntype: "   "\n---\n')
+    expect(note.type).toBe('note')
+  })
+
+  it('falls back to note when type is a non-string YAML value', () => {
+    const note = parseNote('notes/foo.md', '---\ntype: 42\n---\n')
+    expect(note.type).toBe('note')
+  })
 })
 
 describe('resolveWikilink', () => {

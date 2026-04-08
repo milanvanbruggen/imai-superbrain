@@ -38,7 +38,7 @@ export function parseNote(path: string, raw: string): VaultNote {
     path,
     stem,
     title: data.title ?? stemToTitle(stem),
-    type: systemType(path) ?? (typeof data.type === 'string' && data.type.trim() ? data.type : 'note'),
+    type: systemType(path) ?? (typeof data.type === 'string' && data.type.trim() ? data.type.trim() : 'note'),
     tags: data.tags ?? [],
     date: data.date instanceof Date
       ? data.date.toISOString().slice(0, 10)
