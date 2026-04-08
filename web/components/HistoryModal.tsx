@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { CommitEntry } from '@/lib/vault-history'
 
 interface Props {
@@ -21,21 +21,54 @@ function formatRelativeTime(isoString: string | null): string {
 export function HistoryModal({ onClose, onRestored }: Props) {
   const [commits, setCommits] = useState<CommitEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [page, setPage] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const [confirmingSha, setConfirmingSha] = useState<string | null>(null)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  async function fetchPage(p: number) {
+    const res = await fetch(`/api/vault/history?page=${p}`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
+    return data.commits as CommitEntry[]
+  }
 
   useEffect(() => {
-    fetch('/api/vault/history')
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error)
-        setCommits(data.commits)
+    fetchPage(1)
+      .then(items => {
+        setCommits(items)
+        setHasMore(items.length === 50)
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!hasMore || loading) return
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(entries => {
+      if (!entries[0].isIntersecting || loadingMore) return
+      const nextPage = page + 1
+      setLoadingMore(true)
+      fetchPage(nextPage)
+        .then(items => {
+          setCommits(prev => [...prev, ...items])
+          setPage(nextPage)
+          setHasMore(items.length === 50)
+        })
+        .catch(() => {})
+        .finally(() => setLoadingMore(false))
+    }, { threshold: 1.0 })
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, loading, loadingMore, page])
 
   async function handleRestore(sha: string) {
     setRestoring(true)
@@ -92,7 +125,7 @@ export function HistoryModal({ onClose, onRestored }: Props) {
         ) : error ? (
           <p className="text-xs text-red-500 py-4">{error}</p>
         ) : (
-          <div className="overflow-y-auto flex-1 -mx-2 px-2 space-y-1">
+          <div className="overflow-y-auto flex-1 -mx-2 px-2 space-y-1" style={{ overflowAnchor: 'none' }}>
             {commits.map(commit => (
               <div key={commit.sha} className="rounded-lg border border-slate-100 dark:border-gray-800 bg-slate-50 dark:bg-gray-800/50 px-3 py-2.5">
                 {confirmingSha === commit.sha ? (
@@ -133,6 +166,13 @@ export function HistoryModal({ onClose, onRestored }: Props) {
                 )}
               </div>
             ))}
+            {hasMore && <div ref={sentinelRef} className="py-1" />}
+            {loadingMore && (
+              <div className="flex items-center justify-center gap-2 py-3 text-xs text-slate-400">
+                <div className="w-3 h-3 rounded-full border-2 border-teal-500 border-t-transparent animate-spin" />
+                Loading more...
+              </div>
+            )}
           </div>
         )}
       </div>

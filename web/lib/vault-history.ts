@@ -18,9 +18,9 @@ const ghHeaders = (pat: string) => ({
   'X-GitHub-Api-Version': '2022-11-28',
 })
 
-export async function listCommits(creds: GitHubCreds, limit = 50): Promise<CommitEntry[]> {
+export async function listCommits(creds: GitHubCreds, limit = 50, page = 1): Promise<CommitEntry[]> {
   const base = `https://api.github.com/repos/${creds.owner}/${creds.repo}`
-  const res = await fetch(`${base}/commits?sha=${creds.branch ?? 'main'}&per_page=${limit}`, {
+  const res = await fetch(`${base}/commits?sha=${creds.branch ?? 'main'}&per_page=${limit}&page=${page}`, {
     headers: ghHeaders(creds.pat),
   })
   if (!res.ok) throw new Error(`GitHub commits failed: ${res.status}`)
