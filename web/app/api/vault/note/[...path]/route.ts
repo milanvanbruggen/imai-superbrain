@@ -32,7 +32,7 @@ export function applyRemoveRelation(raw: string, target: string): string {
   const { data, content } = matter(raw)
   if (Array.isArray(data.relations)) {
     data.relations = (data.relations as any[]).filter(
-      (r: any) => (r.target as string).replace(/^\[\[|\]\]$/g, '') !== target
+      (r: any) => !(typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '') === target)
     )
     if (data.relations.length === 0) delete data.relations
   }

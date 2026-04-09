@@ -84,4 +84,11 @@ Body.
     expect(result).toContain('Body.')
     expect(result).not.toContain('Missing')
   })
+
+  it('does not throw when relations array contains an entry with a non-string target', () => {
+    const raw = '---\ntitle: Test\nrelations:\n  - target: null\n    type: works_with\n  - target: \'[[NoteA]]\'\n    type: references\n---\n\nBody.'
+    expect(() => applyRemoveRelation(raw, 'NoteA')).not.toThrow()
+    const result = applyRemoveRelation(raw, 'NoteA')
+    expect(result).not.toContain('NoteA')
+  })
 })
