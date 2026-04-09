@@ -4,7 +4,6 @@ import matter from 'gray-matter'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
-import { addToManagedBlock, removeFromManagedBlock } from '@/lib/vault-parser'
 
 export function applySetType(raw: string, type: string): string {
   const { data, content } = matter(raw)
@@ -14,30 +13,28 @@ export function applySetType(raw: string, type: string): string {
 
 export function applyAddRelation(raw: string, target: string, relationType: string | null): string {
   const { data, content } = matter(raw)
-  if (relationType) {
-    const relations: any[] = Array.isArray(data.relations) ? data.relations : []
-    const alreadyPresent = relations.some(
-      (r: any) => typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '') === target
-    )
-    if (!alreadyPresent) {
-      relations.push({ target: `[[${target}]]`, type: relationType })
-      data.relations = relations
-    }
+  const relations: any[] = Array.isArray(data.relations) ? data.relations : []
+  const alreadyPresent = relations.some(
+    (r: any) => typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '').toLowerCase() === target.toLowerCase()
+  )
+  if (!alreadyPresent) {
+    const entry: any = { target: `[[${target}]]` }
+    if (relationType) entry.type = relationType
+    relations.push(entry)
+    data.relations = relations
   }
-  const updatedContent = addToManagedBlock(content, target)
-  return matter.stringify(updatedContent, data)
+  return matter.stringify(content, data)
 }
 
 export function applyRemoveRelation(raw: string, target: string): string {
   const { data, content } = matter(raw)
   if (Array.isArray(data.relations)) {
     data.relations = (data.relations as any[]).filter(
-      (r: any) => !(typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '') === target)
+      (r: any) => !(typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '').toLowerCase() === target.toLowerCase())
     )
     if (data.relations.length === 0) delete data.relations
   }
-  const updatedContent = removeFromManagedBlock(content, target)
-  return matter.stringify(updatedContent, data)
+  return matter.stringify(content, data)
 }
 
 export async function GET(

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import matter from 'gray-matter'
 import { applySetType, applyAddRelation, applyRemoveRelation } from '@/app/api/vault/note/[...path]/route'
 
 describe('applySetType', () => {
@@ -19,76 +20,83 @@ describe('applySetType', () => {
 })
 
 describe('applyAddRelation', () => {
-  it('adds typed relation to frontmatter and managed block', () => {
+  it('adds typed relation to frontmatter', () => {
     const raw = '---\ntitle: Test\ntype: person\n---\n\nBody.'
     const result = applyAddRelation(raw, 'Superbrain', 'works_with')
-    expect(result).toContain('Superbrain')
-    expect(result).toContain('works_with')
-    expect(result).toContain('<!-- superbrain:related -->')
-    expect(result).toContain('[[Superbrain]]')
+    const { data } = matter(result)
+    expect(data.relations).toHaveLength(1)
+    expect(data.relations[0].target).toBe('[[Superbrain]]')
+    expect(data.relations[0].type).toBe('works_with')
+    expect(result).not.toContain('superbrain:related')
     expect(result).toContain('Body.')
   })
 
-  it('adds untyped link only to managed block, not frontmatter relations', () => {
+  it('adds untyped link to frontmatter without type field', () => {
     const raw = '---\ntitle: Test\n---\n\nBody.'
     const result = applyAddRelation(raw, 'Superbrain', null)
-    expect(result).not.toContain('relations:')
-    expect(result).toContain('[[Superbrain]]')
-    expect(result).toContain('<!-- superbrain:related -->')
+    const { data } = matter(result)
+    expect(data.relations).toHaveLength(1)
+    expect(data.relations[0].target).toBe('[[Superbrain]]')
+    expect(data.relations[0].type).toBeUndefined()
+    expect(result).not.toContain('superbrain:related')
   })
 
-  it('does not duplicate typed relation if target already in relations', () => {
+  it('does not duplicate if target already in relations', () => {
     const raw = "---\ntitle: Test\nrelations:\n  - target: '[[Superbrain]]'\n    type: works_with\n---\n\nBody."
     const result = applyAddRelation(raw, 'Superbrain', 'part_of')
-    expect(result.match(/target:/g)?.length).toBe(1)
+    const { data } = matter(result)
+    expect(data.relations).toHaveLength(1)
   })
 
-  it('does not add duplicate wikilink to managed block when called twice for same target', () => {
+  it('appends second distinct relation to existing non-empty relations array', () => {
+    const raw = "---\ntitle: Test\nrelations:\n  - target: '[[NoteA]]'\n    type: works_with\n---\n\nBody."
+    const result = applyAddRelation(raw, 'NoteB', 'part_of')
+    const { data } = matter(result)
+    expect(data.relations).toHaveLength(2)
+    expect(data.relations[1].target).toBe('[[NoteB]]')
+    expect(data.relations[1].type).toBe('part_of')
+  })
+
+  it('does not duplicate when called twice for same target', () => {
     const raw = '---\ntitle: Test\n---\n\nBody.'
     const afterFirst = applyAddRelation(raw, 'Superbrain', null)
     const afterSecond = applyAddRelation(afterFirst, 'Superbrain', null)
-    expect(afterSecond.match(/\[\[Superbrain\]\]/g)?.length).toBe(1)
+    const { data } = matter(afterSecond)
+    expect(data.relations).toHaveLength(1)
   })
 })
 
 describe('applyRemoveRelation', () => {
-  it('removes typed relation from frontmatter and body block', () => {
-    const raw = `---
-title: Test
-relations:
-  - target: '[[Superbrain]]'
-    type: works_with
----
-
-Body.
-<!-- superbrain:related -->
-[[Superbrain]]
-<!-- /superbrain:related -->`
+  it('removes typed relation from frontmatter', () => {
+    const raw = "---\ntitle: Test\nrelations:\n  - target: '[[Superbrain]]'\n    type: works_with\n---\n\nBody."
     const result = applyRemoveRelation(raw, 'Superbrain')
+    const { data } = matter(result)
+    expect(data.relations).toBeUndefined()
+    expect(result).toContain('Body.')
     expect(result).not.toContain('Superbrain')
-    expect(result).not.toContain('relations:')
-    expect(result).not.toContain('superbrain:related')
   })
 
-  it('removes untyped managed link from body block only', () => {
-    const raw = '---\ntitle: Test\n---\n\nBody.\n<!-- superbrain:related -->\n[[NoteA]]\n<!-- /superbrain:related -->'
+  it('removes untyped relation from frontmatter', () => {
+    const raw = "---\ntitle: Test\nrelations:\n  - target: '[[NoteA]]'\n---\n\nBody."
     const result = applyRemoveRelation(raw, 'NoteA')
+    const { data } = matter(result)
+    expect(data.relations).toBeUndefined()
     expect(result).not.toContain('NoteA')
-    expect(result).not.toContain('superbrain:related')
     expect(result).toContain('Body.')
   })
 
-  it('is a no-op when target not found anywhere', () => {
+  it('is a no-op when target not in relations', () => {
     const raw = '---\ntitle: Test\n---\n\nBody.'
     const result = applyRemoveRelation(raw, 'Missing')
     expect(result).toContain('Body.')
     expect(result).not.toContain('Missing')
   })
 
-  it('does not throw when relations array contains an entry with a non-string target', () => {
-    const raw = '---\ntitle: Test\nrelations:\n  - target: null\n    type: works_with\n  - target: \'[[NoteA]]\'\n    type: references\n---\n\nBody.'
+  it('does not throw when relations array contains a non-string target', () => {
+    const raw = "---\ntitle: Test\nrelations:\n  - target: null\n    type: works_with\n  - target: '[[NoteA]]'\n    type: references\n---\n\nBody."
     expect(() => applyRemoveRelation(raw, 'NoteA')).not.toThrow()
-    const result = applyRemoveRelation(raw, 'NoteA')
-    expect(result).not.toContain('NoteA')
+    const { data } = matter(applyRemoveRelation(raw, 'NoteA'))
+    expect(data.relations).toHaveLength(1)
+    expect(data.relations[0].target).toBeNull()
   })
 })
