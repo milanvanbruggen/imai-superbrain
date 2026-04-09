@@ -453,7 +453,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                           </li>
                         )
                       })}
-{organicLinks.map(stem => {
+                      {organicLinks.map(stem => {
                         const targetId = stem.toLowerCase()
                         const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
                         return (
