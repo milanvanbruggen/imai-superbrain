@@ -215,15 +215,12 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const incoming = allEdges.filter(e => e.target === node?.id)
   const nodeById = Object.fromEntries(allNodes.map(n => [n.id, n]))
   const relationTargets = new Set(note ? note.relations.map(r => r.target.toLowerCase()) : [])
-  const managedLower = new Set(note ? note.managedLinks.map(s => s.toLowerCase()) : [])
-  const untypedManaged = note ? note.managedLinks.filter(s => !relationTargets.has(s.toLowerCase())) : []
-  const organicLinks = note ? note.wikilinks.filter(s => !managedLower.has(s.toLowerCase()) && !relationTargets.has(s.toLowerCase())) : []
-  const linkedStems = new Set([...Array.from(relationTargets), ...Array.from(managedLower)])
+  const organicLinks = note ? note.wikilinks.filter(s => !relationTargets.has(s.toLowerCase())) : []
   const pickerTypes = [...new Set(allNodes.filter(n => n.id !== node?.id).map(n => n.type))].sort()
   const pickerNotes = allNodes.filter(n =>
     n.type === pickerType &&
     n.id !== node?.id &&
-    !linkedStems.has(n.id)
+    !relationTargets.has(n.id)
   )
   return (
     <aside
@@ -433,7 +430,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                       + Toevoegen
                     </button>
                   </div>
-                  {(note.relations.length > 0 || untypedManaged.length > 0 || organicLinks.length > 0) && (
+                  {(note.relations.length > 0 || organicLinks.length > 0) && (
                     <ul className="space-y-0.5">
                       {note.relations.map(rel => {
                         const targetId = rel.target.toLowerCase()
@@ -444,7 +441,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                             <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
                               {nodeById[targetId]?.title ?? rel.target}
                             </button>
-                            <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>
+                            {rel.type && <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>}
                             <button
                               onClick={() => handleRemoveRelation(rel.target)}
                               disabled={removingLink !== null}
@@ -456,27 +453,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                           </li>
                         )
                       })}
-                      {untypedManaged.map(stem => {
-                        const targetId = stem.toLowerCase()
-                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
-                        return (
-                          <li key={`managed-${stem}`} className="flex items-center gap-2 py-0.5 group">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
-                              {nodeById[targetId]?.title ?? stem}
-                            </button>
-                            <button
-                              onClick={() => handleRemoveRelation(stem)}
-                              disabled={removingLink !== null}
-                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
-                              title="Remove link"
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                          </li>
-                        )
-                      })}
-                      {organicLinks.map(stem => {
+{organicLinks.map(stem => {
                         const targetId = stem.toLowerCase()
                         const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
                         return (
