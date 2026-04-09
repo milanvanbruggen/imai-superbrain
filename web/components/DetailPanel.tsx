@@ -63,10 +63,12 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const [pickerTarget, setPickerTarget] = useState('')
   const [pickerRelationType, setPickerRelationType] = useState('')
   const [addingLink, setAddingLink] = useState(false)
+  const [confirmRemoveTarget, setConfirmRemoveTarget] = useState<string | null>(null)
 
   useEffect(() => {
     setEditing(false)
     setConfirmDelete(false)
+    setConfirmRemoveTarget(null)
     setRenaming(false)
     setTypePickerOpen(false)
     setSettingType(false)
@@ -442,14 +444,32 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                               {nodeById[targetId]?.title ?? rel.target}
                             </button>
                             {rel.type && <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>}
-                            <button
-                              onClick={() => handleRemoveRelation(rel.target)}
-                              disabled={removingLink !== null}
-                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
-                              title="Remove link"
-                            >
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
+                            {confirmRemoveTarget === rel.target ? (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => { handleRemoveRelation(rel.target); setConfirmRemoveTarget(null) }}
+                                  disabled={removingLink !== null}
+                                  className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                  {removingLink === rel.target ? '…' : 'Confirm'}
+                                </button>
+                                <button
+                                  onClick={() => setConfirmRemoveTarget(null)}
+                                  className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmRemoveTarget(rel.target)}
+                                disabled={removingLink !== null}
+                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
+                                title="Remove link"
+                              >
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                              </button>
+                            )}
                           </li>
                         )
                       })}
