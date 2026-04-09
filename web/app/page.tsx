@@ -584,6 +584,8 @@ export default function BrainPage() {
           collapsed={panelCollapsed}
           onToggleCollapse={togglePanel}
           onOpenSettings={() => setShowSettings(true)}
+          noteTypes={noteTypes}
+          typeColors={typeColors}
         />
       </div>
 
