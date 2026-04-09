@@ -57,6 +57,12 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const [gmailOpen, setGmailOpen] = useState(false)
   const [typePickerOpen, setTypePickerOpen] = useState(false)
   const [settingType, setSettingType] = useState(false)
+  const [removingLink, setRemovingLink] = useState<string | null>(null)
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false)
+  const [pickerType, setPickerType] = useState('')
+  const [pickerTarget, setPickerTarget] = useState('')
+  const [pickerRelationType, setPickerRelationType] = useState('')
+  const [addingLink, setAddingLink] = useState(false)
 
   useEffect(() => {
     setEditing(false)
@@ -64,6 +70,10 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
     setRenaming(false)
     setTypePickerOpen(false)
     setSettingType(false)
+    setLinkPickerOpen(false)
+    setPickerType('')
+    setPickerTarget('')
+    setPickerRelationType('')
   }, [note?.path])
 
   useEffect(() => {
@@ -125,6 +135,45 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
     }
   }
 
+  async function handleRemoveRelation(target: string) {
+    if (!note || removingLink) return
+    setRemovingLink(target)
+    try {
+      const res = await fetch(`/api/vault/note/${note.path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'remove-relation', target }),
+      })
+      if (res.ok) onNoteUpdated()
+    } finally {
+      setRemovingLink(null)
+    }
+  }
+
+  async function handleAddRelation() {
+    if (!note || !pickerTarget || addingLink) return
+    setAddingLink(true)
+    try {
+      const res = await fetch(`/api/vault/note/${note.path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'add-relation',
+          target: pickerTarget,
+          relationType: pickerRelationType || null,
+        }),
+      })
+      if (res.ok) {
+        onNoteUpdated()
+        setLinkPickerOpen(false)
+        setPickerTarget('')
+        setPickerRelationType('')
+      }
+    } finally {
+      setAddingLink(false)
+    }
+  }
+
   async function handleDelete() {
     if (!note) return
     setDeleting(true)
@@ -165,6 +214,17 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const outgoing = allEdges.filter(e => e.source === node?.id)
   const incoming = allEdges.filter(e => e.target === node?.id)
   const nodeById = Object.fromEntries(allNodes.map(n => [n.id, n]))
+  const relationTargets = new Set(note ? note.relations.map(r => r.target.toLowerCase()) : [])
+  const managedLower = new Set(note ? note.managedLinks.map(s => s.toLowerCase()) : [])
+  const untypedManaged = note ? note.managedLinks.filter(s => !relationTargets.has(s.toLowerCase())) : []
+  const organicLinks = note ? note.wikilinks.filter(s => !managedLower.has(s.toLowerCase()) && !relationTargets.has(s.toLowerCase())) : []
+  const linkedStems = new Set([...Array.from(relationTargets), ...Array.from(managedLower)])
+  const pickerTypes = [...new Set(allNodes.filter(n => n.id !== node?.id).map(n => n.type))].sort()
+  const pickerNotes = allNodes.filter(n =>
+    n.type === pickerType &&
+    n.id !== node?.id &&
+    !linkedStems.has(n.id)
+  )
   return (
     <aside
       style={{ width }}
@@ -359,51 +419,166 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                 )}
               </div>
 
-              {(outgoing.length > 0 || incoming.length > 0) && (
-                <div className="border-t border-slate-100 dark:border-gray-800/60 px-5 py-4 space-y-4">
-                  {outgoing.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-medium text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2">Links to</h3>
-                      <ul className="space-y-0.5">
-                        {outgoing.map(e => {
-                          const dot = TYPE_DOT[nodeById[e.target]?.type] ?? 'bg-slate-400'
-                          return (
-                            <li key={`${e.source}-${e.target}`}>
-                              <button onClick={() => onNavigate(e.target)} className="group flex items-center gap-2 w-full text-left py-1 cursor-pointer">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                                <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors truncate flex-1">
-                                  {nodeById[e.target]?.title ?? e.target}
-                                </span>
-                                {e.typed && <span className="text-xs text-orange-500/70 shrink-0">{e.relationType}</span>}
-                              </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
+              <div className="border-t border-slate-100 dark:border-gray-800/60 px-5 py-4 space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-medium text-slate-400 dark:text-gray-500 uppercase tracking-wider">Links to</h3>
+                    <button
+                      onClick={() => {
+                        setLinkPickerOpen(v => !v)
+                        if (pickerTypes.length > 0 && !pickerType) setPickerType(pickerTypes[0])
+                      }}
+                      className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+                    >
+                      + Toevoegen
+                    </button>
+                  </div>
+                  {(note.relations.length > 0 || untypedManaged.length > 0 || organicLinks.length > 0) && (
+                    <ul className="space-y-0.5">
+                      {note.relations.map(rel => {
+                        const targetId = rel.target.toLowerCase()
+                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
+                        return (
+                          <li key={`rel-${rel.target}`} className="flex items-center gap-2 py-0.5 group">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                              {nodeById[targetId]?.title ?? rel.target}
+                            </button>
+                            <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>
+                            <button
+                              onClick={() => handleRemoveRelation(rel.target)}
+                              disabled={removingLink !== null}
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
+                              title="Remove link"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </li>
+                        )
+                      })}
+                      {untypedManaged.map(stem => {
+                        const targetId = stem.toLowerCase()
+                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
+                        return (
+                          <li key={`managed-${stem}`} className="flex items-center gap-2 py-0.5 group">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                              {nodeById[targetId]?.title ?? stem}
+                            </button>
+                            <button
+                              onClick={() => handleRemoveRelation(stem)}
+                              disabled={removingLink !== null}
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
+                              title="Remove link"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </li>
+                        )
+                      })}
+                      {organicLinks.map(stem => {
+                        const targetId = stem.toLowerCase()
+                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
+                        return (
+                          <li key={`organic-${stem}`} className="flex items-center gap-2 py-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                              {nodeById[targetId]?.title ?? stem}
+                            </button>
+                            <span className="text-xs text-slate-300 dark:text-gray-600 shrink-0" title="In-text link">↩</span>
+                          </li>
+                        )
+                      })}
+                    </ul>
                   )}
-                  {incoming.length > 0 && (
-                    <div>
-                      <h3 className="text-xs font-medium text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2">Linked from</h3>
-                      <ul className="space-y-0.5">
-                        {incoming.map(e => {
-                          const dot = TYPE_DOT[nodeById[e.source]?.type] ?? 'bg-slate-400'
-                          return (
-                            <li key={`${e.source}-${e.target}`}>
-                              <button onClick={() => onNavigate(e.source)} className="group flex items-center gap-2 w-full text-left py-1 cursor-pointer">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                                <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors truncate">
-                                  {nodeById[e.source]?.title ?? e.source}
-                                </span>
-                              </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
+
+                  {linkPickerOpen && (
+                    <div className="mt-3 border border-slate-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      <div className="flex overflow-x-auto border-b border-slate-100 dark:border-gray-800">
+                        {pickerTypes.map(t => (
+                          <button
+                            key={t}
+                            onClick={() => { setPickerType(t); setPickerTarget('') }}
+                            className={`px-3 py-1.5 text-xs whitespace-nowrap cursor-pointer transition-colors ${
+                              pickerType === t
+                                ? 'text-teal-600 dark:text-teal-400 border-b-2 border-teal-500'
+                                : 'text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="max-h-36 overflow-y-auto">
+                        {pickerNotes.length === 0 ? (
+                          <p className="text-xs text-slate-400 dark:text-gray-600 px-3 py-2 italic">No notes of this type</p>
+                        ) : (
+                          pickerNotes.map(n => (
+                            <button
+                              key={n.id}
+                              onClick={() => setPickerTarget(pickerTarget === n.id ? '' : n.id)}
+                              className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer transition-colors ${
+                                pickerTarget === n.id
+                                  ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 font-medium'
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-gray-800'
+                              }`}
+                            >
+                              {n.title}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <div className="px-3 py-2 border-t border-slate-100 dark:border-gray-800 flex items-center gap-2">
+                        <select
+                          value={pickerRelationType}
+                          onChange={e => setPickerRelationType(e.target.value)}
+                          className="flex-1 text-xs bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded px-1.5 py-1 text-slate-600 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                        >
+                          <option value="">— geen relatietype —</option>
+                          <option value="works_with">works_with</option>
+                          <option value="part_of">part_of</option>
+                          <option value="inspired_by">inspired_by</option>
+                          <option value="references">references</option>
+                        </select>
+                        <button
+                          onClick={handleAddRelation}
+                          disabled={!pickerTarget || addingLink}
+                          className="px-2.5 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                        >
+                          {addingLink ? '…' : 'Toevoegen'}
+                        </button>
+                        <button
+                          onClick={() => setLinkPickerOpen(false)}
+                          className="text-xs text-slate-400 hover:text-gray-700 dark:hover:text-gray-300 cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
+
+                {incoming.length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-medium text-slate-400 dark:text-gray-500 uppercase tracking-wider mb-2">Linked from</h3>
+                    <ul className="space-y-0.5">
+                      {incoming.map(e => {
+                        const dot = TYPE_DOT[nodeById[e.source]?.type] ?? 'bg-slate-400'
+                        return (
+                          <li key={`${e.source}-${e.target}`}>
+                            <button onClick={() => onNavigate(e.source)} className="group flex items-center gap-2 w-full text-left py-1 cursor-pointer">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                              <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-gray-900 dark:group-hover:text-slate-200 transition-colors truncate">
+                                {nodeById[e.source]?.title ?? e.source}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </>
