@@ -153,7 +153,7 @@ export function NoteTypesModal({ onClose, onSaved, noteCounts }: Props) {
                           onClick={() => confirmDeleteType(type._key)}
                           className="px-2.5 py-1 text-xs bg-red-600 text-white rounded font-medium hover:bg-red-500 cursor-pointer"
                         >
-                          Delete
+                          Confirm
                         </button>
                         <button
                           onClick={cancelDelete}
