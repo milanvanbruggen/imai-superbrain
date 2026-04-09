@@ -149,6 +149,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
       if (res.ok) onNoteUpdated()
     } finally {
       setRemovingLink(null)
+      setConfirmRemoveTarget(null)
     }
   }
 
@@ -447,7 +448,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                             {confirmRemoveTarget === rel.target ? (
                               <div className="flex items-center gap-1 shrink-0">
                                 <button
-                                  onClick={() => { handleRemoveRelation(rel.target); setConfirmRemoveTarget(null) }}
+                                  onClick={() => handleRemoveRelation(rel.target)}
                                   disabled={removingLink !== null}
                                   className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
                                 >
