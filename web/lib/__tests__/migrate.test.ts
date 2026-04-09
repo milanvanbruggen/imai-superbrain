@@ -69,4 +69,19 @@ First paragraph.
     expect(changed).toBe(true)
     expect(updated).not.toContain('superbrain:related')
   })
+
+  it('strips empty managed block with no wikilinks', () => {
+    const raw = `---
+title: Test
+---
+
+Body.
+<!-- superbrain:related -->
+
+<!-- /superbrain:related -->`
+    const { updated, changed } = migrateNote(raw)
+    expect(changed).toBe(true)
+    expect(updated).not.toContain('superbrain:related')
+    expect(updated).toContain('Body.')
+  })
 })

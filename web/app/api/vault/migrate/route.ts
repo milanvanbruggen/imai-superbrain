@@ -4,6 +4,7 @@ import matter from 'gray-matter'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
+import type { TypedRelation } from '@/lib/types'
 
 export function migrateNote(raw: string): { updated: string; changed: boolean } {
   const normalized = raw.replace(/\r\n/g, '\n')
@@ -13,11 +14,11 @@ export function migrateNote(raw: string): { updated: string; changed: boolean } 
 
   const stems = [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1])
   const { data, content } = matter(normalized)
-  const relations: any[] = Array.isArray(data.relations) ? data.relations : []
+  const relations: TypedRelation[] = Array.isArray(data.relations) ? data.relations : []
 
   for (const stem of stems) {
     const alreadyPresent = relations.some(
-      (r: any) =>
+      (r: TypedRelation) =>
         typeof r.target === 'string' &&
         r.target.replace(/^\[\[|\]\]$/g, '').toLowerCase() === stem.toLowerCase()
     )
@@ -28,7 +29,7 @@ export function migrateNote(raw: string): { updated: string; changed: boolean } 
   if (relations.length > 0) data.relations = relations
 
   const cleanContent = content.replace(
-    /\n*<!-- superbrain:related -->\n[\s\S]*?\n<!-- \/superbrain:related -->/,
+    /\n{0,2}<!-- superbrain:related -->\n[\s\S]*?\n<!-- \/superbrain:related -->/,
     ''
   )
   return { updated: matter.stringify(cleanContent, data), changed: true }
