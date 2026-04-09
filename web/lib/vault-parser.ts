@@ -3,40 +3,6 @@ import { VaultNote, GraphNode, GraphEdge, VaultGraph, TypedRelation } from './ty
 
 const WIKILINK_RE = /\[\[([^\]]+)\]\]/g
 
-export function extractManagedBlock(content: string): string[] {
-  content = content.replace(/\r\n/g, '\n')
-  const match = content.match(/<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/)
-  if (!match) return []
-  return [...match[1].matchAll(/\[\[([^\]]+)\]\]/g)].map(m => m[1])
-}
-
-export function addToManagedBlock(content: string, stem: string): string {
-  content = content.replace(/\r\n/g, '\n')
-  const wikilink = `[[${stem}]]`
-  const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
-  const match = content.match(blockRe)
-  if (match) {
-    if (match[1].includes(wikilink)) return content
-    const updated = `${match[1]} ${wikilink}`.trim()
-    return content.replace(blockRe, `<!-- superbrain:related -->\n${updated}\n<!-- /superbrain:related -->`)
-  }
-  const block = `\n<!-- superbrain:related -->\n${wikilink}\n<!-- /superbrain:related -->`
-  return content.trimEnd() + block
-}
-
-export function removeFromManagedBlock(content: string, stem: string): string {
-  content = content.replace(/\r\n/g, '\n')
-  const wikilink = `[[${stem}]]`
-  const blockRe = /<!-- superbrain:related -->\n([\s\S]*?)\n<!-- \/superbrain:related -->/
-  const match = content.match(blockRe)
-  if (!match) return content
-  const updated = match[1].split(/\s+/).filter(p => p !== wikilink).join(' ').trim()
-  if (!updated) {
-    return content.replace(/\n*<!-- superbrain:related -->\n[\s\S]*?\n<!-- \/superbrain:related -->/, '')
-  }
-  return content.replace(blockRe, `<!-- superbrain:related -->\n${updated}\n<!-- /superbrain:related -->`)
-}
-
 const SYSTEM_PATHS = new Set(['CLAUDE.md', 'memory.md'])
 
 function systemType(path: string): 'system' | 'template' | null {
@@ -61,10 +27,12 @@ export function parseNote(path: string, raw: string): VaultNote {
     wikilinksInBody.add(match[1])
   }
 
-  const relations: TypedRelation[] = (data.relations ?? []).map((r: any) => ({
-    target: (r.target as string).replace(/^\[\[|\]\]$/g, ''),
-    type: r.type ?? 'references',
-  }))
+  const relations: TypedRelation[] = (data.relations ?? [])
+    .filter((r: any) => typeof r.target === 'string')
+    .map((r: any) => ({
+      target: r.target.replace(/^\[\[|\]\]$/g, ''),
+      type: typeof r.type === 'string' && r.type.trim() ? r.type.trim() : undefined,
+    }))
 
   const email = typeof data.email === 'string' ? data.email : undefined
 
@@ -83,7 +51,6 @@ export function parseNote(path: string, raw: string): VaultNote {
     content,
     relations,
     wikilinks: [...wikilinksInBody],
-    managedLinks: extractManagedBlock(content),
   }
 }
 
@@ -127,13 +94,13 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
   const edges: GraphEdge[] = []
   const typedPairs = new Set<string>()
 
-  // Add typed edges from frontmatter relations first
+  // Add edges from frontmatter relations first (typed if rel.type set, untyped otherwise)
   for (const note of parsed) {
     const sourceId = note.stem.toLowerCase()
     for (const rel of note.relations) {
       const targetId = resolveWikilink(rel.target, stemIndex)
       if (targetId) {
-        edges.push({ source: sourceId, target: targetId, typed: true, relationType: rel.type })
+        edges.push({ source: sourceId, target: targetId, typed: !!rel.type, relationType: rel.type })
         typedPairs.add(`${sourceId}→${targetId}`)
       }
     }

@@ -13,12 +13,11 @@ export interface VaultNote {
   content: string       // raw markdown (body only, no frontmatter)
   relations: TypedRelation[]
   wikilinks: string[]   // stems found in body [[...]]
-  managedLinks: string[]  // stems from <!-- superbrain:related --> block
 }
 
 export interface TypedRelation {
   target: string        // stem of target note
-  type: string          // works_with | part_of | inspired_by | references
+  type?: string         // works_with | part_of | inspired_by | references
 }
 
 export interface GraphNode {

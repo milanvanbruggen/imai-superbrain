@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseNote, buildGraph, resolveWikilink, extractManagedBlock, addToManagedBlock, removeFromManagedBlock } from '../vault-parser'
+import { parseNote, buildGraph, resolveWikilink } from '../vault-parser'
 
 const SAMPLE_NOTE = `---
 title: Alice Johnson
@@ -135,100 +135,52 @@ describe('buildGraph', () => {
   })
 })
 
-describe('extractManagedBlock', () => {
-  it('returns empty array when no block present', () => {
-    expect(extractManagedBlock('just some text')).toEqual([])
-  })
-
-  it('extracts stems from managed block', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[Note1]] [[Note2]]\n<!-- /superbrain:related -->'
-    expect(extractManagedBlock(content)).toEqual(['Note1', 'Note2'])
-  })
-
-  it('returns empty array for empty block', () => {
-    const content = '<!-- superbrain:related -->\n\n<!-- /superbrain:related -->'
-    expect(extractManagedBlock(content)).toEqual([])
-  })
-})
-
-describe('addToManagedBlock', () => {
-  it('creates block when none exists', () => {
-    const result = addToManagedBlock('some content', 'NewNote')
-    expect(result).toContain('<!-- superbrain:related -->')
-    expect(result).toContain('[[NewNote]]')
-    expect(result).toContain('<!-- /superbrain:related -->')
-    expect(result).toContain('some content')
-  })
-
-  it('appends to existing block', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[Existing]]\n<!-- /superbrain:related -->'
-    const result = addToManagedBlock(content, 'NewNote')
-    expect(result).toContain('[[Existing]]')
-    expect(result).toContain('[[NewNote]]')
-  })
-
-  it('does not duplicate if stem already present', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[Note]]\n<!-- /superbrain:related -->'
-    const result = addToManagedBlock(content, 'Note')
-    expect(result.match(/\[\[Note\]\]/g)?.length).toBe(1)
-  })
-})
-
-describe('removeFromManagedBlock', () => {
-  it('removes one stem from block with multiple', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[A]] [[B]]\n<!-- /superbrain:related -->'
-    const result = removeFromManagedBlock(content, 'A')
-    expect(result).not.toContain('[[A]]')
-    expect(result).toContain('[[B]]')
-  })
-
-  it('removes entire block when last stem is removed', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[Only]]\n<!-- /superbrain:related -->'
-    const result = removeFromManagedBlock(content, 'Only')
-    expect(result).not.toContain('superbrain:related')
-    expect(result.trim()).toBe('body')
-  })
-
-  it('returns content unchanged when stem not in block', () => {
-    const content = 'body\n<!-- superbrain:related -->\n[[A]]\n<!-- /superbrain:related -->'
-    expect(removeFromManagedBlock(content, 'Missing')).toBe(content)
-  })
-
-  it('returns content unchanged when no block exists', () => {
-    expect(removeFromManagedBlock('just some text', 'Note')).toBe('just some text')
-  })
-})
-
-describe('parseNote - managedLinks', () => {
-  it('returns empty array when no managed block', () => {
-    const note = parseNote('notes/foo.md', 'just text')
-    expect(note.managedLinks).toEqual([])
-  })
-
-  it('extracts managed links from body block', () => {
+describe('parseNote - untyped relation', () => {
+  it('parses relation without type field as type: undefined', () => {
     const raw = `---
 title: Test
+relations:
+  - target: '[[NoteA]]'
 ---
 
-Some body.
-<!-- superbrain:related -->
-[[NoteA]] [[NoteB]]
-<!-- /superbrain:related -->`
+Body.`
     const note = parseNote('notes/test.md', raw)
-    expect(note.managedLinks).toEqual(['NoteA', 'NoteB'])
+    expect(note.relations).toEqual([{ target: 'NoteA', type: undefined }])
   })
 
-  it('managed link stems also appear in wikilinks (graph uses them for edges)', () => {
-    const raw = `---
-title: Test
----
+})
 
-Some body.
-<!-- superbrain:related -->
-[[NoteA]]
-<!-- /superbrain:related -->`
-    const note = parseNote('notes/test.md', raw)
-    expect(note.managedLinks).toContain('NoteA')
-    expect(note.wikilinks).toContain('NoteA')
+describe('buildGraph - untyped frontmatter relation', () => {
+  it('creates typed:false edge for relation without type', () => {
+    const files: [string, string][] = [
+      ['people/Milan.md', "---\ntitle: Milan\ntype: person\nrelations:\n  - target: '[[Superbrain]]'\n---\n\n"],
+      ['projects/Superbrain.md', '---\ntitle: Superbrain\ntype: project\n---\n\n'],
+    ]
+    const graph = buildGraph(files)
+    const edge = graph.edges.find(e => e.source === 'milan' && e.target === 'superbrain')
+    expect(edge).toBeDefined()
+    expect(edge!.typed).toBe(false)
+    expect(edge!.relationType).toBeUndefined()
+  })
+
+  it('treats empty-string type as untyped (typed: false, relationType: undefined)', () => {
+    const files: [string, string][] = [
+      ['people/Milan.md', "---\nrelations:\n  - target: '[[Superbrain]]'\n    type: ''\n---\n"],
+      ['projects/Superbrain.md', '---\ntitle: Superbrain\n---\n'],
+    ]
+    const graph = buildGraph(files)
+    const edge = graph.edges.find(e => e.source === 'milan' && e.target === 'superbrain')
+    expect(edge!.typed).toBe(false)
+    expect(edge!.relationType).toBeUndefined()
+  })
+
+  it('suppresses body wikilink when untyped frontmatter relation covers same pair', () => {
+    const files: [string, string][] = [
+      ['people/Milan.md', "---\ntitle: Milan\ntype: person\nrelations:\n  - target: '[[Superbrain]]'\n---\n\nSee [[Superbrain]]."],
+      ['projects/Superbrain.md', '---\ntitle: Superbrain\ntype: project\n---\n\n'],
+    ]
+    const graph = buildGraph(files)
+    const edges = graph.edges.filter(e => e.source === 'milan' && e.target === 'superbrain')
+    expect(edges).toHaveLength(1)
   })
 })
