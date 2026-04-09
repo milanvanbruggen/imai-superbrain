@@ -19,6 +19,8 @@ interface Props {
   collapsed: boolean
   onToggleCollapse: () => void
   onOpenSettings?: () => void
+  noteTypes: { name: string; color: string }[]
+  typeColors: Record<string, string>
 }
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; dot: string }> = {
@@ -42,7 +44,7 @@ const TYPE_DOT: Record<string, string> = {
   system: 'bg-gray-400', template: 'bg-purple-400',
 }
 
-export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse, onOpenSettings }: Props) {
+export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse, onOpenSettings, noteTypes, typeColors }: Props) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -50,18 +52,43 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const [renameValue, setRenameValue] = useState('')
   const [saving, setSaving] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const typePickerRef = useRef<HTMLDivElement>(null)
   const { data: session } = useSession()
   const [gmailOpen, setGmailOpen] = useState(false)
+  const [typePickerOpen, setTypePickerOpen] = useState(false)
+  const [settingType, setSettingType] = useState(false)
 
   useEffect(() => {
     setEditing(false)
     setConfirmDelete(false)
     setRenaming(false)
+    setTypePickerOpen(false)
+    setSettingType(false)
   }, [note?.path])
 
   useEffect(() => {
     if (renaming) renameInputRef.current?.select()
   }, [renaming])
+
+  useEffect(() => {
+    if (!typePickerOpen) return
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setTypePickerOpen(false)
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [typePickerOpen])
+
+  useEffect(() => {
+    if (!typePickerOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (typePickerRef.current && !typePickerRef.current.contains(e.target as Node)) {
+        setTypePickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [typePickerOpen])
 
   async function handleRename() {
     if (!note || !renameValue.trim() || renameValue.trim() === note.title) {
@@ -79,6 +106,22 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
     } finally {
       setSaving(false)
       setRenaming(false)
+    }
+  }
+
+  async function handleSetType(type: string) {
+    if (!note || settingType) return
+    setSettingType(true)
+    try {
+      const res = await fetch(`/api/vault/note/${note.path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'set-type', type }),
+      })
+      if (res.ok) onNoteUpdated()
+    } finally {
+      setSettingType(false)
+      setTypePickerOpen(false)
     }
   }
 
@@ -122,8 +165,6 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const outgoing = allEdges.filter(e => e.source === node?.id)
   const incoming = allEdges.filter(e => e.target === node?.id)
   const nodeById = Object.fromEntries(allNodes.map(n => [n.id, n]))
-  const typeColors = note ? (TYPE_COLORS[note.type] ?? TYPE_COLORS.note) : TYPE_COLORS.note
-
   return (
     <aside
       style={{ width }}
@@ -183,10 +224,41 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                 </div>
               )}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium ${typeColors.bg} ${typeColors.text}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${typeColors.dot}`} />
-                  {note.type}
-                </span>
+                <div className="relative" ref={typePickerRef}>
+                  <button
+                    onClick={() => setTypePickerOpen(v => !v)}
+                    disabled={settingType}
+                    className="inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer transition-opacity disabled:opacity-60"
+                    style={{ backgroundColor: `${typeColors[note.type] ?? '#94a3b8'}22`, color: typeColors[note.type] ?? '#94a3b8' }} // 22 = ~8% alpha (8-digit hex)
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: typeColors[note.type] ?? '#94a3b8' }} />
+                    {note.type}
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                  {typePickerOpen && noteTypes.length > 0 && (
+                    <div className="absolute left-0 top-full mt-1 z-20 bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-[180px]">
+                      <div className="grid grid-cols-2 gap-1">
+                        {noteTypes.map(t => (
+                          <button
+                            key={t.name}
+                            onClick={() => handleSetType(t.name)}
+                            disabled={settingType}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs cursor-pointer transition-colors text-left w-full ${
+                              t.name === note.type
+                                ? 'bg-slate-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
+                                : 'hover:bg-slate-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                            {t.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {note.date && (
                   <span className="text-xs text-slate-400 dark:text-gray-600">{note.date}</span>
                 )}
