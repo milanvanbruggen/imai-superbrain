@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!path || !email) {
     return NextResponse.json({ error: 'path and email are required' }, { status: 400 })
   }
-  if (!path.endsWith('.md') || path.split('/').some(s => s === '..' || s === '.') || path.startsWith('/')) {
+  if (!path.endsWith('.md') || path.split('/').some((s: string) => s === '..' || s === '.') || path.startsWith('/')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

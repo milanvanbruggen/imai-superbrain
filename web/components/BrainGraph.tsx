@@ -35,6 +35,8 @@ export const DEFAULT_TYPE_COLORS: Record<string, string> = {
 const NODE_REL_SIZE = 3.5
 // Minimum distance between node centres — keeps the compact organic cluster readable
 const COLLIDE_DIST = 24
+// Above this node count the O(n²) collision force becomes too expensive per tick
+const LARGE_GRAPH_THRESHOLD = 80
 
 function truncate(s: string, max = 20): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
@@ -96,6 +98,7 @@ function createCollideForce(minDist: number) {
 }
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes, typeColors }: Props) {
+  const isLargeGraph = nodes.length > LARGE_GRAPH_THRESHOLD
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -150,7 +153,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
       fg.d3Force('charge')?.strength(-60).distanceMax(120)
       fg.d3Force('link')?.distance(45).strength(1.0)
-      fg.d3Force('collide', createCollideForce(COLLIDE_DIST))
+      // Skip O(n²) custom collision for large graphs — charge force provides enough separation
+      fg.d3Force('collide', isLargeGraph ? null : createCollideForce(COLLIDE_DIST))
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
@@ -172,7 +176,7 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
     applyForces()
     return () => clearTimeout(timer)
-  }, [size])
+  }, [size, isLargeGraph])
 
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
@@ -259,9 +263,10 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={0}
-          d3AlphaDecay={0.04}
-          d3VelocityDecay={0.6}
-          warmupTicks={100}
+          d3AlphaDecay={isLargeGraph ? 0.06 : 0.04}
+          d3VelocityDecay={isLargeGraph ? 0.65 : 0.6}
+          warmupTicks={isLargeGraph ? 200 : 100}
+          cooldownTicks={isLargeGraph ? 80 : 250}
           onNodeHover={(node: any) => {
             const id = node?.id ?? null
             setHoveredId(id)

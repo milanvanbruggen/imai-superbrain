@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'path and summary are required' }, { status: 400 })
   }
 
-  if (!path.endsWith('.md') || path.split('/').some(s => s === '..' || s === '.') || path.startsWith('/')) {
+  if (!path.endsWith('.md') || path.split('/').some((s: string) => s === '..' || s === '.') || path.startsWith('/')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
 
