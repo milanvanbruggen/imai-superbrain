@@ -77,10 +77,10 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
     notesByStem[note.stem.toLowerCase()] = note
   }
 
-  // stem → stem (lowercase): maps each note's canonical id to itself for O(1) wikilink resolution
+  // stem (lowercase) → path: O(1) wikilink resolution; path is unique even for duplicate stems
   const stemMap = new Map<string, string>()
   for (const note of parsed) {
-    stemMap.set(note.stem.toLowerCase(), note.stem.toLowerCase())
+    stemMap.set(note.stem.toLowerCase(), note.path)
   }
 
   // Count stems to detect duplicates
@@ -91,7 +91,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
   }
 
   const nodes: GraphNode[] = parsed.map(note => ({
-    id: note.stem.toLowerCase(),
+    id: note.path,
     path: note.path,
     title: note.title,
     type: note.type,
@@ -104,7 +104,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
 
   // Add edges from frontmatter relations first (typed if rel.type set, untyped otherwise)
   for (const note of parsed) {
-    const sourceId = note.stem.toLowerCase()
+    const sourceId = note.path
     for (const rel of note.relations) {
       const targetId = resolveWikilink(rel.target, stemMap)
       if (targetId) {
@@ -116,7 +116,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
 
   // Add untyped edges from body wikilinks (suppress if typed edge already covers same pair)
   for (const note of parsed) {
-    const sourceId = note.stem.toLowerCase()
+    const sourceId = note.path
     for (const link of note.wikilinks) {
       const targetId = resolveWikilink(link, stemMap)
       if (targetId && !typedPairs.has(`${sourceId}→${targetId}`)) {

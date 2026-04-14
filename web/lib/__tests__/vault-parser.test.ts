@@ -89,14 +89,14 @@ describe('parseNote', () => {
 
 describe('resolveWikilink', () => {
   const stemMap = new Map<string, string>([
-    ['alice johnson', 'alice johnson'],
-    ['superbrain', 'superbrain'],
-    ['ambient computing', 'ambient computing'],
+    ['alice johnson', 'people/Alice Johnson.md'],
+    ['superbrain', 'projects/Superbrain.md'],
+    ['ambient computing', 'ideas/ambient computing.md'],
   ])
 
   it('resolves case-insensitively', () => {
-    expect(resolveWikilink('Alice Johnson', stemMap)).toBe('alice johnson')
-    expect(resolveWikilink('ALICE JOHNSON', stemMap)).toBe('alice johnson')
+    expect(resolveWikilink('Alice Johnson', stemMap)).toBe('people/Alice Johnson.md')
+    expect(resolveWikilink('ALICE JOHNSON', stemMap)).toBe('people/Alice Johnson.md')
   })
 
   it('returns null for unresolved links', () => {
@@ -113,8 +113,8 @@ describe('buildGraph', () => {
   it('creates nodes for each note', () => {
     const graph = buildGraph(notes)
     expect(graph.nodes).toHaveLength(2)
-    expect(graph.nodes.map(n => n.id)).toContain('milan')
-    expect(graph.nodes.map(n => n.id)).toContain('superbrain')
+    expect(graph.nodes.map(n => n.id)).toContain('people/Milan.md')
+    expect(graph.nodes.map(n => n.id)).toContain('projects/Superbrain.md')
   })
 
   it('creates edges for wikilinks', () => {
@@ -128,7 +128,7 @@ describe('buildGraph', () => {
     // Superbrain has typed relation to Milan AND body wikilink to Milan
     // Only the typed edge should remain
     const superbrain_to_milan = graph.edges.filter(
-      e => e.source === 'superbrain' && e.target === 'milan'
+      e => e.source === 'projects/Superbrain.md' && e.target === 'people/Milan.md'
     )
     expect(superbrain_to_milan).toHaveLength(1)
     expect(superbrain_to_milan[0].typed).toBe(true)
@@ -174,7 +174,7 @@ describe('buildGraph — wikilink resolution performance', () => {
     ]
     const graph = buildGraph(files)
     expect(graph.edges).toHaveLength(1)
-    expect(graph.edges[0]).toMatchObject({ source: 'alice', target: 'bob' })
+    expect(graph.edges[0]).toMatchObject({ source: 'people/Alice.md', target: 'people/Bob.md' })
   })
 })
 
@@ -185,7 +185,7 @@ describe('buildGraph - untyped frontmatter relation', () => {
       ['projects/Superbrain.md', '---\ntitle: Superbrain\ntype: project\n---\n\n'],
     ]
     const graph = buildGraph(files)
-    const edge = graph.edges.find(e => e.source === 'milan' && e.target === 'superbrain')
+    const edge = graph.edges.find(e => e.source === 'people/Milan.md' && e.target === 'projects/Superbrain.md')
     expect(edge).toBeDefined()
     expect(edge!.typed).toBe(false)
     expect(edge!.relationType).toBeUndefined()
@@ -197,7 +197,7 @@ describe('buildGraph - untyped frontmatter relation', () => {
       ['projects/Superbrain.md', '---\ntitle: Superbrain\n---\n'],
     ]
     const graph = buildGraph(files)
-    const edge = graph.edges.find(e => e.source === 'milan' && e.target === 'superbrain')
+    const edge = graph.edges.find(e => e.source === 'people/Milan.md' && e.target === 'projects/Superbrain.md')
     expect(edge!.typed).toBe(false)
     expect(edge!.relationType).toBeUndefined()
   })
@@ -208,7 +208,7 @@ describe('buildGraph - untyped frontmatter relation', () => {
       ['projects/Superbrain.md', '---\ntitle: Superbrain\ntype: project\n---\n\n'],
     ]
     const graph = buildGraph(files)
-    const edges = graph.edges.filter(e => e.source === 'milan' && e.target === 'superbrain')
+    const edges = graph.edges.filter(e => e.source === 'people/Milan.md' && e.target === 'projects/Superbrain.md')
     expect(edges).toHaveLength(1)
   })
 })

@@ -288,7 +288,7 @@ export default function BrainPage() {
   }, [selectedId])
 
   const selectedNode = graph?.nodes.find(n => n.id === selectedId) ?? null
-  const selectedNote = selectedId && graph ? (graph.notesByStem[selectedId] ?? null) : null
+  const selectedNote = selectedId && graph ? (graph.notesByPath[selectedId] ?? null) : null
 
   const availableTypes = useMemo(() => {
     const fromGraph = graph ? graph.nodes.map(n => n.type) : []
