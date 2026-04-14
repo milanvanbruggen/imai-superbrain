@@ -82,7 +82,7 @@ describe('restoreToCommit', () => {
   it('throws when creating the new commit fails', async () => {
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ tree: { sha: 'tree' } }) })
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ object: { sha: 'head' } }) })
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({}) })
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 422, json: async () => ({}), text: async () => '' })
 
     await expect(restoreToCommit(creds, 'abc1234567890abcdef1234567890abcdef123456')).rejects.toThrow('422')
   })
