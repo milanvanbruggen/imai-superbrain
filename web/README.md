@@ -65,7 +65,7 @@ The app needs a Personal Access Token to read and write files in the vault repo.
 
 ```bash
 # Clone this repository
-git clone https://github.com/YOUR_USERNAME/mai-superbrain.git
+git clone https://github.com/milanvanbruggen/mai-superbrain.git
 cd mai-superbrain/web
 
 # Install dependencies

@@ -27,7 +27,7 @@ Notes live in a GitHub repository and are connected through `[[wikilinks]]`. Opt
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/mai-superbrain.git
+git clone https://github.com/milanvanbruggen/mai-superbrain.git
 cd mai-superbrain/web
 
 # Install dependencies
