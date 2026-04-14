@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'path and summary are required' }, { status: 400 })
   }
 
-  if (!path.endsWith('.md') || path.includes('..')) {
+  if (!path.endsWith('.md') || path.split('/').some(s => s === '..' || s === '.') || path.startsWith('/')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   const updatedContent = replaceEmailContext(content, summary)
 
-  const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
+  const stem = path.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? path
   try {
     await client.writeFile(path, updatedContent, sha, `brain: update [[${stem}]] with email context`)
   } catch (err: any) {

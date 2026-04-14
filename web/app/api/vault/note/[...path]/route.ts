@@ -66,7 +66,7 @@ export async function DELETE(
   const filePath = pathSegments.join('/')
   const { sha } = await req.json()
 
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '') ?? filePath
+  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
   const client = getVaultClient()
   try {
     await client.deleteFile(filePath, sha, `brain: delete [[${stem}]]`)
@@ -89,7 +89,7 @@ export async function PUT(
   const filePath = pathSegments.join('/')
   const { content, sha } = await req.json()
 
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '') ?? filePath
+  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
   const isNew = !sha
   const message = isNew ? `brain: create [[${stem}]]` : `brain: update [[${stem}]]`
 
@@ -117,7 +117,7 @@ export async function PATCH(
 
   const client = getVaultClient()
   const { content: raw, sha } = await client.readFile(filePath)
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '') ?? filePath
+  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
 
   let updated: string
   let message: string

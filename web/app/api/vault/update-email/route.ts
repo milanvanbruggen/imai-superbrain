@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   if (!path || !email) {
     return NextResponse.json({ error: 'path and email are required' }, { status: 400 })
   }
-  if (!path.endsWith('.md') || path.includes('..')) {
+  if (!path.endsWith('.md') || path.split('/').some(s => s === '..' || s === '.') || path.startsWith('/')) {
     return NextResponse.json({ error: 'Invalid path' }, { status: 400 })
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   const updated = spliceEmailIntoFrontmatter(content, email)
 
-  const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
+  const stem = path.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? path
   try {
     await client.writeFile(path, updated, sha, `brain: add email to [[${stem}]]`)
   } catch (err: any) {

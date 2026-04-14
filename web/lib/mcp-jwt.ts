@@ -8,6 +8,7 @@ export function getIssuer(): string {
 async function getSecret(): Promise<CryptoKey> {
   const secret = process.env.NEXTAUTH_SECRET
   if (!secret) throw new Error('NEXTAUTH_SECRET is not set')
+  if (secret.length < 32) throw new Error('NEXTAUTH_SECRET must be at least 32 characters (generate with: openssl rand -base64 32)')
   const keyBytes = new TextEncoder().encode(secret)
   return crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, [
     'sign',

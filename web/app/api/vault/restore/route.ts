@@ -18,6 +18,9 @@ export async function POST(req: NextRequest) {
   if (!sha || typeof sha !== 'string') {
     return NextResponse.json({ error: 'sha is required' }, { status: 400 })
   }
+  if (!/^[a-f0-9]{7,40}$/i.test(sha)) {
+    return NextResponse.json({ error: 'Invalid sha format' }, { status: 400 })
+  }
 
   const remote = settings.remote
   try {

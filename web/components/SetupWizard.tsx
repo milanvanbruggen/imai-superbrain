@@ -143,9 +143,16 @@ export function SetupWizard({ onComplete }: Props) {
         throw new Error(result.error ?? `Setup failed (HTTP ${res.status})`)
       }
       const result = await res.json()
-      if (result.vaultConfig) {
-        // Serverless: show copy block instead of completing
-        setVaultConfigJson(result.vaultConfig)
+      if (result.serverless) {
+        // Serverless: assemble VAULT_CONFIG client-side so the token never round-trips via the server response
+        let remote: Record<string, unknown>
+        if (data.provider === 'gitlab') {
+          remote = { provider: 'gitlab', token: data.gitlabToken, namespace: data.gitlabNamespace, project: data.gitlabProject, branch: data.gitlabBranch || 'main', ...(data.gitlabUrl ? { url: data.gitlabUrl } : {}) }
+        } else {
+          remote = { provider: 'github', token: data.githubToken, owner: data.githubOwner, repo: data.githubRepo, branch: data.githubBranch || 'main' }
+        }
+        const configForCopy: Record<string, unknown> = { remote, ...(data.vaultPath ? { local: { path: data.vaultPath } } : {}) }
+        setVaultConfigJson(JSON.stringify(configForCopy))
         setSaving(false)
         return
       }

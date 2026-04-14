@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'crypto'
 import { signToken, verifyToken, verifyPKCE } from '@/lib/mcp-jwt'
+
+function safeEqual(a: string, b: string): boolean {
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  } catch {
+    return false
+  }
+}
 
 export async function POST(req: Request) {
   // Parse form-encoded body (standard OAuth token request)
@@ -29,13 +38,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid_grant' }, { status: 400 })
   }
 
-  // Validate redirect_uri exact-match (RFC 6749 §4.1.3)
-  if (codePayload['redirect_uri'] !== redirectUri) {
+  // Validate redirect_uri exact-match (RFC 6749 §4.1.3) — timing-safe to prevent enumeration
+  if (!safeEqual(String(codePayload['redirect_uri'] ?? ''), redirectUri)) {
     return NextResponse.json({ error: 'invalid_grant' }, { status: 400 })
   }
 
-  // Validate client_id matches
-  if (codePayload['client_id'] !== clientId) {
+  // Validate client_id matches — timing-safe
+  if (!safeEqual(String(codePayload['client_id'] ?? ''), clientId)) {
     return NextResponse.json({ error: 'invalid_grant' }, { status: 400 })
   }
 

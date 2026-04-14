@@ -222,10 +222,9 @@ export async function POST(req: NextRequest) {
 
       invalidateCache()
 
-      // On Vercel: return the VAULT_CONFIG JSON for the user to copy
+      // On Vercel: signal the client to assemble VAULT_CONFIG locally (token stays client-side)
       if (isServerless()) {
-        const configForCopy = { remote, ...(vaultPath ? { local: { path: vaultPath } } : {}) }
-        return NextResponse.json({ ok: true, vaultConfig: JSON.stringify(configForCopy) })
+        return NextResponse.json({ ok: true, serverless: true })
       }
 
       return NextResponse.json({ ok: true })
