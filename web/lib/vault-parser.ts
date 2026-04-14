@@ -15,6 +15,10 @@ function stemToTitle(stem: string): string {
   return stem.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+function isRawRelation(r: unknown): r is { target: string; type?: unknown } {
+  return typeof r === 'object' && r !== null && typeof (r as Record<string, unknown>).target === 'string'
+}
+
 export function parseNote(path: string, raw: string): VaultNote {
   const { data, content } = matter(raw)
   const stem = path.split('/').pop()!.replace(/\.md$/, '')
@@ -27,12 +31,14 @@ export function parseNote(path: string, raw: string): VaultNote {
     wikilinksInBody.add(match[1])
   }
 
-  const relations: TypedRelation[] = (data.relations ?? [])
-    .filter((r: any) => typeof r.target === 'string')
-    .map((r: any) => ({
-      target: r.target.replace(/^\[\[|\]\]$/g, ''),
-      type: typeof r.type === 'string' && r.type.trim() ? r.type.trim() : undefined,
-    }))
+  const relations: TypedRelation[] = Array.isArray(data.relations)
+    ? data.relations
+        .filter(isRawRelation)
+        .map(r => ({
+          target: r.target.replace(/^\[\[|\]\]$/g, ''),
+          type: typeof r.type === 'string' && r.type.trim() ? r.type.trim() : undefined,
+        }))
+    : []
 
   const email = typeof data.email === 'string' ? data.email : undefined
 
@@ -56,11 +62,9 @@ export function parseNote(path: string, raw: string): VaultNote {
 
 export function resolveWikilink(
   link: string,
-  notes: { stem: string; path: string }[]
+  stemMap: Map<string, string>
 ): string | null {
-  const lower = link.toLowerCase()
-  const match = notes.find(n => n.stem.toLowerCase() === lower)
-  return match ? match.stem.toLowerCase() : null
+  return stemMap.get(link.toLowerCase()) ?? null
 }
 
 export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
@@ -73,7 +77,11 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
     notesByStem[note.stem.toLowerCase()] = note
   }
 
-  const stemIndex = parsed.map(n => ({ stem: n.stem.toLowerCase(), path: n.path }))
+  // stem → stem (lowercase): maps each note's canonical id to itself for O(1) wikilink resolution
+  const stemMap = new Map<string, string>()
+  for (const note of parsed) {
+    stemMap.set(note.stem.toLowerCase(), note.stem.toLowerCase())
+  }
 
   // Count stems to detect duplicates
   const stemCounts: Record<string, number> = {}
@@ -98,7 +106,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
   for (const note of parsed) {
     const sourceId = note.stem.toLowerCase()
     for (const rel of note.relations) {
-      const targetId = resolveWikilink(rel.target, stemIndex)
+      const targetId = resolveWikilink(rel.target, stemMap)
       if (targetId) {
         edges.push({ source: sourceId, target: targetId, typed: !!rel.type, relationType: rel.type })
         typedPairs.add(`${sourceId}→${targetId}`)
@@ -110,7 +118,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
   for (const note of parsed) {
     const sourceId = note.stem.toLowerCase()
     for (const link of note.wikilinks) {
-      const targetId = resolveWikilink(link, stemIndex)
+      const targetId = resolveWikilink(link, stemMap)
       if (targetId && !typedPairs.has(`${sourceId}→${targetId}`)) {
         edges.push({ source: sourceId, target: targetId, typed: false })
       }

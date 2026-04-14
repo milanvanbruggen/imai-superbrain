@@ -88,19 +88,19 @@ describe('parseNote', () => {
 })
 
 describe('resolveWikilink', () => {
-  const notes = [
-    { stem: 'alice johnson', path: 'people/Alice Johnson.md' },
-    { stem: 'superbrain', path: 'projects/Superbrain.md' },
-    { stem: 'ambient computing', path: 'ideas/Ambient Computing.md' },
-  ]
+  const stemMap = new Map<string, string>([
+    ['alice johnson', 'alice johnson'],
+    ['superbrain', 'superbrain'],
+    ['ambient computing', 'ambient computing'],
+  ])
 
   it('resolves case-insensitively', () => {
-    expect(resolveWikilink('Alice Johnson', notes)).toBe('alice johnson')
-    expect(resolveWikilink('ALICE JOHNSON', notes)).toBe('alice johnson')
+    expect(resolveWikilink('Alice Johnson', stemMap)).toBe('alice johnson')
+    expect(resolveWikilink('ALICE JOHNSON', stemMap)).toBe('alice johnson')
   })
 
   it('returns null for unresolved links', () => {
-    expect(resolveWikilink('Unknown Note', notes)).toBeNull()
+    expect(resolveWikilink('Unknown Note', stemMap)).toBeNull()
   })
 })
 
@@ -148,6 +148,34 @@ Body.`
     expect(note.relations).toEqual([{ target: 'NoteA', type: undefined }])
   })
 
+})
+
+describe('parseNote — relations edge cases', () => {
+  it('does not crash when relations is a string instead of array', () => {
+    const raw = `---\nrelations: "not an array"\n---\nContent`
+    expect(() => parseNote('notes/foo.md', raw)).not.toThrow()
+    const note = parseNote('notes/foo.md', raw)
+    expect(note.relations).toEqual([])
+  })
+
+  it('does not crash when relations is a number', () => {
+    const raw = `---\nrelations: 42\n---\nContent`
+    expect(() => parseNote('notes/foo.md', raw)).not.toThrow()
+    const note = parseNote('notes/foo.md', raw)
+    expect(note.relations).toEqual([])
+  })
+})
+
+describe('buildGraph — wikilink resolution performance', () => {
+  it('resolves wikilinks correctly with Map-based lookup', () => {
+    const files: [string, string][] = [
+      ['people/Alice.md', '---\ntitle: Alice\n---\nKnows [[Bob]]'],
+      ['people/Bob.md', '---\ntitle: Bob\n---\nContent'],
+    ]
+    const graph = buildGraph(files)
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.edges[0]).toMatchObject({ source: 'alice', target: 'bob' })
+  })
 })
 
 describe('buildGraph - untyped frontmatter relation', () => {
