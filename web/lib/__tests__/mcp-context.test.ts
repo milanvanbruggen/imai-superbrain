@@ -103,3 +103,50 @@ describe('getContextText', () => {
     expect(result).toContain('projects/foo.md — Foo Project')
   })
 })
+
+describe('loadNotes — cache reuse', () => {
+  it('uses graph cache when hash matches, skips file fetches', async () => {
+    vi.resetModules()
+    const mockTree = [{ path: 'notes/foo.md', sha: 'abc123' }]
+    const mockReadFile = vi.fn().mockResolvedValue({ content: 'content', sha: 'abc123' })
+
+    vi.doMock('@/lib/vault-client', () => ({
+      getVaultClient: () => ({
+        getMarkdownTree: vi.fn().mockResolvedValue(mockTree),
+        readFile: mockReadFile,
+      }),
+    }))
+    vi.doMock('@/lib/graph-cache', () => ({
+      getCachedGraph: vi.fn().mockReturnValue({
+        nodes: [{ path: 'notes/foo.md', title: 'Foo', type: 'note', tags: [] }],
+        notesByPath: {
+          'notes/foo.md': {
+            path: 'notes/foo.md',
+            title: 'Foo',
+            type: 'note',
+            tags: [],
+            content: 'cached content',
+            stem: 'foo',
+            relations: [],
+            wikilinks: [],
+            date: null,
+          },
+        },
+        notesByStem: {},
+        edges: [],
+        builtAt: Date.now(),
+      }),
+      computeVaultHash: vi.fn().mockReturnValue('hash-abc'),
+      setCachedGraph: vi.fn(),
+    }))
+    vi.doMock('@/lib/vault-parser', () => ({
+      buildGraph: vi.fn(),
+    }))
+
+    const { loadNotes } = await import('@/app/api/mcp/route')
+    const { noteMap } = await loadNotes()
+
+    expect(mockReadFile).not.toHaveBeenCalled()
+    expect(noteMap.get('notes/foo.md')?.content).toBe('cached content')
+  })
+})

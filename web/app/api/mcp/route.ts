@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod'
 import { getVaultClient, VaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
+import { getCachedGraph, computeVaultHash, setCachedGraph } from '@/lib/graph-cache'
 import { verifyToken } from '@/lib/mcp-jwt'
 import { getStemFromPath } from '@/lib/note-utils'
 
@@ -23,10 +24,29 @@ async function getAuthInfo(req: Request): Promise<{ token: string; clientId: str
 }
 
 // Build an in-memory note index from the vault for this request.
-// We rebuild per request because Vercel functions are stateless.
-async function loadNotes() {
+// Reuses the graph cache when the vault hash matches — avoids N+1 file fetches.
+export async function loadNotes() {
   const client = getVaultClient()
   const tree = await client.getMarkdownTree()
+  const vaultHash = computeVaultHash(tree)
+
+  // Reuse cached graph if vault hash matches — avoids N+1 file fetches
+  const cached = getCachedGraph(vaultHash)
+  if (cached) {
+    const noteMap = new Map<string, { path: string; title: string; type: string; tags: string[]; content: string }>()
+    for (const note of Object.values(cached.notesByPath)) {
+      noteMap.set(note.path, {
+        path: note.path,
+        title: note.title,
+        type: note.type,
+        tags: note.tags,
+        content: note.content,
+      })
+    }
+    return { noteMap, client }
+  }
+
+  // Cache miss — fetch all files and build graph
   const files = await Promise.all(
     tree.map(async f => {
       const { content } = await client.readFile(f.path)
@@ -34,6 +54,7 @@ async function loadNotes() {
     })
   )
   const graph = buildGraph(files)
+  setCachedGraph(graph, vaultHash)
 
   // Build a lookup map: path → { title, type, tags, content }
   const noteMap = new Map<string, { path: string; title: string; type: string; tags: string[]; content: string }>()
