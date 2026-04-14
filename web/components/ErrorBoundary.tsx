@@ -1,6 +1,6 @@
 'use client'
 
-import { Component, ReactNode } from 'react'
+import React, { Component, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
@@ -15,6 +15,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { error }
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    console.error('[ErrorBoundary] Caught error:', error, info.componentStack)
   }
 
   render() {
