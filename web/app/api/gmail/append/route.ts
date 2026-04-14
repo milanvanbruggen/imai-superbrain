@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
 import { EMAIL_CONTEXT_MARKER } from '@/lib/gmail-constants'
+import { getStemFromPath } from '@/lib/note-utils'
 
 // Exported for testing
 export function replaceEmailContext(content: string, summary: string): string {
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const updatedContent = replaceEmailContext(content, summary)
 
-  const stem = path.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? path
+  const stem = getStemFromPath(path)
   try {
     await client.writeFile(path, updatedContent, sha, `brain: update [[${stem}]] with email context`)
   } catch (err: any) {

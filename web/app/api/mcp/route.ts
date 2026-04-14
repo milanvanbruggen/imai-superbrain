@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getVaultClient, VaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
 import { verifyToken } from '@/lib/mcp-jwt'
+import { getStemFromPath } from '@/lib/note-utils'
 
 async function getAuthInfo(req: Request): Promise<{ token: string; clientId: string } | null> {
   const auth = req.headers.get('authorization') ?? ''
@@ -192,7 +193,7 @@ function createMcpServer() {
       } catch {
         // new file
       }
-      const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? path
+      const stem = getStemFromPath(path)
       await client.writeFile(path, content, sha, sha ? `brain: update [[${stem}]]` : `brain: create [[${stem}]]`)
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, path }) }],

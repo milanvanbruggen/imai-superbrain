@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
 import { invalidateCache } from '@/lib/graph-cache'
+import { getStemFromPath } from '@/lib/note-utils'
 
 // Exported for testing
 export function spliceEmailIntoFrontmatter(raw: string, email: string): string {
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
 
   const updated = spliceEmailIntoFrontmatter(content, email)
 
-  const stem = path.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? path
+  const stem = getStemFromPath(path)
   try {
     await client.writeFile(path, updated, sha, `brain: add email to [[${stem}]]`)
   } catch (err: any) {

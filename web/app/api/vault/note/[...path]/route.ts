@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import matter from 'gray-matter'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { getVaultClient } from '@/lib/vault-client'
+import { getStemFromPath } from '@/lib/note-utils'
 import { invalidateCache } from '@/lib/graph-cache'
 
 export function applySetType(raw: string, type: string): string {
@@ -66,7 +67,7 @@ export async function DELETE(
   const filePath = pathSegments.join('/')
   const { sha } = await req.json()
 
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
+  const stem = getStemFromPath(filePath)
   const client = getVaultClient()
   try {
     await client.deleteFile(filePath, sha, `brain: delete [[${stem}]]`)
@@ -89,7 +90,7 @@ export async function PUT(
   const filePath = pathSegments.join('/')
   const { content, sha } = await req.json()
 
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
+  const stem = getStemFromPath(filePath)
   const isNew = !sha
   const message = isNew ? `brain: create [[${stem}]]` : `brain: update [[${stem}]]`
 
@@ -117,7 +118,7 @@ export async function PATCH(
 
   const client = getVaultClient()
   const { content: raw, sha } = await client.readFile(filePath)
-  const stem = filePath.split('/').pop()?.replace(/\.md$/, '').replace(/[[\]]/g, '') ?? filePath
+  const stem = getStemFromPath(filePath)
 
   let updated: string
   let message: string
