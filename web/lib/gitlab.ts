@@ -1,5 +1,6 @@
 import type { VaultClient } from './vault-client'
 import type { GitLabRemote } from './vault-config'
+import { validateVaultPath } from './note-utils'
 
 export class GitLabVaultClient implements VaultClient {
   private base: string
@@ -49,6 +50,7 @@ export class GitLabVaultClient implements VaultClient {
   }
 
   async readFile(path: string): Promise<{ content: string; sha: string }> {
+    validateVaultPath(path)
     const encodedPath = encodeURIComponent(path)
     const res = await fetch(
       `${this.base}/repository/files/${encodedPath}?ref=${this.branch}`,
@@ -61,6 +63,7 @@ export class GitLabVaultClient implements VaultClient {
   }
 
   async writeFile(path: string, content: string, sha: string | null, message: string): Promise<void> {
+    validateVaultPath(path)
     const encodedPath = encodeURIComponent(path)
     const method = sha ? 'PUT' : 'POST'
     const res = await fetch(`${this.base}/repository/files/${encodedPath}`, {
@@ -80,6 +83,7 @@ export class GitLabVaultClient implements VaultClient {
   }
 
   async deleteFile(path: string, _sha: string, message: string): Promise<void> {
+    validateVaultPath(path)
     const encodedPath = encodeURIComponent(path)
     const res = await fetch(`${this.base}/repository/files/${encodedPath}`, {
       method: 'DELETE',

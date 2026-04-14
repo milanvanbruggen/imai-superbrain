@@ -2,6 +2,7 @@ import { readFile, writeFile, readdir, stat, mkdir, unlink } from 'fs/promises'
 import { join, relative, normalize, dirname } from 'path'
 import { createHash } from 'crypto'
 import type { VaultClient } from './vault-client'
+import { validateVaultPath } from './note-utils'
 
 function sha1(content: string): string {
   // Must match Git's blob SHA format so local SHAs equal GitHub SHAs
@@ -46,17 +47,20 @@ export class LocalVaultClient implements VaultClient {
   }
 
   async readFile(path: string): Promise<{ content: string; sha: string }> {
+    validateVaultPath(path)
     const fullPath = this.resolveSafe(path)
     const content = await readFile(fullPath, 'utf-8')
     return { content, sha: sha1(content) }
   }
 
   async deleteFile(path: string, _sha: string, _message: string): Promise<void> {
+    validateVaultPath(path)
     const fullPath = this.resolveSafe(path)
     await unlink(fullPath)
   }
 
   async writeFile(path: string, content: string, _sha: string | null, _message: string): Promise<void> {
+    validateVaultPath(path)
     const fullPath = this.resolveSafe(path)
     await mkdir(dirname(fullPath), { recursive: true })
     await writeFile(fullPath, content, 'utf-8')

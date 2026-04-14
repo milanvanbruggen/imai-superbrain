@@ -1,4 +1,5 @@
 import type { VaultClient } from './vault-client'
+import { validateVaultPath } from './note-utils'
 
 interface GitHubClientConfig {
   pat: string
@@ -72,6 +73,7 @@ export class GitHubVaultClient implements VaultClient {
   }
 
   async readFile(path: string): Promise<FileContent> {
+    validateVaultPath(path)
     const res = await fetch(`${this.base}/contents/${path}`, { headers: this.headers })
     if (!res.ok) throw new Error(`Failed to read file ${path}: ${res.status}`)
     const data = await res.json()
@@ -80,6 +82,7 @@ export class GitHubVaultClient implements VaultClient {
   }
 
   async deleteFile(path: string, sha: string, message: string): Promise<void> {
+    validateVaultPath(path)
     const res = await fetch(`${this.base}/contents/${path}`, {
       method: 'DELETE',
       headers: { ...this.headers, 'Content-Type': 'application/json' },
@@ -92,6 +95,7 @@ export class GitHubVaultClient implements VaultClient {
   }
 
   async writeFile(path: string, content: string, sha: string | null, message: string): Promise<void> {
+    validateVaultPath(path)
     const body: Record<string, unknown> = {
       message,
       content: Buffer.from(content).toString('base64'),

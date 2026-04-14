@@ -88,12 +88,12 @@ describe('LocalVaultClient', () => {
   it('writeFile throws on path traversal attempt', async () => {
     await expect(
       client.writeFile('../escape.md', 'evil', null, 'hack')
-    ).rejects.toThrow(/path traversal/i)
+    ).rejects.toThrow(/traversal/i)
   })
 
   it('readFile throws on path traversal attempt', async () => {
     await expect(
       client.readFile('../escape.md')
-    ).rejects.toThrow(/path traversal/i)
+    ).rejects.toThrow(/traversal/i)
   })
 })
