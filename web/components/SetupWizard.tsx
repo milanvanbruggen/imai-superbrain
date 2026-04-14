@@ -90,8 +90,10 @@ export function SetupWizard({ onComplete }: Props) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    const host = window.location.hostname
-    setIsServerless(host !== 'localhost' && host !== '127.0.0.1')
+    fetch('/api/vault/config')
+      .then(res => res.json())
+      .then(data => { if (typeof data.isServerless === 'boolean') setIsServerless(data.isServerless) })
+      .catch(() => {})
   }, [])
 
   function update(fields: Partial<SetupData>) {
