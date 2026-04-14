@@ -178,6 +178,28 @@ describe('buildGraph — wikilink resolution performance', () => {
   })
 })
 
+describe('buildGraph — path-based wikilinks', () => {
+  it('resolves [[folder/Note]] style links to the correct node', () => {
+    const files: [string, string][] = [
+      ['people/Alice.md', '---\ntitle: Alice\n---\nSee [[people/Bob]]'],
+      ['people/Bob.md', '---\ntitle: Bob\n---\nContent'],
+    ]
+    const graph = buildGraph(files)
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.edges[0]).toMatchObject({ source: 'people/Alice.md', target: 'people/Bob.md' })
+  })
+
+  it('resolves [[folder/Note.md]] style links with .md extension', () => {
+    const files: [string, string][] = [
+      ['people/Alice.md', '---\ntitle: Alice\n---\nSee [[people/Bob.md]]'],
+      ['people/Bob.md', '---\ntitle: Bob\n---\nContent'],
+    ]
+    const graph = buildGraph(files)
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.edges[0]).toMatchObject({ source: 'people/Alice.md', target: 'people/Bob.md' })
+  })
+})
+
 describe('buildGraph - untyped frontmatter relation', () => {
   it('creates typed:false edge for relation without type', () => {
     const files: [string, string][] = [

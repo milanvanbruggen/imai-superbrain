@@ -78,9 +78,12 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
   }
 
   // stem (lowercase) → path: O(1) wikilink resolution; path is unique even for duplicate stems
+  // Also index by path-without-extension and full path so [[folder/Note]] and [[folder/Note.md]] resolve
   const stemMap = new Map<string, string>()
   for (const note of parsed) {
     stemMap.set(note.stem.toLowerCase(), note.path)
+    stemMap.set(note.path.replace(/\.md$/, '').toLowerCase(), note.path)
+    stemMap.set(note.path.toLowerCase(), note.path)
   }
 
   // Count stems to detect duplicates

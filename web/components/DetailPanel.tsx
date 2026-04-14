@@ -217,14 +217,23 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const outgoing = allEdges.filter(e => e.source === node?.id)
   const incoming = allEdges.filter(e => e.target === node?.id)
   const nodeById = Object.fromEntries(allNodes.map(n => [n.id, n]))
+
+  // Map stem (and path-without-ext) → node for resolving relation targets
+  // rel.target is a stem (e.g. "Superbrain"), but node.id is a path (e.g. "projects/Superbrain.md")
+  const nodeByLowerStem = new Map<string, GraphNode>()
+  for (const n of allNodes) {
+    const stem = n.id.split('/').pop()?.replace(/\.md$/, '') ?? ''
+    nodeByLowerStem.set(stem.toLowerCase(), n)
+    nodeByLowerStem.set(n.id.replace(/\.md$/, '').toLowerCase(), n)
+  }
+
   const relationTargets = new Set(note ? note.relations.map(r => r.target.toLowerCase()) : [])
   const organicLinks = note ? note.wikilinks.filter(s => !relationTargets.has(s.toLowerCase())) : []
   const pickerTypes = [...new Set(allNodes.filter(n => n.id !== node?.id).map(n => n.type))].sort()
-  const pickerNotes = allNodes.filter(n =>
-    n.type === pickerType &&
-    n.id !== node?.id &&
-    !relationTargets.has(n.id)
-  )
+  const pickerNotes = allNodes.filter(n => {
+    const nodeStem = (n.id.split('/').pop()?.replace(/\.md$/, '') ?? '').toLowerCase()
+    return n.type === pickerType && n.id !== node?.id && !relationTargets.has(nodeStem)
+  })
   return (
     <aside
       style={{ width }}
@@ -436,13 +445,14 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   {(note.relations.length > 0 || organicLinks.length > 0) && (
                     <ul className="space-y-0.5">
                       {note.relations.map(rel => {
-                        const targetId = rel.target.toLowerCase()
-                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
+                        const targetNode = nodeByLowerStem.get(rel.target.toLowerCase())
+                        const targetId = targetNode?.id ?? null
+                        const dot = TYPE_DOT[targetNode?.type ?? ''] ?? 'bg-slate-400'
                         return (
                           <li key={`rel-${rel.target}`} className="flex items-center gap-2 py-0.5 group">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
-                              {nodeById[targetId]?.title ?? rel.target}
+                            <button onClick={() => targetId && onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                              {targetNode?.title ?? rel.target}
                             </button>
                             {rel.type && <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>}
                             {confirmRemoveTarget === rel.target ? (
@@ -475,13 +485,14 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                         )
                       })}
                       {organicLinks.map(stem => {
-                        const targetId = stem.toLowerCase()
-                        const dot = TYPE_DOT[nodeById[targetId]?.type ?? ''] ?? 'bg-slate-400'
+                        const targetNode = nodeByLowerStem.get(stem.toLowerCase())
+                        const targetId = targetNode?.id ?? null
+                        const dot = TYPE_DOT[targetNode?.type ?? ''] ?? 'bg-slate-400'
                         return (
                           <li key={`organic-${stem}`} className="flex items-center gap-2 py-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                            <button onClick={() => onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
-                              {nodeById[targetId]?.title ?? stem}
+                            <button onClick={() => targetId && onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                              {targetNode?.title ?? stem}
                             </button>
                             <span className="text-xs text-slate-300 dark:text-gray-600 shrink-0" title="In-text link">↩</span>
                           </li>
