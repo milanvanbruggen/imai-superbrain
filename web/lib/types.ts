@@ -7,6 +7,8 @@ export interface VaultNote {
   stem: string          // filename without extension, e.g. "Milan"
   title: string         // from frontmatter.title or stem
   type: BuiltInNoteType | string
+  inbox: boolean        // true if frontmatter inbox: true
+  modified?: string     // from frontmatter modified field (YYYY-MM-DD)
   tags: string[]
   date: string | null
   email?: string
@@ -25,6 +27,7 @@ export interface GraphNode {
   path: string
   title: string
   type: VaultNote['type']
+  inbox: boolean
   tags: string[]
   hasDuplicateStem: boolean
 }

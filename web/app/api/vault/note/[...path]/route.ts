@@ -12,6 +12,12 @@ export function applySetType(raw: string, type: string): string {
   return matter.stringify(content, data)
 }
 
+export function applyRemoveInbox(raw: string): string {
+  const { data, content } = matter(raw)
+  delete data.inbox
+  return matter.stringify(content, data)
+}
+
 export function applyAddRelation(raw: string, target: string, relationType: string | null): string {
   const { data, content } = matter(raw)
   const relations: any[] = Array.isArray(data.relations) ? data.relations : []
@@ -34,6 +40,21 @@ export function applyRemoveRelation(raw: string, target: string): string {
       (r: any) => !(typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '').toLowerCase() === target.toLowerCase())
     )
     if (data.relations.length === 0) delete data.relations
+  }
+  return matter.stringify(content, data)
+}
+
+export function applyUpdateRelation(raw: string, target: string, relationType: string | null): string {
+  const { data, content } = matter(raw)
+  if (Array.isArray(data.relations)) {
+    data.relations = (data.relations as any[]).map((r: any) => {
+      if (typeof r.target === 'string' && r.target.replace(/^\[\[|\]\]$/g, '').toLowerCase() === target.toLowerCase()) {
+        const updated: any = { target: r.target }
+        if (relationType) updated.type = relationType
+        return updated
+      }
+      return r
+    })
   }
   return matter.stringify(content, data)
 }
@@ -141,6 +162,15 @@ export async function PATCH(
     }
     updated = applyRemoveRelation(raw, body.target)
     message = `brain: unlink [[${stem}]] → [[${body.target}]]`
+  } else if (body.operation === 'update-relation') {
+    if (typeof body.target !== 'string' || !body.target.trim()) {
+      return NextResponse.json({ error: 'target required' }, { status: 400 })
+    }
+    updated = applyUpdateRelation(raw, body.target, body.relationType ?? null)
+    message = `brain: update relation [[${stem}]] → [[${body.target}]]`
+  } else if (body.operation === 'remove-inbox') {
+    updated = applyRemoveInbox(raw)
+    message = `brain: processed inbox item [[${stem}]]`
   } else if (typeof body.title === 'string') {
     const { data, content } = matter(raw)
     data.title = body.title

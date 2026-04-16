@@ -47,12 +47,18 @@ export function parseNote(path: string, raw: string): VaultNote {
     stem,
     title: data.title ?? stemToTitle(stem),
     type: systemType(path) ?? (typeof data.type === 'string' && data.type.trim() ? data.type.trim() : 'note'),
+    inbox: data.inbox === true,
     tags: data.tags ?? [],
     date: data.date instanceof Date
       ? data.date.toISOString().slice(0, 10)
       : typeof data.date === 'string'
         ? data.date
         : null,
+    modified: data.modified instanceof Date
+      ? data.modified.toISOString().slice(0, 10)
+      : typeof data.modified === 'string'
+        ? data.modified
+        : undefined,
     email,
     content,
     relations,
@@ -98,6 +104,7 @@ export function buildGraph(files: [path: string, raw: string][]): VaultGraph {
     path: note.path,
     title: note.title,
     type: note.type,
+    inbox: note.inbox,
     tags: note.tags,
     hasDuplicateStem: (stemCounts[note.stem.toLowerCase()] ?? 0) > 1,
   }))

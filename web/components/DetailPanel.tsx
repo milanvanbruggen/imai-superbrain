@@ -6,6 +6,7 @@ import { GraphNode, GraphEdge, VaultNote } from '@/lib/types'
 import { NoteEditor } from './NoteEditor'
 import { useSession } from 'next-auth/react'
 import { GmailModal } from './GmailModal'
+import { useToast } from './Toaster'
 
 interface Props {
   node: GraphNode | null
@@ -45,6 +46,7 @@ const TYPE_DOT: Record<string, string> = {
 }
 
 export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onNoteDeleted, onNavigate, width, collapsed, onToggleCollapse, onOpenSettings, noteTypes, typeColors }: Props) {
+  const toast = useToast()
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -64,6 +66,9 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
   const [pickerRelationType, setPickerRelationType] = useState('')
   const [addingLink, setAddingLink] = useState(false)
   const [confirmRemoveTarget, setConfirmRemoveTarget] = useState<string | null>(null)
+  const [editingRelationTarget, setEditingRelationTarget] = useState<string | null>(null)
+  const [editingRelationType, setEditingRelationType] = useState('')
+  const [updatingRelation, setUpdatingRelation] = useState<string | null>(null)
 
   useEffect(() => {
     setEditing(false)
@@ -76,6 +81,8 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
     setPickerType('')
     setPickerTarget('')
     setPickerRelationType('')
+    setEditingRelationTarget(null)
+    setEditingRelationType('')
   }, [note?.path])
 
   useEffect(() => {
@@ -109,12 +116,13 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
     }
     setSaving(true)
     try {
-      await fetch(`/api/vault/note/${note.path}`, {
+      const res = await fetch(`/api/vault/note/${note.path}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: renameValue.trim() }),
       })
-      onNoteUpdated()
+      if (res.ok) { toast('Title updated'); onNoteUpdated() }
+      else toast('Failed to update title', 'error')
     } finally {
       setSaving(false)
       setRenaming(false)
@@ -130,7 +138,8 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operation: 'set-type', type }),
       })
-      if (res.ok) onNoteUpdated()
+      if (res.ok) { toast(`Type set to ${type}`); onNoteUpdated() }
+      else toast('Failed to set type', 'error')
     } finally {
       setSettingType(false)
       setTypePickerOpen(false)
@@ -146,10 +155,29 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ operation: 'remove-relation', target }),
       })
-      if (res.ok) onNoteUpdated()
+      if (res.ok) { toast('Relation removed'); onNoteUpdated() }
+      else toast('Failed to remove relation', 'error')
     } finally {
       setRemovingLink(null)
       setConfirmRemoveTarget(null)
+    }
+  }
+
+  async function handleUpdateRelation(target: string, relationType: string) {
+    if (!note || updatingRelation) return
+    setUpdatingRelation(target)
+    try {
+      const res = await fetch(`/api/vault/note/${note.path}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operation: 'update-relation', target, relationType: relationType || null }),
+      })
+      if (res.ok) { toast('Relation updated'); onNoteUpdated() }
+      else toast('Failed to update relation', 'error')
+    } finally {
+      setUpdatingRelation(null)
+      setEditingRelationTarget(null)
+      setEditingRelationType('')
     }
   }
 
@@ -167,10 +195,13 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
         }),
       })
       if (res.ok) {
+        toast('Relation added')
         onNoteUpdated()
         setLinkPickerOpen(false)
         setPickerTarget('')
         setPickerRelationType('')
+      } else {
+        toast('Failed to add relation', 'error')
       }
     } finally {
       setAddingLink(false)
@@ -411,6 +442,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
               note={note}
               onSaved={() => {
                 setEditing(false)
+                toast('Note saved')
                 onNoteUpdated()
               }}
             />
@@ -439,7 +471,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                       }}
                       className="text-xs text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
                     >
-                      + Toevoegen
+                      + Add
                     </button>
                   </div>
                   {(note.relations.length > 0 || organicLinks.length > 0) && (
@@ -448,38 +480,78 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                         const targetNode = nodeByLowerStem.get(rel.target.toLowerCase())
                         const targetId = targetNode?.id ?? null
                         const dot = TYPE_DOT[targetNode?.type ?? ''] ?? 'bg-slate-400'
+                        const isEditing = editingRelationTarget === rel.target
                         return (
-                          <li key={`rel-${rel.target}`} className="flex items-center gap-2 py-0.5 group">
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                            <button onClick={() => targetId && onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
-                              {targetNode?.title ?? rel.target}
-                            </button>
-                            {rel.type && <span className="text-xs text-orange-500/70 shrink-0">{rel.type}</span>}
-                            {confirmRemoveTarget === rel.target ? (
-                              <div className="flex items-center gap-1 shrink-0">
+                          <li key={`rel-${rel.target}`} className="py-0.5 group">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                              <button onClick={() => targetId && onNavigate(targetId)} className="text-xs text-slate-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 transition-colors truncate flex-1 text-left cursor-pointer">
+                                {targetNode?.title ?? rel.target}
+                              </button>
+                              {!isEditing && (
                                 <button
-                                  onClick={() => handleRemoveRelation(rel.target)}
-                                  disabled={removingLink !== null}
-                                  className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                                  onClick={() => { setEditingRelationTarget(rel.target); setEditingRelationType(rel.type ?? ''); setConfirmRemoveTarget(null) }}
+                                  className={`text-xs shrink-0 transition-colors cursor-pointer ${rel.type ? 'text-orange-500/70 hover:text-orange-600 dark:hover:text-orange-400' : 'opacity-0 group-hover:opacity-100 text-slate-300 dark:text-gray-600 hover:text-slate-500'}`}
+                                  title="Edit relation type"
                                 >
-                                  {removingLink === rel.target ? '…' : 'Confirm'}
+                                  {rel.type ?? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>}
+                                </button>
+                              )}
+                              {confirmRemoveTarget === rel.target ? (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    onClick={() => handleRemoveRelation(rel.target)}
+                                    disabled={removingLink !== null}
+                                    className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                                  >
+                                    {removingLink === rel.target ? '…' : 'Confirm'}
+                                  </button>
+                                  <button
+                                    onClick={() => setConfirmRemoveTarget(null)}
+                                    className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : !isEditing ? (
+                                <button
+                                  onClick={() => setConfirmRemoveTarget(rel.target)}
+                                  disabled={removingLink !== null}
+                                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
+                                  title="Remove relation"
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              ) : null}
+                            </div>
+                            {isEditing && (
+                              <div className="mt-1.5 ml-4 flex items-center gap-1.5">
+                                <select
+                                  value={editingRelationType}
+                                  onChange={e => setEditingRelationType(e.target.value)}
+                                  autoFocus
+                                  className="flex-1 text-xs bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded px-1.5 py-1 text-slate-600 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                >
+                                  <option value="">— no type —</option>
+                                  <option value="works_with">works_with</option>
+                                  <option value="part_of">part_of</option>
+                                  <option value="inspired_by">inspired_by</option>
+                                  <option value="references">references</option>
+                                </select>
+                                <button
+                                  onClick={() => handleUpdateRelation(rel.target, editingRelationType)}
+                                  disabled={updatingRelation === rel.target}
+                                  className="px-2 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-500 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {updatingRelation === rel.target ? '…' : 'Save'}
                                 </button>
                                 <button
-                                  onClick={() => setConfirmRemoveTarget(null)}
-                                  className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                                  onClick={() => { setEditingRelationTarget(null); setEditingRelationType('') }}
+                                  className="text-xs text-slate-400 hover:text-gray-700 dark:hover:text-gray-300 cursor-pointer"
                                 >
-                                  Cancel
+                                  ✕
                                 </button>
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => setConfirmRemoveTarget(rel.target)}
-                                disabled={removingLink !== null}
-                                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-colors cursor-pointer shrink-0 disabled:opacity-30"
-                                title="Remove link"
-                              >
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                              </button>
                             )}
                           </li>
                         )
@@ -525,9 +597,9 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                           pickerNotes.map(n => (
                             <button
                               key={n.id}
-                              onClick={() => setPickerTarget(pickerTarget === n.id ? '' : n.id)}
+                              onClick={() => { const stem = n.id.split('/').pop()?.replace(/\.md$/, '') ?? n.id; setPickerTarget(pickerTarget === stem ? '' : stem) }}
                               className={`w-full text-left px-3 py-1.5 text-xs cursor-pointer transition-colors ${
-                                pickerTarget === n.id
+                                pickerTarget === (n.id.split('/').pop()?.replace(/\.md$/, '') ?? n.id)
                                   ? 'bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-300 font-medium'
                                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-gray-800'
                               }`}
@@ -543,7 +615,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                           onChange={e => setPickerRelationType(e.target.value)}
                           className="flex-1 text-xs bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 rounded px-1.5 py-1 text-slate-600 dark:text-gray-400 focus:outline-none focus:ring-1 focus:ring-teal-500"
                         >
-                          <option value="">— geen relatietype —</option>
+                          <option value="">— no type —</option>
                           <option value="works_with">works_with</option>
                           <option value="part_of">part_of</option>
                           <option value="inspired_by">inspired_by</option>
@@ -554,7 +626,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                           disabled={!pickerTarget || addingLink}
                           className="px-2.5 py-1 text-xs bg-teal-600 text-white rounded font-medium hover:bg-teal-500 disabled:opacity-50 cursor-pointer whitespace-nowrap"
                         >
-                          {addingLink ? '…' : 'Toevoegen'}
+                          {addingLink ? '…' : 'Add'}
                         </button>
                         <button
                           onClick={() => setLinkPickerOpen(false)}

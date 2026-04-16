@@ -10,6 +10,8 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
 import { SetupWizard } from '@/components/SetupWizard'
 import { HistoryModal } from '@/components/HistoryModal'
+import { InboxView } from '@/components/InboxView'
+import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
   const [isLocal, setIsLocal] = useState(false)
@@ -67,6 +69,7 @@ const MAX_PANEL_WIDTH = 700
 const DEFAULT_PANEL_WIDTH = MAX_PANEL_WIDTH
 
 export default function BrainPage() {
+  const toast = useToast()
   const [graph, setGraph] = useState<VaultGraph | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -81,6 +84,10 @@ export default function BrainPage() {
   const [showNoteTypes, setShowNoteTypes] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [showSystemNodes, setShowSystemNodes] = useState(false)
+  const [inboxCount, setInboxCount] = useState(0)
+  const [showInboxOnly, setShowInboxOnly] = useState(false)
+  const [showInboxReminder, setShowInboxReminder] = useState(false)
+  const inboxReminderChecked = useRef(false)
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -157,6 +164,12 @@ export default function BrainPage() {
       const data: VaultGraph = await res.json()
       setGraph(data)
 
+      // Refresh inbox count
+      fetch('/api/vault/inbox')
+        .then(r => r.json())
+        .then(d => setInboxCount(d.count ?? 0))
+        .catch(() => {})
+
       // Check sync status once on load
       fetch('/api/vault/sync')
         .then(r => r.json())
@@ -178,12 +191,31 @@ export default function BrainPage() {
     }
   }
 
+  // Silent background reload — no loading spinner, no state disruption
+  async function silentLoadGraph() {
+    try {
+      const res = await fetch('/api/vault/graph')
+      if (!res.ok) return
+      const data: VaultGraph = await res.json()
+      setGraph(data)
+      fetch('/api/vault/inbox')
+        .then(r => r.json())
+        .then(d => setInboxCount(d.count ?? 0))
+        .catch(() => {})
+      fetch('/api/vault/hash')
+        .then(r => r.json())
+        .then(({ hash }) => { if (hash) vaultHashRef.current = hash })
+        .catch(() => {})
+    } catch {}
+  }
+
   async function handleNoteCreated(path: string) {
     setShowNewNote(false)
-    await loadGraph()
-    const stem = path.split('/').pop()?.replace(/\.md$/, '') ?? ''
-    setSelectedId(stem.toLowerCase())
-    // Make sure panel is open when a note is created
+    await silentLoadGraph()
+    const newPath = path.endsWith('.md') ? path : path + '.md'
+    // Find the node by path after reload
+    setSelectedId(newPath)
+    toast('Note created')
     if (panelCollapsed) {
       setPanelCollapsed(false)
       setPanelWidth(prevWidthRef.current)
@@ -191,7 +223,7 @@ export default function BrainPage() {
   }
 
   async function handleNoteUpdated() {
-    await loadGraph()
+    await silentLoadGraph()
   }
 
   // Silent background reload — no loading spinner
@@ -269,6 +301,18 @@ export default function BrainPage() {
     const id = setInterval(refreshGraphSilently, 5000)
     return () => clearInterval(id)
   }, [vaultError, error])
+
+  // Daily inbox reminder — check once after first successful graph load
+  useEffect(() => {
+    if (!graph || inboxReminderChecked.current) return
+    inboxReminderChecked.current = true
+    if (inboxCount === 0) return
+    const enabled = localStorage.getItem('superbrain_inbox_reminder') !== 'false'
+    if (!enabled) return
+    const today = new Date().toISOString().slice(0, 10)
+    if (localStorage.getItem('superbrain_inbox_reminder_dismissed') === today) return
+    setShowInboxReminder(true)
+  }, [graph, inboxCount])
 
   // Escape key deselects
   useEffect(() => {
@@ -423,7 +467,7 @@ export default function BrainPage() {
 
   const allNodes = showSystemNodes
     ? graph.nodes.filter(n => n.type === 'system' || n.type === 'template')
-    : graph.nodes.filter(n => n.type !== 'system' && n.type !== 'template')
+    : graph.nodes.filter(n => n.type !== 'system' && n.type !== 'template' && !n.inbox)
   const allEdges = graph.edges.filter(e =>
     allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target)
   )
@@ -441,8 +485,12 @@ export default function BrainPage() {
     })
   }
 
-  const displayNodes = allNodes
-  const displayEdges = allEdges
+  const displayNodes = showInboxOnly
+    ? allNodes.filter(n => n.inbox)
+    : allNodes
+  const displayEdges = allEdges.filter(e =>
+    displayNodes.some(n => n.id === e.source) && displayNodes.some(n => n.id === e.target)
+  )
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100" onClick={() => setSelectedId(null)}>
@@ -464,7 +512,26 @@ export default function BrainPage() {
         <McpStatus />
 
         <div className="ml-auto flex items-center gap-2">
-          <SearchBar nodes={graph.nodes} onSelect={setSelectedId} />
+          <button
+            onClick={() => { setShowInboxOnly(v => !v); setActiveTypes(new Set()) }}
+            className={`relative px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
+              showInboxOnly
+                ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+                : 'bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+              <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+            </svg>
+            Inbox
+            {inboxCount > 0 && (
+              <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                {inboxCount > 99 ? '99+' : inboxCount}
+              </span>
+            )}
+          </button>
+          <SearchBar nodes={graph.nodes.filter(n => !n.inbox)} onSelect={setSelectedId} />
           <button
             onClick={() => setShowNewNote(true)}
             className="px-3 py-1.5 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors duration-150 cursor-pointer"
@@ -497,70 +564,110 @@ export default function BrainPage() {
         </div>
       </header>
 
-      <div className="flex flex-1 min-h-0" onClick={e => e.stopPropagation()}>
-        {/* Graph fills all remaining space — ResizeObserver in BrainGraph keeps it centered */}
-        <main className="flex-1 relative overflow-hidden min-w-0">
-          <BrainGraph
-            nodes={displayNodes}
-            edges={displayEdges}
-            selectedId={selectedId}
-            onSelectNode={setSelectedId}
-            activeTypes={activeTypes}
-            typeColors={typeColors}
-          />
-
-          {/* System files toggle — top right */}
+      {/* Daily inbox reminder banner */}
+      {showInboxReminder && (
+        <div className="relative z-10 flex items-center gap-3 px-5 py-2 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200/60 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs shrink-0">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+            <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+          </svg>
+          <span>
+            You have <strong>{inboxCount}</strong> item{inboxCount !== 1 ? 's' : ''} waiting in your inbox.
+          </span>
           <button
-            onClick={() => { setShowSystemNodes(v => !v); setActiveTypes(new Set()); setSelectedId(null) }}
-            title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
-            className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
-              showSystemNodes
-                ? 'bg-white/90 dark:bg-gray-900/90 text-gray-600 dark:text-gray-300 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
-                : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
-            }`}
+            onClick={() => { setShowInboxReminder(false); setShowInboxOnly(true) }}
+            className="font-medium underline underline-offset-2 cursor-pointer hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
           >
-            <span className="text-xs">System</span>
-            {/* Toggle pill */}
-            <span className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
-              showSystemNodes ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
-            }`}>
-              <span className={`absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${
-                showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'
-              }`} />
-            </span>
+            Review now
           </button>
+          <button
+            onClick={() => {
+              localStorage.setItem('superbrain_inbox_reminder_dismissed', new Date().toISOString().slice(0, 10))
+              setShowInboxReminder(false)
+            }}
+            className="ml-auto p-1 hover:text-amber-800 dark:hover:text-amber-300 cursor-pointer transition-colors"
+            aria-label="Dismiss"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      )}
 
-          {/* Type filter overlay — left */}
-          <div className="absolute top-3 left-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none pr-28" style={{ scrollbarWidth: 'none' }}>
-            {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => {
-              const isActive = activeTypes.size === 0 || activeTypes.has(type)
-              const color = typeColors[type] ?? '#94a3b8'
-              return (
+      <div className="flex flex-1 min-h-0" onClick={e => e.stopPropagation()}>
+        <main className="flex-1 relative overflow-hidden min-w-0">
+          {showInboxOnly ? (
+            <InboxView
+              notesByPath={graph.notesByPath}
+              onSelect={setSelectedId}
+              typeColors={typeColors}
+              onApproved={silentLoadGraph}
+            />
+          ) : (
+            <>
+              <BrainGraph
+                nodes={displayNodes}
+                edges={displayEdges}
+                selectedId={selectedId}
+                onSelectNode={setSelectedId}
+                activeTypes={activeTypes}
+                typeColors={typeColors}
+              />
+
+              {/* System files toggle — top right */}
+              <button
+                onClick={() => { setShowSystemNodes(v => !v); setActiveTypes(new Set()); setSelectedId(null) }}
+                title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
+                className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                  showSystemNodes
+                    ? 'bg-white/90 dark:bg-gray-900/90 text-gray-600 dark:text-gray-300 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
+                    : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
+                }`}
+              >
+                <span className="text-xs">System</span>
+                <span className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
+                  showSystemNodes ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <span className={`absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${
+                    showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`} />
+                </span>
+              </button>
+
+              {/* Type filter overlay — left */}
+              <div className="absolute top-3 left-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none pr-28" style={{ scrollbarWidth: 'none' }}>
+                {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => {
+                  const isActive = activeTypes.size === 0 || activeTypes.has(type)
+                  const color = typeColors[type] ?? '#94a3b8'
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => toggleType(type)}
+                      title={isActive ? `Hide ${type}` : `Show only ${type}`}
+                      className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                        isActive
+                          ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
+                          : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
+                      }`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: isActive ? color : '#9ca3af' }}
+                      />
+                      {type}
+                    </button>
+                  )
+                })}
                 <button
-                  key={type}
-                  onClick={() => toggleType(type)}
-                  title={isActive ? `Hide ${type}` : `Show only ${type}`}
-                  className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
-                    isActive
-                      ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
-                      : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
-                  }`}
+                  onClick={() => setShowNoteTypes(true)}
+                  className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: isActive ? color : '#9ca3af' }}
-                  />
-                  {type}
+                  Edit
                 </button>
-              )
-            })}
-            <button
-              onClick={() => setShowNoteTypes(true)}
-              className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              Edit
-            </button>
-          </div>
+              </div>
+            </>
+          )}
         </main>
 
         {/* Drag handle — hidden when panel is collapsed */}
@@ -578,7 +685,7 @@ export default function BrainPage() {
           allEdges={graph.edges}
           allNodes={graph.nodes}
           onNoteUpdated={handleNoteUpdated}
-          onNoteDeleted={() => { setSelectedId(null); loadGraph() }}
+          onNoteDeleted={() => { setSelectedId(null); silentLoadGraph(); toast('Note deleted') }}
           onNavigate={setSelectedId}
           width={panelWidth}
           collapsed={panelCollapsed}

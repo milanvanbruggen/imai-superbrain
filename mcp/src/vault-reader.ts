@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync, existsSync } from 'fs'
 import { join, relative, normalize, dirname } from 'path'
 import { parseMarkdown, ParsedNote } from './parser.js'
 
@@ -61,6 +61,18 @@ export class VaultReader {
     // Create parent directories if needed
     mkdirSync(dirname(fullPath), { recursive: true })
     writeFileSync(fullPath, content, 'utf-8')
+    this.reload()
+  }
+
+  deleteNote(path: string): void {
+    const fullPath = join(this.vaultPath, path)
+    if (!normalize(fullPath).startsWith(normalize(this.vaultPath) + '/')) {
+      throw new Error(`Path traversal detected: ${path}`)
+    }
+    if (!existsSync(fullPath)) {
+      throw new Error(`Note not found: ${path}`)
+    }
+    unlinkSync(fullPath)
     this.reload()
   }
 

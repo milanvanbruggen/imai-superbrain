@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useSession, signIn, signOut } from 'next-auth/react'
+import { useToast } from './Toaster'
 
 interface VaultConfig {
   mode: 'local' | 'github' | 'gitlab' | 'unconfigured'
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export function SettingsModal({ onClose }: Props) {
+  const toast = useToast()
   const [config, setConfig] = useState<VaultConfig | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [saving, setSaving] = useState(false)
@@ -49,6 +51,18 @@ export function SettingsModal({ onClose }: Props) {
 
   // Sync explainer
   const [showSyncExplainer, setShowSyncExplainer] = useState(false)
+
+  // Notification preferences (localStorage)
+  const [inboxReminder, setInboxReminder] = useState(true)
+  useEffect(() => {
+    setInboxReminder(localStorage.getItem('superbrain_inbox_reminder') !== 'false')
+  }, [])
+  function toggleInboxReminder() {
+    const next = !inboxReminder
+    setInboxReminder(next)
+    localStorage.setItem('superbrain_inbox_reminder', next ? 'true' : 'false')
+    toast(next ? 'Inbox reminder enabled' : 'Inbox reminder disabled', 'info')
+  }
 
   // Editable fields
   const [editVaultPath, setEditVaultPath] = useState('')
@@ -95,13 +109,15 @@ export function SettingsModal({ onClose }: Props) {
         setEditVaultPath(updated.vaultPath ?? '')
       }
       setEditingLocal(false)
+      toast('Vault path saved')
     } catch (e: unknown) {
-      setLocalSaveError(e instanceof Error ? e.message : 'Failed to save')
+      const msg = e instanceof Error ? e.message : 'Failed to save'
+      setLocalSaveError(msg)
+      toast(msg, 'error')
     } finally {
       setSaving(false)
     }
   }
-
 
   async function handleSetPrimary(mode: 'local' | 'github') {
     const res = await fetch('/api/vault/config', {
@@ -112,6 +128,9 @@ export function SettingsModal({ onClose }: Props) {
     if (res.ok) {
       const updated = await fetch('/api/vault/config').then(r => r.json().catch(() => null))
       if (updated) setConfig(updated)
+      toast('Vault updated')
+    } else {
+      toast('Failed to update vault', 'error')
     }
   }
 
@@ -273,6 +292,23 @@ export function SettingsModal({ onClose }: Props) {
               </div>
             </div>
 
+            {/* Notifications */}
+            <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+              <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">Notifications</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-gray-700 dark:text-gray-300">Daily inbox reminder</p>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-600 mt-0.5">Show a reminder when you open the app and have inbox items</p>
+                </div>
+                <span
+                  onClick={toggleInboxReminder}
+                  className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 cursor-pointer ${inboxReminder ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                >
+                  <span className={`absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${inboxReminder ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                </span>
+              </div>
+            </div>
+
             {/* Account */}
             <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4">
               <div className="flex items-center justify-between">
@@ -303,9 +339,11 @@ export function SettingsModal({ onClose }: Props) {
                   <button
                     onClick={async () => {
                       setDisconnecting(true)
-                      await fetch('/api/gmail/disconnect', { method: 'POST' })
+                      const res = await fetch('/api/gmail/disconnect', { method: 'POST' })
                       await update()
                       setDisconnecting(false)
+                      if (res.ok) toast('Gmail disconnected')
+                      else toast('Failed to disconnect Gmail', 'error')
                     }}
                     disabled={disconnecting}
                     className="text-xs text-slate-400 hover:text-red-500 disabled:opacity-50 cursor-pointer transition-colors"

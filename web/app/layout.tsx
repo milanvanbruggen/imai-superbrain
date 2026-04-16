@@ -4,6 +4,7 @@ import { ThemeProvider } from 'next-themes'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import './globals.css'
 import { SessionProvider } from './session-provider'
+import { ToastProvider } from '@/components/Toaster'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans' })
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono' })
@@ -20,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${geist.variable} ${geistMono.variable} font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <ErrorBoundary>
-            <SessionProvider>{children}</SessionProvider>
+            <SessionProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </SessionProvider>
           </ErrorBoundary>
         </ThemeProvider>
       </body>

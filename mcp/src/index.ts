@@ -12,6 +12,7 @@ import { createGetRelatedTool } from './tools/get-related.js'
 import { createListTool } from './tools/list-notes.js'
 import { createGetContextTool } from './tools/get-context.js'
 import { createGetIndexTool } from './tools/get-index.js'
+import { createDeleteTool } from './tools/delete-note.js'
 
 const vault = new VaultReader()
 
@@ -23,6 +24,7 @@ const tools = [
   createListTool(vault),
   createGetContextTool(vault),
   createGetIndexTool(vault),
+  createDeleteTool(vault),
 ]
 
 const server = new Server(
