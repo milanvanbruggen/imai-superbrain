@@ -17,8 +17,9 @@ The app runs as a Next.js web application — locally for development and on Ver
 7. [MCP integration (Claude Desktop)](#6-mcp-integration-claude-desktop)
 8. [Gmail integration (optional)](#7-gmail-integration-optional)
 9. [Install as PWA on iPhone](#8-install-as-pwa-on-iphone)
-10. [Vault structure](#vault-structure)
-11. [Environment variables reference](#environment-variables-reference)
+10. [Inbox workflow](#inbox-workflow)
+11. [Vault structure](#vault-structure)
+12. [Environment variables reference](#environment-variables-reference)
 
 ---
 
@@ -214,8 +215,11 @@ The MCP server requires OAuth authentication. The first time Claude connects, it
 | `get_context` | Returns your personal context (profile, active projects, memory) |
 | `read_note` | Reads a specific vault note by path |
 | `search_notes` | Full-text search across vault |
-| `create_note` | Creates a new note |
-| `update_note` | Updates an existing note |
+| `write_note` | Creates or updates a note at the given path |
+| `delete_note` | Permanently deletes a note at the given path |
+| `get_related` | Returns notes related to a given note |
+| `list_notes` | Lists all notes in the vault |
+| `get_index` | Returns the stem index (stem → path mapping) |
 
 > **Note:** MCP only works when the app is deployed to a public URL (Vercel). It is not available on localhost.
 
@@ -253,20 +257,70 @@ After restarting the app, go to **Settings → Integrations** and click **Connec
 
 ---
 
+## Inbox workflow
+
+The inbox is a staging area for new notes before they are added to the graph. Inbox notes are hidden from the graph and search until approved.
+
+### Creating inbox notes
+
+Add `inbox: true` to a note's frontmatter to mark it as an inbox item:
+
+```yaml
+---
+title: My new idea
+type: idea
+inbox: true
+---
+```
+
+Optionally include a `modified` field (YYYY-MM-DD) to distinguish updated notes from newly added ones:
+
+```yaml
+---
+title: Milan van Bruggen
+type: person
+inbox: true
+modified: 2025-01-15
+---
+```
+
+Notes with `inbox: true` and no `modified`, or where `modified == date`, appear under **Added**. Notes with `modified != date` appear under **Updated**.
+
+### Reviewing inbox items
+
+Open the **Inbox** view (envelope icon in the header) to see all pending items grouped by date.
+
+For each note the app shows:
+- A **duplicate warning** if a note with the same title or stem already exists in the vault
+- **Suggested relations** (for new notes only) based on wikilinks in the body and title mentions
+
+Actions per note:
+- **Approve** — removes `inbox: true` and moves the file to `{type}/filename.md`
+- **Merge** (shown when a duplicate is detected) — merges tags, relations, and body content into the existing note, then deletes the inbox note
+- **Add relation** — links the inbox note to a suggested note before approving
+
+Use **Approve all (n)** at the top of each day section to process all pending notes at once.
+
+### Folder placement on approve
+
+When a note is approved it is moved from its current location to a folder named after its type. A note with `type: person` is written to `person/filename.md`; a note with `type: idea` goes to `idea/filename.md`. If the note has no type it stays in place with only `inbox: true` removed.
+
+---
+
 ## Vault structure
 
-The folder structure determines note types in the graph. Each top-level folder maps to a type with a distinct color:
+Note types are determined by the `type` frontmatter field, not the folder. Folders are used for organisation and are created automatically when inbox notes are approved. A typical structure:
 
 ```
 vault-repo/
-├── people/       → person nodes (blue)
-├── projects/     → project nodes (purple)
-├── meetings/     → meeting nodes (teal)
-├── daily/        → daily notes (amber)
-├── ideas/        → idea nodes (pink)
-├── resources/    → resource nodes (orange)
-├── areas/        → area nodes (green)
-├── notes/        → general notes (default)
+├── person/       → person notes
+├── project/      → project notes
+├── meeting/      → meeting notes
+├── daily/        → daily notes
+├── idea/         → idea notes
+├── resource/     → resource notes
+├── area/         → area notes
+├── note/         → general notes
 ├── Claude/       → system files (hidden by default)
 │   ├── profile.md
 │   ├── active-projects.md

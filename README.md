@@ -13,9 +13,13 @@ Notes live in a GitHub repository and are connected through `[[wikilinks]]`. Opt
 ## Features
 
 - **Interactive knowledge graph** — force-directed visualization of all vault notes and their connections
+- **Inbox review** — date-grouped inbox view with duplicate detection, merge suggestions, relation suggestions, and per-note or bulk approve; approved notes are moved to the correct type folder automatically
+- **Relation editing** — add, edit (change type), and remove relations directly from the detail panel
+- **Toast notifications** — non-intrusive feedback for all write actions (approve, merge, edit, delete, settings changes)
+- **Daily inbox reminder** — banner when there are unprocessed inbox items; configurable in Settings
 - **GitHub-backed vault** — notes are stored as markdown files in a GitHub repository
 - **Obsidian sync** — optional bidirectional sync with a local Obsidian vault (localhost only)
-- **MCP server** — AI tools can read, search, and write notes via the Model Context Protocol
+- **MCP server** — AI tools can read, search, write, and delete notes via the Model Context Protocol
 - **Gmail integration** — search and summarize email conversations from within person notes
 - **Setup Wizard** — guided onboarding with optional template vault (folders, system files, note templates)
 - **PWA support** — installable on mobile devices for offline access
