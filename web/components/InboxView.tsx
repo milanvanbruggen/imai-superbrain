@@ -104,6 +104,17 @@ async function mergeNotes(sourcePath: string, targetPath: string): Promise<boole
   return res.ok
 }
 
+async function deleteNote(path: string): Promise<boolean> {
+  const encoded = path.split('/').map(encodeURIComponent).join('/')
+  const { sha } = await fetch(`/api/vault/note/${encoded}`).then(r => r.json())
+  const res = await fetch(`/api/vault/note/${encoded}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sha }),
+  })
+  return res.ok
+}
+
 interface NoteCardProps {
   note: VaultNote
   duplicate: VaultNote | null
@@ -114,15 +125,18 @@ interface NoteCardProps {
   approved: boolean
   approving: boolean
   onApprove: () => void
+  onDecline: () => void
+  declining: boolean
   onChanged: () => void
 }
 
 function NoteCard({
   note, duplicate, suggestedRelations, showRelationSuggestions,
-  typeColors, onSelect, approved, approving, onApprove, onChanged,
+  typeColors, onSelect, approved, approving, onApprove, onDecline, declining, onChanged,
 }: NoteCardProps) {
   const [addedRelations, setAddedRelations] = useState<Set<string>>(new Set())
   const [addingRelation, setAddingRelation] = useState<string | null>(null)
+  const [confirmDecline, setConfirmDecline] = useState(false)
   const color = typeColors[note.type] ?? '#94a3b8'
 
   async function handleAddRelation(target: VaultNote) {
@@ -167,13 +181,42 @@ function NoteCard({
             ))}
           </div>
         </div>
-        <button
-          onClick={onApprove}
-          disabled={approving}
-          className="shrink-0 ml-2 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
-        >
-          {approving ? '…' : duplicate ? 'Merge' : 'Approve'}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {confirmDecline ? (
+            <>
+              <button
+                onClick={() => { setConfirmDecline(false); onDecline() }}
+                disabled={declining}
+                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {declining ? '…' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setConfirmDecline(false)}
+                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setConfirmDecline(true)}
+                disabled={approving || declining}
+                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Decline
+              </button>
+              <button
+                onClick={onApprove}
+                disabled={approving || declining}
+                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
+              >
+                {approving ? '…' : duplicate ? 'Merge' : 'Approve'}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Duplicate warning */}
@@ -228,9 +271,12 @@ interface UpdatedNoteCardProps {
   approved: boolean
   approving: boolean
   onApprove: () => void
+  onDecline: () => void
+  declining: boolean
 }
 
-function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approved, approving, onApprove }: UpdatedNoteCardProps) {
+function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approved, approving, onApprove, onDecline, declining }: UpdatedNoteCardProps) {
+  const [confirmDecline, setConfirmDecline] = useState(false)
   const display = duplicate ?? note
   const color = typeColors[display.type] ?? '#94a3b8'
 
@@ -280,13 +326,42 @@ function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approv
             )}
           </div>
         </div>
-        <button
-          onClick={onApprove}
-          disabled={approving}
-          className="shrink-0 ml-2 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
-        >
-          {approving ? '…' : 'Merge'}
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {confirmDecline ? (
+            <>
+              <button
+                onClick={() => { setConfirmDecline(false); onDecline() }}
+                disabled={declining}
+                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {declining ? '…' : 'Confirm'}
+              </button>
+              <button
+                onClick={() => setConfirmDecline(false)}
+                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setConfirmDecline(true)}
+                disabled={approving || declining}
+                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Decline
+              </button>
+              <button
+                onClick={onApprove}
+                disabled={approving || declining}
+                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
+              >
+                {approving ? '…' : 'Merge'}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -309,6 +384,7 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
   const [approvingPaths, setApprovingPaths] = useState<Set<string>>(new Set())
   const [approvedPaths, setApprovedPaths] = useState<Set<string>>(new Set())
   const [approvingAll, setApprovingAll] = useState(false)
+  const [decliningPaths, setDecliningPaths] = useState<Set<string>>(new Set())
 
   const allDayNotes = [...added, ...updated]
   const duplicates = new Map(allDayNotes.map(n => [n.path, findDuplicate(n, allNotes)]))
@@ -335,6 +411,23 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
       onApproved()
     } else {
       toast(`Failed to process "${note.title}"`, 'error')
+    }
+  }
+
+  async function handleDecline(note: VaultNote) {
+    const path = note.path
+    setDecliningPaths(prev => new Set(prev).add(path))
+    try {
+      const ok = await deleteNote(path)
+      if (ok) {
+        setApprovedPaths(prev => new Set(prev).add(path))
+        toast(`Declined "${note.title}"`)
+        onApproved()
+      } else {
+        toast(`Failed to decline "${note.title}"`, 'error')
+      }
+    } finally {
+      setDecliningPaths(prev => { const s = new Set(prev); s.delete(path); return s })
     }
   }
 
@@ -378,6 +471,8 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
                   approved={approvedPaths.has(note.path)}
                   approving={approvingPaths.has(note.path)}
                   onApprove={() => handleApprove(note)}
+                  onDecline={() => handleDecline(note)}
+                  declining={decliningPaths.has(note.path)}
                   onChanged={onApproved}
                 />
               ))}
@@ -400,6 +495,8 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
                     approved={approvedPaths.has(note.path)}
                     approving={approvingPaths.has(note.path)}
                     onApprove={() => handleApprove(note)}
+                    onDecline={() => handleDecline(note)}
+                    declining={decliningPaths.has(note.path)}
                   />
                 )
               })}
