@@ -379,7 +379,9 @@ function UpdatedNoteCard({ note, duplicate, typeColors, onSelect, approved, appr
         <div className="mt-3 ml-5">
           <DiffView
             oldContent={duplicate?.content ?? ''}
-            newContent={note.content}
+            newContent={duplicate
+              ? (duplicate.content.trim() + (note.content.trim() ? '\n\n' + note.content.trim() : ''))
+              : note.content}
           />
         </div>
       )}
