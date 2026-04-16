@@ -639,7 +639,11 @@ export default function BrainPage() {
               onSelect={setSelectedId}
               typeColors={typeColors}
               onApproved={silentLoadGraph}
-              onPreviewChanges={(note, duplicate) => setDiffPreview({ note, duplicate })}
+              onPreviewChanges={(note, duplicate) => {
+                setDiffPreview({ note, duplicate })
+                setPanelCollapsed(false)
+                setPanelWidth(prevWidthRef.current)
+              }}
             />
           ) : (
             <>
