@@ -107,14 +107,30 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/[-_\s]+/g, ' ').trim()
 }
 
+const ACTION_PREFIXES = ['update ', 'add ', 'new ', 'create ', 'update-', 'add-', 'new-', 'create-']
+
+function stripActionPrefix(s: string): string {
+  for (const prefix of ACTION_PREFIXES) {
+    if (s.startsWith(prefix)) return s.slice(prefix.length).trim()
+  }
+  return s
+}
+
 function findDuplicate(note: VaultNote, allNotes: VaultNote[]): VaultNote | null {
   const titleN = norm(note.title)
   const stemN = norm(note.stem)
+  const titleStripped = stripActionPrefix(titleN)
+  const stemStripped = stripActionPrefix(stemN)
   return allNotes.find(n => {
     if (n.path === note.path || n.inbox) return false
     const nTitle = norm(n.title)
     const nStem = norm(n.stem)
-    return nTitle === titleN || nStem === stemN || nTitle === stemN || nStem === titleN
+    return (
+      nTitle === titleN || nStem === stemN ||
+      nTitle === stemN || nStem === titleN ||
+      nTitle === titleStripped || nStem === stemStripped ||
+      nTitle === stemStripped || nStem === titleStripped
+    )
   }) ?? null
 }
 
@@ -389,10 +405,15 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
   const [approvingAll, setApprovingAll] = useState(false)
 
   const allDayNotes = [...added, ...updated]
-  const pendingNotes = allDayNotes.filter(n => !approvedPaths.has(n.path))
-
   const duplicates = new Map(allDayNotes.map(n => [n.path, findDuplicate(n, allNotes)]))
-  const suggestions = new Map(added.map(n => [n.path, findSuggestedRelations(n, allNotes)]))
+
+  // Added notes that match an existing note → treat as updates
+  const trueAdded = added.filter(n => !duplicates.get(n.path))
+  const addedAsUpdated = added.filter(n => !!duplicates.get(n.path))
+  const allUpdated = [...addedAsUpdated, ...updated]
+
+  const pendingNotes = allDayNotes.filter(n => !approvedPaths.has(n.path))
+  const suggestions = new Map(trueAdded.map(n => [n.path, findSuggestedRelations(n, allNotes)]))
 
   async function handleApprove(note: VaultNote) {
     const path = note.path
@@ -435,15 +456,15 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
       </div>
 
       <div className="space-y-4">
-        {added.length > 0 && (
+        {trueAdded.length > 0 && (
           <div>
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-1.5 px-1">Added</p>
             <div className="space-y-1">
-              {added.map(note => (
+              {trueAdded.map(note => (
                 <NoteCard
                   key={note.path}
                   note={note}
-                  duplicate={duplicates.get(note.path) ?? null}
+                  duplicate={null}
                   suggestedRelations={suggestions.get(note.path) ?? []}
                   showRelationSuggestions={true}
                   typeColors={typeColors}
@@ -457,11 +478,11 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
             </div>
           </div>
         )}
-        {updated.length > 0 && (
+        {allUpdated.length > 0 && (
           <div>
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-1.5 px-1">Updated</p>
             <div className="space-y-1">
-              {updated.map(note => (
+              {allUpdated.map(note => (
                 <UpdatedNoteCard
                   key={note.path}
                   note={note}
