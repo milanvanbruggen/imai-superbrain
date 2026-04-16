@@ -28,21 +28,29 @@ function stripActionAffix(s: string): string {
   return result
 }
 
+function matchCandidates(raw: string): Set<string> {
+  const candidates = new Set<string>()
+  const n = norm(raw)
+  candidates.add(n)
+  candidates.add(stripActionAffix(n))
+  // "Onder — n8n flow..." → try the part before the em/en dash
+  const beforeDash = raw.match(/^(.+?)\s*[—–]\s*/)?.[1]
+  if (beforeDash) {
+    const b = norm(beforeDash)
+    candidates.add(b)
+    candidates.add(stripActionAffix(b))
+  }
+  return candidates
+}
+
 function findDuplicate(note: VaultNote, allNotes: VaultNote[]): VaultNote | null {
-  const titleN = norm(note.title)
-  const stemN = norm(note.stem)
-  const titleStripped = stripActionAffix(titleN)
-  const stemStripped = stripActionAffix(stemN)
+  const candidates = new Set([
+    ...matchCandidates(note.title),
+    ...matchCandidates(note.stem),
+  ])
   return allNotes.find(n => {
     if (n.path === note.path || n.inbox) return false
-    const nTitle = norm(n.title)
-    const nStem = norm(n.stem)
-    return (
-      nTitle === titleN || nStem === stemN ||
-      nTitle === stemN || nStem === titleN ||
-      nTitle === titleStripped || nStem === stemStripped ||
-      nTitle === stemStripped || nStem === titleStripped
-    )
+    return candidates.has(norm(n.title)) || candidates.has(norm(n.stem))
   }) ?? null
 }
 
