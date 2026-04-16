@@ -11,6 +11,7 @@ import { SettingsModal } from '@/components/SettingsModal'
 import { SetupWizard } from '@/components/SetupWizard'
 import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
+import { DiffPanel } from '@/components/DiffPanel'
 import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
@@ -88,6 +89,7 @@ export default function BrainPage() {
   const [showInboxOnly, setShowInboxOnly] = useState(false)
   const [showInboxReminder, setShowInboxReminder] = useState(false)
   const inboxReminderChecked = useRef(false)
+  const [diffPreview, setDiffPreview] = useState<{ note: VaultNote; duplicate: VaultNote } | null>(null)
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -637,6 +639,7 @@ export default function BrainPage() {
               onSelect={setSelectedId}
               typeColors={typeColors}
               onApproved={silentLoadGraph}
+              onPreviewChanges={(note, duplicate) => setDiffPreview({ note, duplicate })}
             />
           ) : (
             <>
@@ -713,21 +716,34 @@ export default function BrainPage() {
           />
         )}
 
-        <DetailPanel
-          node={selectedNode}
-          note={selectedNote}
-          allEdges={graph.edges}
-          allNodes={graph.nodes}
-          onNoteUpdated={handleNoteUpdated}
-          onNoteDeleted={() => { setSelectedId(null); silentLoadGraph(); toast('Note deleted') }}
-          onNavigate={setSelectedId}
-          width={panelWidth}
-          collapsed={panelCollapsed}
-          onToggleCollapse={togglePanel}
-          onOpenSettings={() => setShowSettings(true)}
-          noteTypes={noteTypes}
-          typeColors={typeColors}
-        />
+        {diffPreview ? (
+          <DiffPanel
+            note={diffPreview.note}
+            duplicate={diffPreview.duplicate}
+            typeColors={typeColors}
+            width={panelWidth}
+            collapsed={panelCollapsed}
+            onToggleCollapse={togglePanel}
+            onMerged={() => { setDiffPreview(null); silentLoadGraph() }}
+            onClose={() => setDiffPreview(null)}
+          />
+        ) : (
+          <DetailPanel
+            node={selectedNode}
+            note={selectedNote}
+            allEdges={graph.edges}
+            allNodes={graph.nodes}
+            onNoteUpdated={handleNoteUpdated}
+            onNoteDeleted={() => { setSelectedId(null); silentLoadGraph(); toast('Note deleted') }}
+            onNavigate={setSelectedId}
+            width={panelWidth}
+            collapsed={panelCollapsed}
+            onToggleCollapse={togglePanel}
+            onOpenSettings={() => setShowSettings(true)}
+            noteTypes={noteTypes}
+            typeColors={typeColors}
+          />
+        )}
       </div>
 
       {showSettings && (

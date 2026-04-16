@@ -1,106 +1,15 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { VaultNote } from '@/lib/types'
 import { useToast } from '@/components/Toaster'
-
-// ── Diff ──────────────────────────────────────────────────────────────────────
-
-type DiffLine = { type: 'same' | 'add' | 'remove' | 'ellipsis'; line: string }
-
-function computeDiff(oldText: string, newText: string): DiffLine[] {
-  const oldLines = oldText.split('\n')
-  const newLines = newText.split('\n')
-  const m = oldLines.length
-  const n = newLines.length
-
-  // LCS table
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = oldLines[i - 1] === newLines[j - 1]
-        ? dp[i - 1][j - 1] + 1
-        : Math.max(dp[i - 1][j], dp[i][j - 1])
-
-  // Backtrack
-  const raw: DiffLine[] = []
-  let i = m, j = n
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
-      raw.unshift({ type: 'same', line: oldLines[i - 1] }); i--; j--
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      raw.unshift({ type: 'add', line: newLines[j - 1] }); j--
-    } else {
-      raw.unshift({ type: 'remove', line: oldLines[i - 1] }); i--
-    }
-  }
-
-  // Collapse unchanged sections — keep 3 lines of context around each change
-  const CONTEXT = 3
-  const changed = new Set(raw.flatMap((d, idx) => d.type !== 'same' ? [idx] : []))
-  const visible = new Set<number>()
-  for (const idx of changed)
-    for (let k = Math.max(0, idx - CONTEXT); k <= Math.min(raw.length - 1, idx + CONTEXT); k++)
-      visible.add(k)
-
-  const result: DiffLine[] = []
-  let prevVisible = true
-  for (let idx = 0; idx < raw.length; idx++) {
-    if (visible.has(idx)) {
-      result.push(raw[idx])
-      prevVisible = true
-    } else if (prevVisible) {
-      result.push({ type: 'ellipsis', line: '' })
-      prevVisible = false
-    }
-  }
-  return result
-}
-
-function DiffView({ oldContent, newContent }: { oldContent: string; newContent: string }) {
-  const diff = computeDiff(oldContent.trim(), newContent.trim())
-  const hasChanges = diff.some(d => d.type !== 'same' && d.type !== 'ellipsis')
-
-  if (!hasChanges) {
-    return <p className="text-xs text-gray-400 dark:text-gray-600 italic px-1">No content changes</p>
-  }
-
-  return (
-    <div className="rounded-lg overflow-hidden border border-slate-200 dark:border-gray-700 text-[11px] font-mono">
-      {diff.map((d, i) => {
-        if (d.type === 'ellipsis') {
-          return (
-            <div key={i} className="px-3 py-0.5 text-gray-300 dark:text-gray-600 bg-slate-50 dark:bg-gray-900 select-none">
-              ···
-            </div>
-          )
-        }
-        return (
-          <div
-            key={i}
-            className={`flex gap-2 px-3 py-px whitespace-pre-wrap leading-5 ${
-              d.type === 'add'
-                ? 'bg-green-50 dark:bg-green-900/25 text-green-800 dark:text-green-300'
-                : d.type === 'remove'
-                ? 'bg-red-50 dark:bg-red-900/25 text-red-800 dark:text-red-300'
-                : 'bg-white dark:bg-gray-950 text-gray-500 dark:text-gray-500'
-            }`}
-          >
-            <span className="select-none shrink-0 w-3 opacity-60">
-              {d.type === 'add' ? '+' : d.type === 'remove' ? '−' : ' '}
-            </span>
-            <span>{d.line || ' '}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+import { getDiffStats } from '@/lib/diff'
 
 interface Props {
   notesByPath: Record<string, VaultNote>
   onSelect: (id: string) => void
   typeColors: Record<string, string>
   onApproved: () => void
+  onPreviewChanges: (note: VaultNote, duplicate: VaultNote) => void
 }
 
 function norm(s: string): string {
@@ -315,17 +224,21 @@ interface UpdatedNoteCardProps {
   note: VaultNote
   duplicate: VaultNote | null
   typeColors: Record<string, string>
-  onSelect: (id: string) => void
+  onPreviewChanges: () => void
   approved: boolean
   approving: boolean
   onApprove: () => void
 }
 
-function UpdatedNoteCard({ note, duplicate, typeColors, onSelect, approved, approving, onApprove }: UpdatedNoteCardProps) {
-  const [showDiff, setShowDiff] = useState(false)
-
+function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approved, approving, onApprove }: UpdatedNoteCardProps) {
   const display = duplicate ?? note
   const color = typeColors[display.type] ?? '#94a3b8'
+
+  const stats = useMemo(() => {
+    if (!duplicate) return null
+    const merged = duplicate.content.trim() + (note.content.trim() ? '\n\n' + note.content.trim() : '')
+    return getDiffStats(duplicate.content.trim(), merged)
+  }, [duplicate?.path, note.path])
 
   if (approved) {
     return (
@@ -342,49 +255,39 @@ function UpdatedNoteCard({ note, duplicate, typeColors, onSelect, approved, appr
       <div className="flex items-start gap-3">
         <span className="mt-1 w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
         <div className="min-w-0 flex-1">
-          <button
-            onClick={() => setShowDiff(v => !v)}
-            className="text-sm font-medium text-gray-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 transition-colors text-left cursor-pointer truncate block w-full"
-          >
+          <span className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate block">
             {display.title}
-          </button>
-          <div className="flex items-center gap-2 mt-0.5">
+          </span>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-[11px] text-gray-400 dark:text-gray-500">{display.type}</span>
-            {display.tags.slice(0, 3).map(tag => (
-              <span key={tag} className="text-[11px] text-gray-400 dark:text-gray-500">#{tag}</span>
-            ))}
+            {stats && (stats.added > 0 || stats.removed > 0) && (
+              <span className="flex items-center gap-1">
+                {stats.added > 0 && (
+                  <span className="text-[11px] font-medium text-green-600 dark:text-green-400">+{stats.added}</span>
+                )}
+                {stats.removed > 0 && (
+                  <span className="text-[11px] font-medium text-red-500 dark:text-red-400">−{stats.removed}</span>
+                )}
+              </span>
+            )}
+            {duplicate && (
+              <button
+                onClick={onPreviewChanges}
+                className="text-[11px] text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+              >
+                Preview changes
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {duplicate && (
-            <button
-              onClick={() => onSelect(duplicate.path)}
-              className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer"
-              title="Open existing note"
-            >
-              Open
-            </button>
-          )}
-          <button
-            onClick={onApprove}
-            disabled={approving}
-            className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
-          >
-            {approving ? '…' : 'Merge'}
-          </button>
-        </div>
+        <button
+          onClick={onApprove}
+          disabled={approving}
+          className="shrink-0 ml-2 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
+        >
+          {approving ? '…' : 'Merge'}
+        </button>
       </div>
-
-      {showDiff && (
-        <div className="mt-3 ml-5">
-          <DiffView
-            oldContent={duplicate?.content ?? ''}
-            newContent={duplicate
-              ? (duplicate.content.trim() + (note.content.trim() ? '\n\n' + note.content.trim() : ''))
-              : note.content}
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -398,9 +301,10 @@ interface DaySectionProps {
   typeColors: Record<string, string>
   onSelect: (id: string) => void
   onApproved: () => void
+  onPreviewChanges: (note: VaultNote, duplicate: VaultNote) => void
 }
 
-function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSelect, onApproved }: DaySectionProps) {
+function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSelect, onApproved, onPreviewChanges }: DaySectionProps) {
   const toast = useToast()
   const [approvingPaths, setApprovingPaths] = useState<Set<string>>(new Set())
   const [approvedPaths, setApprovedPaths] = useState<Set<string>>(new Set())
@@ -484,18 +388,21 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
           <div>
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-1.5 px-1">Updated</p>
             <div className="space-y-1">
-              {allUpdated.map(note => (
-                <UpdatedNoteCard
-                  key={note.path}
-                  note={note}
-                  duplicate={duplicates.get(note.path) ?? null}
-                  typeColors={typeColors}
-                  onSelect={onSelect}
-                  approved={approvedPaths.has(note.path)}
-                  approving={approvingPaths.has(note.path)}
-                  onApprove={() => handleApprove(note)}
-                />
-              ))}
+              {allUpdated.map(note => {
+                const dup = duplicates.get(note.path) ?? null
+                return (
+                  <UpdatedNoteCard
+                    key={note.path}
+                    note={note}
+                    duplicate={dup}
+                    typeColors={typeColors}
+                    onPreviewChanges={() => dup && onPreviewChanges(note, dup)}
+                    approved={approvedPaths.has(note.path)}
+                    approving={approvingPaths.has(note.path)}
+                    onApprove={() => handleApprove(note)}
+                  />
+                )
+              })}
             </div>
           </div>
         )}
@@ -504,7 +411,7 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
   )
 }
 
-export function InboxView({ notesByPath, onSelect, typeColors, onApproved }: Props) {
+export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPreviewChanges }: Props) {
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
 
@@ -554,6 +461,7 @@ export function InboxView({ notesByPath, onSelect, typeColors, onApproved }: Pro
             typeColors={typeColors}
             onSelect={onSelect}
             onApproved={onApproved}
+            onPreviewChanges={onPreviewChanges}
           />
         ))}
         {days.length === 0 && (
