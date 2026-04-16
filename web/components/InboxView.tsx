@@ -13,23 +13,26 @@ interface Props {
 }
 
 function norm(s: string): string {
-  return s.toLowerCase().replace(/[-_\s]+/g, ' ').trim()
+  return s.toLowerCase().replace(/[—–\-_\s]+/g, ' ').trim()
 }
 
-const ACTION_PREFIXES = ['update ', 'add ', 'new ', 'create ', 'update-', 'add-', 'new-', 'create-']
+const ACTION_PREFIXES = ['update ', 'add ', 'new ', 'create ']
+const ACTION_SUFFIXES = [' wijziging', ' update', ' change', ' edit', ' aanpassing', ' modification', ' revision']
 
-function stripActionPrefix(s: string): string {
-  for (const prefix of ACTION_PREFIXES) {
-    if (s.startsWith(prefix)) return s.slice(prefix.length).trim()
-  }
-  return s
+function stripActionAffix(s: string): string {
+  let result = s
+  for (const prefix of ACTION_PREFIXES)
+    if (result.startsWith(prefix)) { result = result.slice(prefix.length).trim(); break }
+  for (const suffix of ACTION_SUFFIXES)
+    if (result.endsWith(suffix)) { result = result.slice(0, -suffix.length).trim(); break }
+  return result
 }
 
 function findDuplicate(note: VaultNote, allNotes: VaultNote[]): VaultNote | null {
   const titleN = norm(note.title)
   const stemN = norm(note.stem)
-  const titleStripped = stripActionPrefix(titleN)
-  const stemStripped = stripActionPrefix(stemN)
+  const titleStripped = stripActionAffix(titleN)
+  const stemStripped = stripActionAffix(stemN)
   return allNotes.find(n => {
     if (n.path === note.path || n.inbox) return false
     const nTitle = norm(n.title)
