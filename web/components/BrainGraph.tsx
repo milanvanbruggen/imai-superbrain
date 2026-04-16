@@ -33,9 +33,10 @@ export const DEFAULT_TYPE_COLORS: Record<string, string> = {
 }
 
 const NODE_REL_SIZE = 3.5
-// Minimum distance between node centres — keeps the compact organic cluster readable
-const COLLIDE_DIST = 24
-// Above this node count the O(n²) collision force becomes too expensive per tick
+// Padding added beyond each node's visual radius for collision detection.
+// Accounts for label height (~12px below node) + comfortable breathing room.
+const COLLIDE_PADDING = 14
+// Above this node count reduce collision iterations to keep the simulation fast
 const LARGE_GRAPH_THRESHOLD = 80
 
 function truncate(s: string, max = 20): string {
@@ -72,28 +73,49 @@ function createCenterGravity(strength = 0.03) {
 }
 
 /**
- * Pure-JS collision force compatible with d3-force-3d simulations.
- * Prevents node centres coming closer than `minDist` px.
+ * Size-aware collision force compatible with d3-force simulations.
+ *
+ * Each node's collision radius is its visual radius (√val × NODE_REL_SIZE)
+ * plus a constant padding that reserves space for labels and breathing room.
+ * Running multiple iterations per tick converges overlaps that a single pass
+ * would leave behind — the same strategy d3.forceCollide uses internally.
+ *
+ * For large graphs `iterations` is reduced to keep the O(n²) cost acceptable.
  */
-function createCollideForce(minDist: number) {
+function createCollideForce(padding: number, iterations = 3) {
   let simNodes: any[] = []
+
   function force() {
-    for (let i = 0; i < simNodes.length; i++) {
-      for (let j = i + 1; j < simNodes.length; j++) {
-        const dx = (simNodes[j].x - simNodes[i].x) || 0.001
-        const dy = (simNodes[j].y - simNodes[i].y) || 0.001
-        const dist = Math.sqrt(dx * dx + dy * dy)
-        if (dist < minDist) {
-          const push = ((minDist - dist) / minDist) * 0.8
-          simNodes[i].vx = (simNodes[i].vx ?? 0) - dx * push
-          simNodes[i].vy = (simNodes[i].vy ?? 0) - dy * push
-          simNodes[j].vx = (simNodes[j].vx ?? 0) + dx * push
-          simNodes[j].vy = (simNodes[j].vy ?? 0) + dy * push
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let i = 0; i < simNodes.length; i++) {
+        const a = simNodes[i]
+        const ra = Math.sqrt(Math.max(a.val ?? 1, 0.01)) * NODE_REL_SIZE + padding
+
+        for (let j = i + 1; j < simNodes.length; j++) {
+          const b = simNodes[j]
+          const rb = Math.sqrt(Math.max(b.val ?? 1, 0.01)) * NODE_REL_SIZE + padding
+          const minDist = ra + rb
+
+          let dx = (b.x ?? 0) - (a.x ?? 0)
+          let dy = (b.y ?? 0) - (a.y ?? 0)
+          // Avoid zero-length vector for exactly-overlapping nodes
+          if (dx === 0 && dy === 0) { dx = (Math.random() - 0.5) * 0.1; dy = (Math.random() - 0.5) * 0.1 }
+
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < minDist) {
+            // Proportional push: the deeper the overlap, the harder the push
+            const strength = ((minDist - dist) / dist) * 0.5
+            a.vx = (a.vx ?? 0) - dx * strength
+            a.vy = (a.vy ?? 0) - dy * strength
+            b.vx = (b.vx ?? 0) + dx * strength
+            b.vy = (b.vy ?? 0) + dy * strength
+          }
         }
       }
     }
   }
-  ; (force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+
+  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
   return force
 }
 
@@ -151,10 +173,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
         return
       }
 
-      fg.d3Force('charge')?.strength(-60).distanceMax(120)
-      fg.d3Force('link')?.distance(45).strength(1.0)
-      // Skip O(n²) custom collision for large graphs — charge force provides enough separation
-      fg.d3Force('collide', isLargeGraph ? null : createCollideForce(COLLIDE_DIST))
+      // Stronger repulsion + larger range → nodes spread out more before links pull them back.
+      // distanceMax 160 means nodes up to ~5 screen radii apart still push each other away.
+      fg.d3Force('charge')?.strength(-100).distanceMax(160)
+      fg.d3Force('link')?.distance(50).strength(0.9)
+      // Size-aware collision: 3 iterations for small graphs (converges well), 1 for large (O(n²) cost).
+      // Never fully disabled — charge alone doesn't prevent overlap inside dense clusters.
+      fg.d3Force('collide', createCollideForce(COLLIDE_PADDING, isLargeGraph ? 1 : 3))
       fg.d3Force('centerGravity', null)
       fg.d3Force('isolatedGravity', null)
       fg.d3Force('layer', null)
@@ -263,10 +288,10 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeLabel=""
           nodeRelSize={NODE_REL_SIZE}
           linkDirectionalArrowLength={0}
-          d3AlphaDecay={isLargeGraph ? 0.06 : 0.04}
-          d3VelocityDecay={isLargeGraph ? 0.65 : 0.6}
-          warmupTicks={isLargeGraph ? 200 : 100}
-          cooldownTicks={isLargeGraph ? 80 : 250}
+          d3AlphaDecay={isLargeGraph ? 0.05 : 0.03}
+          d3VelocityDecay={isLargeGraph ? 0.6 : 0.55}
+          warmupTicks={isLargeGraph ? 300 : 150}
+          cooldownTicks={isLargeGraph ? 100 : 300}
           onNodeHover={(node: any) => {
             const id = node?.id ?? null
             setHoveredId(id)
