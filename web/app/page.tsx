@@ -230,6 +230,7 @@ export default function BrainPage() {
   const vaultHashRef = useRef<string | null>(null)
   const syncEnabledRef = useRef(false)
   const lastRemoteSyncRef = useRef<number>(0)
+  const sseActiveRef = useRef(false)
 
   async function refreshGraphSilently() {
     try {
@@ -265,7 +266,8 @@ export default function BrainPage() {
         return
       }
 
-      // Hash-based polling for non-sync mode (unchanged)
+      // Hash-based polling for non-sync mode — skip when SSE is handling local changes
+      if (sseActiveRef.current) return
       const res = await fetch('/api/vault/hash')
       if (!res.ok) return
       const { hash } = await res.json()
@@ -295,12 +297,44 @@ export default function BrainPage() {
       .catch(() => {})
   }, [])
 
-  // Poll vault hash every 5 seconds for background updates
+  // Poll vault hash every 5 seconds for background updates (remote / fallback)
   useEffect(() => {
     if (vaultError || error) return
     const id = setInterval(refreshGraphSilently, 5000)
     return () => clearInterval(id)
   }, [vaultError, error])
+
+  // SSE filesystem watch — local vault only, replaces hash polling when active
+  useEffect(() => {
+    const isLocal = typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    if (!isLocal) return
+
+    let es: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+    function connect() {
+      es = new EventSource('/api/vault/watch')
+      es.onopen = () => { sseActiveRef.current = true }
+      es.onmessage = (e) => {
+        if (e.data === 'change') silentLoadGraph()
+      }
+      es.onerror = () => {
+        sseActiveRef.current = false
+        es?.close()
+        es = null
+        // Retry after 10s — polling covers the gap
+        retryTimer = setTimeout(connect, 10_000)
+      }
+    }
+
+    connect()
+    return () => {
+      sseActiveRef.current = false
+      es?.close()
+      if (retryTimer) clearTimeout(retryTimer)
+    }
+  }, [])
 
   // Daily inbox reminder — check once after first successful graph load
   useEffect(() => {
