@@ -79,7 +79,7 @@ export function DiffPanel({ note, duplicate, typeColors, width, collapsed, onTog
   const mergedContent = formattedSrc
     ? duplicate.content.trim() + '\n\n' + formattedSrc
     : duplicate.content.trim()
-  const diff = computeDiff(duplicate.content.trim(), mergedContent.trim())
+  const diff = computeDiff(duplicate.content.trim(), mergedContent.trim(), Infinity)
 
   async function handleMerge() {
     setMerging(true)
