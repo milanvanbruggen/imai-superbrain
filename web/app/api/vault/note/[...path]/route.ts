@@ -170,6 +170,21 @@ export async function PATCH(
     message = `brain: update relation [[${stem}]] → [[${body.target}]]`
   } else if (body.operation === 'remove-inbox') {
     updated = applyRemoveInbox(raw)
+    const { data } = matter(raw)
+    const type = typeof data.type === 'string' && data.type.trim() ? data.type.trim() : null
+    const filename = filePath.split('/').pop()!
+    const newPath = type ? `${type}/${filename}` : filePath
+    if (newPath !== filePath) {
+      // Write to new location, then delete old
+      await client.writeFile(newPath, updated, null, `brain: processed inbox item [[${stem}]]`)
+      try {
+        await client.deleteFile(filePath, sha, `brain: move [[${stem}]] to ${type}/`)
+      } catch {
+        // Non-fatal: file written to new location regardless
+      }
+      invalidateCache()
+      return NextResponse.json({ ok: true, newPath })
+    }
     message = `brain: processed inbox item [[${stem}]]`
   } else if (typeof body.title === 'string') {
     const { data, content } = matter(raw)
