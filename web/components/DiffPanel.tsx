@@ -58,7 +58,27 @@ export function DiffPanel({ note, duplicate, typeColors, width, collapsed, onTog
   const [confirmMerge, setConfirmMerge] = useState(false)
 
   const color = typeColors[duplicate.type] ?? '#94a3b8'
-  const mergedContent = duplicate.content.trim() + (note.content.trim() ? '\n\n' + note.content.trim() : '')
+
+  // Mirror the server-side merge formatting so the preview matches the actual result
+  function formatNlDate(dateStr: string): string {
+    const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+    const [year, month, day] = dateStr.split('-').map(Number)
+    if (!year || !month || !day) return dateStr
+    return `${day} ${months[month - 1]} ${year}`
+  }
+  function formatAsBullet(content: string, dateStr: string): string {
+    const cleaned = content.replace(/^(?:update|wijziging|change|verzoek)[^\n]*:\s*/im, '').replace(/^\s*\n/, '').trim()
+    if (!cleaned) return ''
+    const prefix = `- **${formatNlDate(dateStr)}** — `
+    const [firstPara, ...rest] = cleaned.split(/\n\n+/)
+    const bullet = prefix + firstPara.replace(/\n/g, ' ')
+    return rest.length > 0 ? bullet + '\n\n  ' + rest.join('\n\n  ') : bullet
+  }
+  const srcDate = note.modified ?? note.date ?? new Date().toISOString().slice(0, 10)
+  const formattedSrc = note.content.trim() ? formatAsBullet(note.content.trim(), srcDate) : ''
+  const mergedContent = formattedSrc
+    ? duplicate.content.trim() + '\n\n' + formattedSrc
+    : duplicate.content.trim()
   const diff = computeDiff(duplicate.content.trim(), mergedContent.trim())
 
   async function handleMerge() {

@@ -6,6 +6,34 @@ import { getVaultClient } from '@/lib/vault-client'
 import { getStemFromPath } from '@/lib/note-utils'
 import { invalidateCache } from '@/lib/graph-cache'
 
+const NL_MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
+
+function formatNlDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  if (!year || !month || !day) return dateStr
+  return `${day} ${NL_MONTHS[month - 1]} ${year}`
+}
+
+// Strip common "update header" lines like "Update voor [[onder]]:" before formatting
+function cleanUpdateContent(content: string): string {
+  return content
+    .replace(/^(?:update|wijziging|change|verzoek)[^\n]*:\s*/im, '')
+    .replace(/^\s*\n/, '')
+    .trim()
+}
+
+function formatAsBullet(content: string, dateStr: string | undefined): string {
+  const cleaned = cleanUpdateContent(content)
+  if (!cleaned) return ''
+  const prefix = dateStr ? `- **${formatNlDate(dateStr)}** — ` : '- '
+  // If content is multi-paragraph, keep first paragraph on the bullet line and indent the rest
+  const [firstPara, ...rest] = cleaned.split(/\n\n+/)
+  const bullet = prefix + firstPara.replace(/\n/g, ' ')
+  return rest.length > 0
+    ? bullet + '\n\n  ' + rest.join('\n\n  ')
+    : bullet
+}
+
 // Merge sourcePath (inbox note) into targetPath (existing note).
 // Newer content from source is appended to target; tags and relations are unioned.
 // The source file is deleted after a successful merge. If deletion fails, inbox:true
@@ -57,11 +85,18 @@ export async function POST(req: NextRequest) {
   if (mergedRelations.length > 0) mergedData.relations = mergedRelations
   else delete mergedData.relations
 
-  // Append source body content to target (only if source has meaningful content)
+  // Format source content as a dated bullet and append to target
   const srcTrimmed = srcContent.trim()
   const tgtTrimmed = tgtContent.trim()
-  const mergedContent = srcTrimmed
-    ? tgtTrimmed ? tgtTrimmed + '\n\n' + srcTrimmed : srcTrimmed
+  const srcDate: string | undefined =
+    typeof srcData.modified === 'string' ? srcData.modified
+    : srcData.modified instanceof Date ? srcData.modified.toISOString().slice(0, 10)
+    : typeof srcData.date === 'string' ? srcData.date
+    : srcData.date instanceof Date ? srcData.date.toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10)
+  const formattedSrc = srcTrimmed ? formatAsBullet(srcTrimmed, srcDate) : ''
+  const mergedContent = formattedSrc
+    ? tgtTrimmed ? tgtTrimmed + '\n\n' + formattedSrc : formattedSrc
     : tgtTrimmed
 
   const merged = matter.stringify('\n' + mergedContent + '\n', mergedData)
