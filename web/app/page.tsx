@@ -381,6 +381,13 @@ export default function BrainPage() {
     return base
   }, [noteTypes])
 
+  // When no custom types are configured, fall back to types present in the graph
+  // so the type picker in DetailPanel always has something to show.
+  const effectiveNoteTypes = useMemo(() => {
+    if (noteTypes.length > 0) return noteTypes
+    return availableTypes.map(name => ({ name, color: typeColors[name] ?? '#94a3b8' }))
+  }, [noteTypes, availableTypes, typeColors])
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-gray-950">
@@ -744,7 +751,7 @@ export default function BrainPage() {
             collapsed={panelCollapsed}
             onToggleCollapse={togglePanel}
             onOpenSettings={() => setShowSettings(true)}
-            noteTypes={noteTypes}
+            noteTypes={effectiveNoteTypes}
             typeColors={typeColors}
           />
         )}
