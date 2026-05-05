@@ -87,7 +87,10 @@ function findSuggestedRelations(note: VaultNote, allNotes: VaultNote[]): VaultNo
   return results.slice(0, 5)
 }
 
+const UNDATED = '__undated__'
+
 function formatDayLabel(dateStr: string, todayStr: string): string {
+  if (dateStr === UNDATED) return 'Undated'
   if (dateStr === todayStr) return 'Today'
   const yesterday = new Date(todayStr)
   yesterday.setDate(yesterday.getDate() - 1)
@@ -523,22 +526,32 @@ export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPre
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
 
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    return d.toISOString().slice(0, 10)
-  })
-
   const allNotes = Object.values(notesByPath)
   const inboxNotes = allNotes.filter(n => n.inbox)
 
-  const days = last7Days
+  const activeDays = new Set<string>()
+  let hasUndated = false
+  for (const n of inboxNotes) {
+    const activityDate = n.modified ?? n.date
+    if (activityDate) activeDays.add(activityDate)
+    else hasUndated = true
+    if (n.date && n.date !== n.modified) activeDays.add(n.date)
+  }
+
+  const sortedDays = Array.from(activeDays).sort((a, b) => b.localeCompare(a))
+  if (hasUndated) sortedDays.push(UNDATED)
+
+  const days = sortedDays
     .map(day => {
       const added = inboxNotes.filter(n => {
         const activityDate = n.modified ?? n.date
+        if (day === UNDATED) return !activityDate
         return activityDate === day && (!n.modified || n.modified === n.date || !n.date)
       })
-      const updated = inboxNotes.filter(n => n.modified === day && n.date !== day)
+      const updated = inboxNotes.filter(n => {
+        if (day === UNDATED) return false
+        return n.modified === day && n.date !== day
+      })
       return { day, added, updated }
     })
     .filter(d => d.added.length > 0 || d.updated.length > 0)
@@ -572,11 +585,6 @@ export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPre
             onPreviewChanges={onPreviewChanges}
           />
         ))}
-        {days.length === 0 && (
-          <p className="text-sm text-center text-gray-400 dark:text-gray-600 pt-16">
-            {inboxNotes.length} inbox {inboxNotes.length === 1 ? 'note' : 'notes'} outside the last 7 days
-          </p>
-        )}
       </div>
     </div>
   )

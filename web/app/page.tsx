@@ -85,11 +85,15 @@ export default function BrainPage() {
   const [showNoteTypes, setShowNoteTypes] = useState(false)
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [showSystemNodes, setShowSystemNodes] = useState(false)
-  const [inboxCount, setInboxCount] = useState(0)
   const [showInboxOnly, setShowInboxOnly] = useState(false)
   const [showInboxReminder, setShowInboxReminder] = useState(false)
   const inboxReminderChecked = useRef(false)
   const [diffPreview, setDiffPreview] = useState<{ note: VaultNote; duplicate: VaultNote } | null>(null)
+
+  const inboxCount = useMemo(
+    () => graph?.nodes.filter(n => n.inbox).length ?? 0,
+    [graph]
+  )
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -166,12 +170,6 @@ export default function BrainPage() {
       const data: VaultGraph = await res.json()
       setGraph(data)
 
-      // Refresh inbox count
-      fetch('/api/vault/inbox')
-        .then(r => r.json())
-        .then(d => setInboxCount(d.count ?? 0))
-        .catch(() => {})
-
       // Check sync status once on load
       fetch('/api/vault/sync')
         .then(r => r.json())
@@ -200,10 +198,6 @@ export default function BrainPage() {
       if (!res.ok) return
       const data: VaultGraph = await res.json()
       setGraph(data)
-      fetch('/api/vault/inbox')
-        .then(r => r.json())
-        .then(d => setInboxCount(d.count ?? 0))
-        .catch(() => {})
       fetch('/api/vault/hash')
         .then(r => r.json())
         .then(({ hash }) => { if (hash) vaultHashRef.current = hash })
