@@ -222,6 +222,31 @@ function createMcpServer() {
     }
   )
 
+  // delete_note
+  server.tool(
+    'delete_note',
+    'Permanently delete a note at the given path. Use with caution — this cannot be undone.',
+    {
+      path: z.string().describe('Relative path of the note to delete, e.g. notes/old-idea.md'),
+    },
+    async ({ path }) => {
+      const { client } = await loadNotes()
+      try {
+        const existing = await client.readFile(path)
+        const stem = getStemFromPath(path)
+        await client.deleteFile(path, existing.sha, `brain: delete [[${stem}]]`)
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: path }) }],
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to delete note'
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ error: message }) }],
+        }
+      }
+    }
+  )
+
   // get_related
   server.tool(
     'get_related',
