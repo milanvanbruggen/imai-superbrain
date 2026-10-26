@@ -3,57 +3,160 @@
 /* Enable class-based dark mode (next-themes applies .dark to <html>) */
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * AI Superbrain house style — see the "AI Superbrain" design system.
+ * The existing Tailwind palette names are remapped onto the archive palette so every
+ * component follows the brand: slate/gray = archive paper and ink, teal = bookcloth green,
+ * amber = catalogue red (new / needs attention), violet & blue = ruling blue (connections).
+ */
+@theme {
+  --font-sans: var(--font-archivo), "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-literata), Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-courier-prime), "Courier New", ui-monospace, monospace;
+
+  --color-white: #FAFAF6;
+
+  --color-slate-50: #EDEEE8;
+  --color-slate-100: #E3E5DE;
+  --color-slate-200: #C6C9C0;
+  --color-slate-300: #A9AEA6;
+  --color-slate-400: #80877F;
+  --color-slate-500: #555C68;
+  --color-slate-600: #454B55;
+  --color-slate-700: #343B44;
+  --color-slate-800: #252C33;
+  --color-slate-900: #1D2330;
+  --color-slate-950: #121718;
+
+  --color-gray-50: #F4F5F0;
+  --color-gray-100: #E6E8E1;
+  --color-gray-200: #D2D6CE;
+  --color-gray-300: #B4BAB5;
+  --color-gray-400: #A2A9A5;
+  --color-gray-500: #6E7573;
+  --color-gray-600: #555C68;
+  --color-gray-700: #344040;
+  --color-gray-800: #232C2D;
+  --color-gray-900: #1B2223;
+  --color-gray-950: #121718;
+
+  --color-teal-50: #E6EFEB;
+  --color-teal-100: #CCE0D7;
+  --color-teal-200: #A6C9B9;
+  --color-teal-300: #86B9A2;
+  --color-teal-400: #6AA389;
+  --color-teal-500: #3F7A63;
+  --color-teal-600: #2B5747;
+  --color-teal-700: #22463A;
+  --color-teal-800: #1A372E;
+  --color-teal-900: #142A23;
+
+  --color-amber-50: #F7EAE7;
+  --color-amber-100: #F0D5CF;
+  --color-amber-200: #E3B0A7;
+  --color-amber-300: #EE8577;
+  --color-amber-400: #E37767;
+  --color-amber-500: #B8402F;
+  --color-amber-600: #A8352B;
+  --color-amber-700: #8E2D24;
+  --color-amber-800: #73251E;
+
+  --color-violet-50: #E8EEF5;
+  --color-violet-100: #D2DEEB;
+  --color-violet-200: #A9C0DA;
+  --color-violet-300: #A3C2E4;
+  --color-violet-400: #8DB3DE;
+  --color-violet-500: #3A6A9C;
+  --color-violet-600: #2F5B8A;
+  --color-violet-700: #24476C;
+
+  --color-blue-400: #8DB3DE;
+  --color-blue-500: #3A6A9C;
+  --color-blue-600: #2F5B8A;
+
+  /* Brand tokens, for new components */
+  --color-paper: #EDEEE8;
+  --color-card: #FAFAF6;
+  --color-ink: #1D2330;
+  --color-ink-muted: #555C68;
+  --color-line: #C6C9C0;
+  --color-line-strong: #80877F;
+  --color-bookcloth: #2B5747;
+  --color-on-bookcloth: #F4F5F0;
+  --color-catalog-red: #A8352B;
+  --color-ruling-blue: #2F5B8A;
+  --color-index-card: #F8F7F2;
+  --color-index-red: #C0392B;
+  --color-index-blue: #7FA3C9;
+}
+
+/* Evening theme: the brand tokens flip; the remapped palette already covers dark: utilities */
+.dark {
+  --color-paper: #121718;
+  --color-card: #1B2223;
+  --color-ink: #E6E8E1;
+  --color-ink-muted: #A2A9A5;
+  --color-line: #344040;
+  --color-line-strong: #66716F;
+  --color-bookcloth: #86B9A2;
+  --color-on-bookcloth: #0F1A16;
+  --color-catalog-red: #EE8577;
+  --color-ruling-blue: #8DB3DE;
+}
+
 body {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ruling-blue);
+  outline-offset: 2px;
 }
 
 /* Scrollbar styling */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #374151 transparent;
+  scrollbar-color: #A9AEA6 transparent;
 }
 .dark * {
-  scrollbar-color: #374151 transparent;
+  scrollbar-color: #344040 transparent;
 }
 
-/* Markdown prose for dark mode (default) */
-.dark .prose-brain h1 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; color: #f1f5f9; }
-.dark .prose-brain h2 { font-size: 0.9rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.4rem; color: #e2e8f0; padding-bottom: 0.2rem; border-bottom: 1px solid #1e293b; }
-.dark .prose-brain h3 { font-size: 0.8rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; color: #cbd5e1; }
-.dark .prose-brain p { margin-bottom: 0.6rem; line-height: 1.65; color: #94a3b8; font-size: 0.8rem; }
-.dark .prose-brain ul { list-style: disc; padding-left: 1.1rem; margin-bottom: 0.5rem; }
-.dark .prose-brain ol { list-style: decimal; padding-left: 1.1rem; margin-bottom: 0.5rem; }
-.dark .prose-brain li { color: #94a3b8; margin-bottom: 0.2rem; line-height: 1.55; font-size: 0.8rem; }
-.dark .prose-brain strong { color: #e2e8f0; font-weight: 600; }
-.dark .prose-brain em { color: #94a3b8; }
-.dark .prose-brain code { background: #1e293b; color: #7dd3fc; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.75rem; font-family: var(--font-geist-mono), ui-monospace, monospace; }
-.dark .prose-brain pre { background: #0f172a; border: 1px solid #1e293b; border-radius: 0.4rem; padding: 0.75rem; overflow-x: auto; margin-bottom: 0.75rem; }
-.dark .prose-brain pre code { background: transparent; padding: 0; font-size: 0.75rem; color: #94a3b8; }
-.dark .prose-brain blockquote { border-left: 2px solid #334155; padding-left: 0.75rem; color: #64748b; margin-bottom: 0.5rem; font-size: 0.8rem; }
-.dark .prose-brain a { color: #60a5fa; }
-.dark .prose-brain a:hover { text-decoration: underline; }
-.dark .prose-brain hr { border-color: #1e293b; margin: 0.75rem 0; }
-.dark .prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
-.dark .prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #1e293b; color: #e2e8f0; font-weight: 600; }
-.dark .prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #0f172a; color: #94a3b8; }
-
-/* Markdown prose for light mode */
-.prose-brain h1 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; color: #0f172a; }
-.prose-brain h2 { font-size: 0.9rem; font-weight: 600; margin-top: 1rem; margin-bottom: 0.4rem; color: #1e293b; padding-bottom: 0.2rem; border-bottom: 1px solid #e2e8f0; }
-.prose-brain h3 { font-size: 0.8rem; font-weight: 600; margin-top: 0.75rem; margin-bottom: 0.3rem; color: #334155; }
-.prose-brain p { margin-bottom: 0.6rem; line-height: 1.65; color: #475569; font-size: 0.8rem; }
+/* Markdown prose — headings in the book face, body in Archivo, code in the catalogue typewriter */
+.prose-brain h1 { font-family: var(--font-serif); font-size: 1.15rem; font-weight: 500; margin-bottom: 0.5rem; color: #1D2330; }
+.prose-brain h2 { font-family: var(--font-serif); font-size: 1rem; font-weight: 500; margin-top: 1rem; margin-bottom: 0.4rem; color: #1D2330; padding-bottom: 0.2rem; border-bottom: 1px solid #C6C9C0; }
+.prose-brain h3 { font-family: var(--font-serif); font-size: 0.9rem; font-weight: 500; margin-top: 0.75rem; margin-bottom: 0.3rem; color: #343B44; }
+.prose-brain p { margin-bottom: 0.6rem; line-height: 1.65; color: #343B44; font-size: 0.85rem; }
 .prose-brain ul { list-style: disc; padding-left: 1.1rem; margin-bottom: 0.5rem; }
 .prose-brain ol { list-style: decimal; padding-left: 1.1rem; margin-bottom: 0.5rem; }
-.prose-brain li { color: #475569; margin-bottom: 0.2rem; line-height: 1.55; font-size: 0.8rem; }
-.prose-brain strong { color: #1e293b; font-weight: 600; }
-.prose-brain em { color: #64748b; }
-.prose-brain code { background: #f1f5f9; color: #0369a1; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.75rem; font-family: var(--font-geist-mono), ui-monospace, monospace; }
-.prose-brain pre { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.4rem; padding: 0.75rem; overflow-x: auto; margin-bottom: 0.75rem; }
-.prose-brain pre code { background: transparent; padding: 0; font-size: 0.75rem; color: #475569; }
-.prose-brain blockquote { border-left: 2px solid #cbd5e1; padding-left: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem; font-size: 0.8rem; }
-.prose-brain a { color: #2563eb; }
+.prose-brain li { color: #343B44; margin-bottom: 0.2rem; line-height: 1.55; font-size: 0.85rem; }
+.prose-brain strong { color: #1D2330; font-weight: 600; }
+.prose-brain em { color: #555C68; }
+.prose-brain code { background: #E3E5DE; color: #2F5B8A; padding: 0.1rem 0.3rem; border-radius: 0.2rem; font-size: 0.8rem; font-family: var(--font-mono); }
+.prose-brain pre { background: #F4F5F0; border: 1px solid #C6C9C0; border-radius: 3px; padding: 0.75rem; overflow-x: auto; margin-bottom: 0.75rem; }
+.prose-brain pre code { background: transparent; padding: 0; font-size: 0.8rem; color: #343B44; }
+.prose-brain blockquote { border-left: 2px solid #C6C9C0; padding-left: 0.75rem; color: #555C68; margin-bottom: 0.5rem; font-size: 0.85rem; }
+.prose-brain a { color: #2F5B8A; }
 .prose-brain a:hover { text-decoration: underline; }
-.prose-brain hr { border-color: #e2e8f0; margin: 0.75rem 0; }
-.prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
-.prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-weight: 600; }
-.prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #f1f5f9; color: #475569; }
+.prose-brain hr { border-color: #C6C9C0; margin: 0.75rem 0; }
+.prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 0.75rem; }
+.prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #80877F; color: #1D2330; font-weight: 600; }
+.prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #C6C9C0; color: #343B44; }
+
+.dark .prose-brain h1, .dark .prose-brain h2, .dark .prose-brain strong, .dark .prose-brain th { color: #E6E8E1; }
+.dark .prose-brain h2 { border-bottom-color: #344040; }
+.dark .prose-brain h3, .dark .prose-brain p, .dark .prose-brain li, .dark .prose-brain td, .dark .prose-brain pre code { color: #C6CBC6; }
+.dark .prose-brain em, .dark .prose-brain blockquote { color: #A2A9A5; }
+.dark .prose-brain blockquote { border-left-color: #344040; }
+.dark .prose-brain code { background: #232C2D; color: #8DB3DE; }
+.dark .prose-brain pre { background: #1B2223; border-color: #344040; }
+.dark .prose-brain a { color: #8DB3DE; }
+.dark .prose-brain hr, .dark .prose-brain td { border-color: #344040; }
+.dark .prose-brain th { border-bottom-color: #66716F; }
+
+/* The index-card ruling used on focus cards */
+.ruled {
+  background-image: repeating-linear-gradient(transparent 0 calc(1.5em - 1px), #7FA3C9 calc(1.5em - 1px) 1.5em);
+}

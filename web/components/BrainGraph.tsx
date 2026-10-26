@@ -18,18 +18,19 @@ interface Props {
   typeColors: Record<string, string>
 }
 
+// Archive inks per note type (AI Superbrain house style); mid tones that read on both the day and evening paper
 export const DEFAULT_TYPE_COLORS: Record<string, string> = {
-  person: '#60a5fa',
-  project: '#34d399',
-  idea: '#f59e0b',
-  resource: '#a78bfa',
-  note: '#94a3b8',
-  meeting: '#06B6D4',
-  daily: '#6B7280',
-  area: '#EC4899',
-  group: '#fb923c',
-  system: '#9CA3AF',
-  template: '#C084FC',
+  person: '#3F7A63',
+  project: '#3A6A9C',
+  idea: '#A87516',
+  resource: '#5E7182',
+  note: '#6E7573',
+  meeting: '#8E4F80',
+  daily: '#80877F',
+  area: '#B8402F',
+  group: '#4C8580',
+  system: '#A2A9A5',
+  template: '#8A7CA8',
 }
 
 const NODE_REL_SIZE = 3.5
@@ -214,13 +215,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   }, [nodes, edges])
 
   const isDark = !mounted || resolvedTheme === 'dark'
-  const bgColor = isDark ? '#030712' : '#f8fafc'
-  // Subtle edge colors — same as Obsidian (no bright orange distracting from structure)
-  const edgeColor = isDark ? '#2d3748' : '#cbd5e1'
-  const edgeColorFocus = isDark ? '#4b5563' : '#94a3b8'
-  const edgeColorTyped = isDark ? '#374151' : '#b0bec5'
-  const labelColorDim = isDark ? '#9ca3af' : '#6b7280'
-  const labelColorActive = isDark ? '#f3f4f6' : '#1f2937'
+  // Archive paper and ruling (AI Superbrain house style)
+  const bgColor = isDark ? '#121718' : '#EDEEE8'
+  const edgeColor = isDark ? '#344040' : '#C6C9C0'
+  const edgeColorFocus = isDark ? '#8DB3DE' : '#2F5B8A'
+  const edgeColorTyped = isDark ? '#3E5872' : '#A9C0DA'
+  const labelColorDim = isDark ? '#A2A9A5' : '#555C68'
+  const labelColorActive = isDark ? '#E6E8E1' : '#1D2330'
 
   const graphData = useMemo(() => ({
     nodes: nodes.map(n => {
@@ -368,13 +369,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
             // Compute edge color (same logic as before)
             let color: string
             if (focusId !== null) {
-              if (srcDimmed && tgtDimmed) color = isDark ? '#1a202c' : '#f8fafc'
+              if (srcDimmed && tgtDimmed) color = isDark ? '#1B2223' : '#E3E5DE'
               else {
                 const base = (link.typed as boolean) ? edgeColorTyped : edgeColor
                 color = srcDimmed || tgtDimmed ? base + '55' : edgeColorFocus
               }
             } else if (activeTypes.size > 0 && (srcDimmed || tgtDimmed)) {
-              color = isDark ? '#1e2533' : '#f1f5f9'
+              color = isDark ? '#1B2223' : '#E3E5DE'
             } else {
               color = (link.typed as boolean) ? edgeColorTyped : edgeColor
             }
