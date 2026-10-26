@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react'
 import { VaultNote } from '@/lib/types'
 import { useToast } from '@/components/Toaster'
 import { getDiffStats } from '@/lib/diff'
+import type { Suggestion } from '@/lib/suggestions'
+import { SuggestionsSection } from '@/components/SuggestionsSection'
 
 interface Props {
   notesByPath: Record<string, VaultNote>
@@ -10,6 +12,10 @@ interface Props {
   typeColors: Record<string, string>
   onApproved: () => void
   onPreviewChanges: (note: VaultNote, duplicate: VaultNote) => void
+  aiSuggestions: Suggestion[]
+  suggestionsLastRunAt: string | null
+  onPreviewSuggestedMerge: (note: VaultNote, duplicate: VaultNote, suggestionId: string) => void
+  onSuggestionsChanged: () => void
 }
 
 function norm(s: string): string {
@@ -522,7 +528,10 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
   )
 }
 
-export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPreviewChanges }: Props) {
+export function InboxView({
+  notesByPath, onSelect, typeColors, onApproved, onPreviewChanges,
+  aiSuggestions, suggestionsLastRunAt, onPreviewSuggestedMerge, onSuggestionsChanged,
+}: Props) {
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
 
@@ -556,14 +565,29 @@ export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPre
     })
     .filter(d => d.added.length > 0 || d.updated.length > 0)
 
+  const suggestionsSection = (
+    <SuggestionsSection
+      suggestions={aiSuggestions}
+      lastRunAt={suggestionsLastRunAt}
+      notesByPath={notesByPath}
+      typeColors={typeColors}
+      onSelect={onSelect}
+      onPreviewMerge={onPreviewSuggestedMerge}
+      onChanged={onSuggestionsChanged}
+    />
+  )
+
   if (inboxNotes.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+      <div className="h-full overflow-y-auto px-6 py-5">
+        <div className="max-w-2xl mx-auto">{suggestionsSection}</div>
+        <div className="flex flex-col items-center text-center gap-3 mt-16">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-300 dark:text-gray-700">
           <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
           <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
         </svg>
-        <p className="text-sm text-gray-400 dark:text-gray-600">Inbox is empty</p>
+          <p className="text-sm text-gray-400 dark:text-gray-600">Inbox is empty</p>
+        </div>
       </div>
     )
   }
@@ -571,6 +595,7 @@ export function InboxView({ notesByPath, onSelect, typeColors, onApproved, onPre
   return (
     <div className="h-full overflow-y-auto px-6 py-5">
       <div className="max-w-2xl mx-auto space-y-8">
+        {suggestionsSection}
         {days.map(({ day, added, updated }) => (
           <DaySection
             key={day}
