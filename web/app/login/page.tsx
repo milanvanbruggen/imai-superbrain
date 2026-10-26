@@ -25,11 +25,14 @@ function LoginContent() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-950">
-      <div className="w-full max-w-sm space-y-6 px-4">
-        <div className="text-center space-y-1">
-          <h1 className="text-3xl font-bold text-white">Superbrain</h1>
-          <p className="text-gray-400">Your personal knowledge graph</p>
+    <main className="flex min-h-screen items-center justify-center bg-paper text-ink">
+      <div className="w-full max-w-sm space-y-8 px-4">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <img src="/brand/ai-superbrain-mark.svg" alt="" width={64} height={64} />
+          <div className="space-y-1">
+            <h1 className="font-serif text-3xl font-medium">AI Superbrain</h1>
+            <p className="text-ink-muted">Your personal archive, with the references in between.</p>
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
@@ -39,13 +42,14 @@ function LoginContent() {
             placeholder="Password"
             autoFocus
             required
-            className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-teal-500 transition"
+            aria-label="Password"
+            className="w-full px-4 py-3 bg-card border border-line-strong rounded-[3px] text-ink placeholder-ink-muted focus:outline-none focus:border-ruling-blue transition"
           />
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-catalog-red">{error}</p>}
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-6 py-3 bg-teal-600 text-white font-medium rounded-lg hover:bg-teal-500 disabled:opacity-50 transition cursor-pointer"
+            className="w-full px-6 py-3 bg-bookcloth text-on-bookcloth font-semibold rounded-[3px] hover:opacity-90 disabled:opacity-50 transition cursor-pointer"
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </button>

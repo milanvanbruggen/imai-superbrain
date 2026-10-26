@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
-import { BrainGraph, DEFAULT_TYPE_COLORS } from '@/components/BrainGraph'
+import { VaultGraph, VaultNote } from '@/lib/types'
+import { DEFAULT_TYPE_COLORS } from '@/lib/type-colors'
 import { NoteTypesModal } from '@/components/NoteTypesModal'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
@@ -12,6 +12,7 @@ import { SetupWizard } from '@/components/SetupWizard'
 import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
 import { DiffPanel } from '@/components/DiffPanel'
+import { TableView } from '@/components/TableView'
 import { markSuggestion } from '@/components/SuggestionsSection'
 import { unconnectedPaths, visibleSuggestions, type RejectedCandidate, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
@@ -69,7 +70,7 @@ function McpStatus() {
 
 const MIN_PANEL_WIDTH = 280
 const MAX_PANEL_WIDTH = 700
-const DEFAULT_PANEL_WIDTH = MAX_PANEL_WIDTH
+const DEFAULT_PANEL_WIDTH = 380
 
 export default function BrainPage() {
   const toast = useToast()
@@ -85,7 +86,6 @@ export default function BrainPage() {
   const [hasGitHub, setHasGitHub] = useState(false)
   const [noteTypes, setNoteTypes] = useState<{name: string, color: string}[]>([])
   const [showNoteTypes, setShowNoteTypes] = useState(false)
-  const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set())
   const [showSystemNodes, setShowSystemNodes] = useState(false)
   const [showInboxOnly, setShowInboxOnly] = useState(false)
   const [showInboxReminder, setShowInboxReminder] = useState(false)
@@ -558,48 +558,23 @@ export default function BrainPage() {
     allNodes.some(n => n.id === e.source) && allNodes.some(n => n.id === e.target)
   )
 
-  function toggleType(type: string) {
-    setActiveTypes(prev => {
-      if (prev.size === 0) return new Set([type])
-      const next = new Set(prev)
-      if (next.has(type)) {
-        next.delete(type)
-        return next.size === 0 ? new Set() : next
-      }
-      next.add(type)
-      return next
-    })
-  }
-
-  const displayNodes = showInboxOnly
-    ? allNodes.filter(n => n.inbox)
-    : allNodes
-  const displayEdges = allEdges.filter(e =>
-    displayNodes.some(n => n.id === e.source) && displayNodes.some(n => n.id === e.target)
-  )
+  // Your own note lies in the middle of the table
+  const ownerId = ownerNote && allNodes.some(n => n.id === ownerNote) ? ownerNote : null
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100" onClick={() => setSelectedId(null)}>
-      <header className="relative z-20 flex items-center gap-4 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
+      <header className="relative z-20 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center shrink-0">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <line x1="12" y1="2" x2="12" y2="6"/>
-              <line x1="12" y1="18" x2="12" y2="22"/>
-              <line x1="2" y1="12" x2="6" y2="12"/>
-              <line x1="18" y1="12" x2="22" y2="12"/>
-            </svg>
-          </div>
-          <h1 className="text-sm font-semibold tracking-wide">Superbrain</h1>
+          <img src="/brand/ai-superbrain-mark.svg" alt="" width={28} height={28} className="shrink-0" />
+          <h1 className="font-serif text-lg font-medium">AI Superbrain</h1>
         </div>
-        <span className="text-xs text-gray-400 dark:text-gray-600 tabular-nums">{graph.nodes.length} notes</span>
+        <span className="hidden md:inline font-mono text-xs text-ink-muted tabular-nums">{graph.nodes.length} cards</span>
 
-        <McpStatus />
+        <div className="hidden md:block"><McpStatus /></div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
-            onClick={() => { setShowInboxOnly(v => !v); setActiveTypes(new Set()) }}
+            onClick={() => setShowInboxOnly(v => !v)}
             className={`relative px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
               showInboxOnly
                 ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
@@ -708,64 +683,43 @@ export default function BrainPage() {
             />
           ) : (
             <>
-              <BrainGraph
-                nodes={displayNodes}
-                edges={displayEdges}
+              <TableView
+                nodes={allNodes}
+                edges={allEdges}
+                notesByPath={graph.notesByPath}
+                ownerId={showSystemNodes ? null : ownerId}
                 selectedId={selectedId}
-                onSelectNode={setSelectedId}
-                activeTypes={activeTypes}
+                onSelect={setSelectedId}
                 typeColors={typeColors}
+                suggestions={showSystemNodes ? [] : openSuggestions}
               />
 
-              {/* System files toggle — top right */}
-              <button
-                onClick={() => { setShowSystemNodes(v => !v); setActiveTypes(new Set()); setSelectedId(null) }}
-                title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
-                className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
-                  showSystemNodes
-                    ? 'bg-white/90 dark:bg-gray-900/90 text-gray-600 dark:text-gray-300 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
-                    : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
-                }`}
-              >
-                <span className="text-xs">System</span>
-                <span className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${
-                  showSystemNodes ? 'bg-teal-500' : 'bg-gray-300 dark:bg-gray-600'
-                }`}>
-                  <span className={`absolute h-3 w-3 rounded-full bg-white shadow transition-transform duration-200 ${
-                    showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'
-                  }`} />
-                </span>
-              </button>
-
-              {/* Type filter overlay — left */}
-              <div className="absolute top-3 left-3 z-10 flex flex-nowrap gap-1.5 overflow-x-auto pointer-events-none pr-28" style={{ scrollbarWidth: 'none' }}>
-                {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => {
-                  const isActive = activeTypes.size === 0 || activeTypes.has(type)
-                  const color = typeColors[type] ?? '#94a3b8'
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => toggleType(type)}
-                      title={isActive ? `Hide ${type}` : `Show only ${type}`}
-                      className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
-                        isActive
-                          ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
-                          : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
-                      }`}
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: isActive ? color : '#9ca3af' }}
-                      />
+              {/* Note types legend and the system files switch — top */}
+              <div className="absolute top-3 left-3 right-3 z-10 flex items-start gap-2 pointer-events-none">
+                <div className="hidden md:flex flex-wrap gap-x-3 gap-y-1 items-center min-w-0">
+                  {availableTypes.filter(t => showSystemNodes ? (t === 'system' || t === 'template') : (t !== 'system' && t !== 'template')).map(type => (
+                    <span key={type} className="flex items-center gap-1.5 font-mono text-[11px] text-ink-muted">
+                      <span className="w-2.5 h-2.5 rounded-[1px] shrink-0" style={{ backgroundColor: typeColors[type] ?? '#80877F' }} />
                       {type}
-                    </button>
-                  )
-                })}
+                    </span>
+                  ))}
+                  <button
+                    onClick={() => setShowNoteTypes(true)}
+                    className="pointer-events-auto font-mono text-[11px] text-ruling-blue underline-offset-2 hover:underline cursor-pointer"
+                  >
+                    Edit types
+                  </button>
+                </div>
                 <button
-                  onClick={() => setShowNoteTypes(true)}
-                  className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
+                  onClick={() => { setShowSystemNodes(v => !v); setSelectedId(null) }}
+                  title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
+                  aria-pressed={showSystemNodes}
+                  className="ml-auto shrink-0 pointer-events-auto flex items-center gap-2 h-7 px-2.5 rounded-[3px] text-xs cursor-pointer border border-line bg-card/95 text-ink"
                 >
-                  Edit
+                  System
+                  <span className={`relative inline-flex items-center h-4 w-7 shrink-0 rounded-full transition-colors duration-200 ${showSystemNodes ? 'bg-bookcloth' : 'bg-line-strong'}`}>
+                    <span className={`absolute h-3 w-3 rounded-full bg-card shadow transition-transform duration-200 ${showSystemNodes ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                  </span>
                 </button>
               </div>
             </>
