@@ -19,18 +19,29 @@ import { useToast } from '@/components/Toaster'
 function McpStatus() {
   const [isLocal, setIsLocal] = useState(false)
   const [showTooltip, setShowTooltip] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const mcpUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : ''
 
   useEffect(() => {
     const host = window.location.hostname
     setIsLocal(host === 'localhost' || host === '127.0.0.1')
   }, [])
 
+  async function copyUrl() {
+    try {
+      await navigator.clipboard.writeText(mcpUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard blocked: the URL is selectable with one click instead
+    }
+  }
+
   return (
-    <div className="relative">
+    // Hover handlers on the wrapper, so the pointer can move into the tooltip to copy the URL
+    <div className="relative" onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
       <button
         onClick={() => setShowTooltip(v => !v)}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
           isLocal
             ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
@@ -41,7 +52,8 @@ function McpStatus() {
         MCP {isLocal ? 'Offline' : 'Active'}
       </button>
       {showTooltip && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 p-3 rounded-lg bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 shadow-lg z-50 text-left">
+        <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50">
+        <div className="relative w-64 p-3 rounded-lg bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 shadow-lg z-50 text-left">
           <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-800 border-l border-t border-slate-200 dark:border-gray-700" />
           {isLocal ? (
             <>
@@ -56,11 +68,18 @@ function McpStatus() {
               <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
                 Your Superbrain is accessible via MCP. AI tools like Claude Desktop can read and search your vault through the remote MCP endpoint.
               </p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
-                URL: <code className="text-[10px] bg-slate-100 dark:bg-gray-700 px-1 py-0.5 rounded">{typeof window !== 'undefined' ? window.location.origin : ''}/mcp</code>
-              </p>
+              <div className="mt-2 flex items-center gap-1.5">
+                <code className="flex-1 min-w-0 truncate select-all text-[10px] bg-slate-100 dark:bg-gray-700 px-1.5 py-1 rounded text-gray-700 dark:text-gray-200" title={mcpUrl}>{mcpUrl}</code>
+                <button
+                  onClick={copyUrl}
+                  className="shrink-0 px-2 py-1 text-[11px] font-medium rounded bg-teal-600 hover:bg-teal-500 text-white cursor-pointer transition-colors"
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             </>
           )}
+        </div>
         </div>
       )}
     </div>
