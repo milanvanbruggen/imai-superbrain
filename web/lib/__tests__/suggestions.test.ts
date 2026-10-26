@@ -4,6 +4,7 @@ import { parseNote } from '../vault-parser'
 import { areLinked, pairKey, pruneSuggestions, visibleSuggestions, SUGGESTIONS_PATH, type Suggestion } from '../suggestions'
 import { generateSuggestions, MIN_CONFIDENCE } from '../suggestion-engine'
 import { runSuggestionReview } from '../suggestion-review'
+import { mapWithConcurrency } from '../concurrency'
 import type { VaultClient } from '../vault-client'
 
 const jan = parseNote('people/Jan.md', '---\ntype: person\n---\nJan works on [[Superbrain]].')
@@ -133,6 +134,34 @@ describe('generateSuggestions', () => {
     expect(fullPrompt).not.toContain('FOCUS |')
   })
 
+  it('verifies candidates in batches of 5 and reports progress per batch', async () => {
+    const people = Array.from({ length: 8 }, (_, i) => parseNote(`people/P${i}.md`, `Person ${i}`))
+    const candidates = people.slice(1).map(p => ({ kind: 'relation', a: people[0].path, b: p.path }))
+    const accept = (n: number) => ({ decisions: Array.from({ length: n }, (_, i) => ({
+      candidate: i + 1, accept: true, source: people[0].path, target: candidates[i + (n === 5 ? 0 : 5)].b,
+      relationType: 'works_with', reason: 'r', confidence: 0.9,
+    })) })
+    const { client, parse } = fakeAnthropic({ candidates }, accept(5), accept(2))
+    const events: unknown[] = []
+
+    const drafts = await generateSuggestions(
+      client, { notes: people, focusPaths: null, blockedKeys: new Set() }, e => events.push(e),
+    )
+
+    expect(parse).toHaveBeenCalledTimes(3) // 1 scan + 2 verify batches
+    expect(drafts).toHaveLength(7)
+    expect(events).toEqual([
+      { phase: 'scanning', notes: 8 },
+      { phase: 'verifying', done: 0, total: 7 },
+      { phase: 'verifying', done: 5, total: 7 },
+      { phase: 'verifying', done: 7, total: 7 },
+    ])
+    // Each batch is numbered from 1 and only contains its own candidates
+    const batch2 = parse.mock.calls[2][0].messages[0].content as string
+    expect(batch2).toContain(`1. relation: ${people[0].path} ↔ ${people[6].path}`)
+    expect(batch2).not.toContain(people[1].path)
+  })
+
   it('does not call Claude when nothing changed', async () => {
     const { client, parse } = fakeAnthropic()
     expect(await generateSuggestions(client, { notes, focusPaths: new Set(), blockedKeys: new Set() })).toEqual([])
@@ -175,8 +204,11 @@ describe('runSuggestionReview', () => {
       { candidates: [{ kind: 'relation', a: idea.path, b: superbrain.path }] },
       { decisions: [{ candidate: 1, accept: true, source: idea.path, target: superbrain.path, relationType: 'part_of', reason: 'Feature', confidence: 0.8 }] },
     )
-    const result = await runSuggestionReview(vault.client, first.client)
+    const events: { phase: string }[] = []
+    const result = await runSuggestionReview(vault.client, first.client, { onProgress: e => events.push(e) })
     expect(result).toMatchObject({ reviewedNotes: 3, focusNotes: 3, added: 1, pending: 1 })
+    expect(events[0]).toEqual({ phase: 'reading', done: 0, total: 3 })
+    expect(events.map(e => e.phase)).toEqual(['reading', 'reading', 'scanning', 'verifying', 'verifying', 'saving'])
 
     const stored = JSON.parse(vault.files[SUGGESTIONS_PATH])
     expect(stored.suggestions[0]).toMatchObject({ kind: 'relation', source: idea.path, target: superbrain.path, relationType: 'part_of', status: 'pending' })
@@ -193,5 +225,21 @@ describe('runSuggestionReview', () => {
     const scanned = await runSuggestionReview(vault.client, full.client, { fullScan: true })
     expect(scanned).toMatchObject({ focusNotes: 3, added: 0, pending: 1 })
     expect(full.parse).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('mapWithConcurrency', () => {
+  it('keeps input order and never exceeds the limit', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const results = await mapWithConcurrency([30, 10, 20, 0, 5], 2, async ms => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise(r => setTimeout(r, ms))
+      inFlight--
+      return ms * 2
+    })
+    expect(results).toEqual([60, 20, 40, 0, 10])
+    expect(maxInFlight).toBe(2)
   })
 })

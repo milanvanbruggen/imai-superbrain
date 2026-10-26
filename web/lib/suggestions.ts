@@ -26,6 +26,13 @@ export interface Suggestion {
   status: SuggestionStatus
 }
 
+/** Live progress of a review run, streamed to the Inbox while a manual scan runs. */
+export type ReviewProgress =
+  | { phase: 'reading'; done: number; total: number }
+  | { phase: 'scanning'; notes: number }
+  | { phase: 'verifying'; done: number; total: number }
+  | { phase: 'saving' }
+
 export interface SuggestionStore {
   version: 1
   lastRunAt: string | null

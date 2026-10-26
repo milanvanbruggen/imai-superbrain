@@ -1,13 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { VaultNote } from './types'
-import { RELATION_TYPES, areLinked, pairKey, type RelationType, type SuggestionKind } from './suggestions'
+import { mapWithConcurrency } from './concurrency'
+import {
+  RELATION_TYPES, areLinked, pairKey, type RelationType, type ReviewProgress, type SuggestionKind,
+} from './suggestions'
 
 export const SUGGESTION_MODEL = 'claude-opus-5-5'
 export const MIN_CONFIDENCE = 0.6
 const MAX_CANDIDATES = 40
 const EXCERPT_CHARS = 280
 const MAX_NOTE_CHARS = 12_000
+// Stage 2 checks candidates in small parallel batches: faster, and progress can be reported per batch
+const VERIFY_BATCH_SIZE = 5
+const VERIFY_CONCURRENCY = 4
 
 export interface SuggestionDraft {
   kind: SuggestionKind
@@ -125,7 +131,13 @@ async function ask<T>(anthropic: Anthropic, params: ParseParams): Promise<T> {
   return response.parsed_output as T
 }
 
-export async function generateSuggestions(anthropic: Anthropic, input: ReviewInput): Promise<SuggestionDraft[]> {
+type Candidate = { kind: SuggestionKind; a: string; b: string }
+
+export async function generateSuggestions(
+  anthropic: Anthropic,
+  input: ReviewInput,
+  onProgress?: (progress: ReviewProgress) => void,
+): Promise<SuggestionDraft[]> {
   const notes = reviewableNotes(input.notes)
   const byPath = new Map(notes.map(n => [n.path, n]))
   const isFocus = (path: string) => input.focusPaths === null || input.focusPaths.has(path)
@@ -138,7 +150,8 @@ export async function generateSuggestions(anthropic: Anthropic, input: ReviewInp
     ? 'Review the whole vault.'
     : 'Notes marked FOCUS are new or changed since the last review. Every candidate must involve at least one FOCUS note.'
 
-  const { candidates } = await ask<{ candidates: { kind: SuggestionKind; a: string; b: string }[] }>(anthropic, {
+  onProgress?.({ phase: 'scanning', notes: notes.length })
+  const { candidates } = await ask<{ candidates: Candidate[] }>(anthropic, {
     model: SUGGESTION_MODEL,
     max_tokens: 16000,
     output_config: { effort: 'medium', format: jsonSchemaOutputFormat(CANDIDATE_SCHEMA) },
@@ -169,9 +182,27 @@ ${index}
   }).slice(0, MAX_CANDIDATES)
   if (valid.length === 0) return []
 
-  // Stage 2 — read the involved notes in full and decide per candidate
-  const involved = [...new Set(valid.flatMap(c => [c.a, c.b]))].map(p => byPath.get(p)!)
-  const list = valid.map((c, i) => `${i + 1}. ${c.kind}: ${c.a} ↔ ${c.b}`).join('\n')
+  // Stage 2 — read the involved notes in full and decide per candidate, in parallel batches
+  const batches: Candidate[][] = []
+  for (let i = 0; i < valid.length; i += VERIFY_BATCH_SIZE) batches.push(valid.slice(i, i + VERIFY_BATCH_SIZE))
+  let verified = 0
+  onProgress?.({ phase: 'verifying', done: 0, total: valid.length })
+  const results = await mapWithConcurrency(batches, VERIFY_CONCURRENCY, async batch => {
+    const drafts = await verifyBatch(anthropic, batch, byPath)
+    verified += batch.length
+    onProgress?.({ phase: 'verifying', done: verified, total: valid.length })
+    return drafts
+  })
+  return results.flat()
+}
+
+async function verifyBatch(
+  anthropic: Anthropic,
+  batch: Candidate[],
+  byPath: Map<string, VaultNote>,
+): Promise<SuggestionDraft[]> {
+  const involved = [...new Set(batch.flatMap(c => [c.a, c.b]))].map(p => byPath.get(p)!)
+  const list = batch.map((c, i) => `${i + 1}. ${c.kind}: ${c.a} ↔ ${c.b}`).join('\n')
   const { decisions } = await ask<{ decisions: {
     candidate: number; accept: boolean; source: string; target: string
     relationType: RelationType | 'none'; reason: string; confidence: number
@@ -202,7 +233,7 @@ ${list}
 
   const drafts: SuggestionDraft[] = []
   for (const d of decisions) {
-    const c = valid[d.candidate - 1]
+    const c = batch[d.candidate - 1]
     if (!c || !d.accept || d.confidence < MIN_CONFIDENCE) continue
     // source/target must be the candidate pair, in either order
     const pair = new Set([c.a, c.b])

@@ -1,10 +1,14 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { VaultClient } from './vault-client'
 import { buildGraph } from './vault-parser'
+import { mapWithConcurrency } from './concurrency'
 import { generateSuggestions } from './suggestion-engine'
 import {
-  areLinked, pairKey, pruneSuggestions, readSuggestionStore, writeSuggestionStore, type Suggestion,
+  areLinked, pairKey, pruneSuggestions, readSuggestionStore, writeSuggestionStore,
+  type ReviewProgress, type Suggestion,
 } from './suggestions'
+
+const READ_CONCURRENCY = 10
 
 export interface ReviewResult {
   reviewedNotes: number
@@ -20,13 +24,19 @@ export interface ReviewResult {
 export async function runSuggestionReview(
   client: VaultClient,
   anthropic: Anthropic,
-  { fullScan = false }: { fullScan?: boolean } = {},
+  { fullScan = false, onProgress }: { fullScan?: boolean; onProgress?: (progress: ReviewProgress) => void } = {},
 ): Promise<ReviewResult> {
   const [tree, { store }] = await Promise.all([client.getMarkdownTree(), readSuggestionStore(client)])
 
-  const files = await Promise.all(
-    tree.map(async f => [f.path, (await client.readFile(f.path)).content] as [string, string])
-  )
+  // A bounded number of parallel reads keeps GitHub's secondary rate limit happy and lets us count progress
+  let read = 0
+  onProgress?.({ phase: 'reading', done: 0, total: tree.length })
+  const files = await mapWithConcurrency(tree, READ_CONCURRENCY, async f => {
+    const { content } = await client.readFile(f.path)
+    read++
+    if (read % 10 === 0 || read === tree.length) onProgress?.({ phase: 'reading', done: read, total: tree.length })
+    return [f.path, content] as [string, string]
+  })
   const notes = Object.values(buildGraph(files).notesByPath)
   const byPath = new Map(notes.map(n => [n.path, n]))
 
@@ -39,7 +49,7 @@ export async function runSuggestionReview(
   })
   const blockedKeys = new Set(existing.map(s => pairKey(s.kind, s.source, s.target)))
 
-  const drafts = await generateSuggestions(anthropic, { notes, focusPaths: fullScan ? null : changedPaths, blockedKeys })
+  const drafts = await generateSuggestions(anthropic, { notes, focusPaths: fullScan ? null : changedPaths, blockedKeys }, onProgress)
 
   const now = new Date().toISOString()
   const added: Suggestion[] = drafts.map(d => ({
@@ -48,6 +58,8 @@ export async function runSuggestionReview(
     createdAt: now,
     status: 'pending',
   }))
+
+  onProgress?.({ phase: 'saving' })
 
   // The owner may have accepted or dismissed suggestions while Claude was working —
   // re-read the store so those decisions aren't overwritten.
