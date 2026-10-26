@@ -1,7 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { VaultNote } from '@/lib/types'
-import type { Suggestion } from '@/lib/suggestions'
+import type { ReviewProgress, Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 interface Props {
@@ -126,27 +126,125 @@ function SuggestionCard({
   )
 }
 
+type RunEvent =
+  | ReviewProgress
+  | { phase: 'done'; result: { added: number } }
+  | { phase: 'error'; message: string }
+
+/** POSTs a manual review and calls onEvent for every line of the NDJSON progress stream. */
+async function streamReview(scope: 'changed' | 'all', onEvent: (event: RunEvent) => void): Promise<void> {
+  const res = await fetch('/api/cron/suggestions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scope }),
+  })
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}))
+    onEvent({ phase: 'error', message: data.message ?? data.error ?? `AI review failed (${res.status})` })
+    return
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let finished = false
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += value
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const event = JSON.parse(line) as RunEvent
+      if (event.phase === 'done' || event.phase === 'error') finished = true
+      onEvent(event)
+    }
+  }
+  // The stream ended without a result — usually the function hit its time limit
+  if (!finished) onEvent({ phase: 'error', message: 'The review stopped before finishing (time limit reached?)' })
+}
+
+const STEPS = ['reading', 'scanning', 'verifying'] as const
+
+function formatElapsed(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function RunProgress({ progress, startedAt }: { progress: ReviewProgress | null; startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const elapsed = formatElapsed(Math.max(0, Math.round((now - startedAt) / 1000)))
+
+  let label = 'Starting review…'
+  let counts: string | null = null
+  let fraction: number | null = null // null = no countable progress in this step
+  if (progress?.phase === 'reading') {
+    label = 'Reading notes'
+    counts = `${progress.done} / ${progress.total} notes`
+    fraction = progress.total ? progress.done / progress.total : 0
+  } else if (progress?.phase === 'scanning') {
+    label = `Looking for candidates among ${progress.notes} notes`
+  } else if (progress?.phase === 'verifying') {
+    label = 'Checking candidates in full'
+    counts = `${progress.done} / ${progress.total} checked · ${progress.total - progress.done} to go`
+    fraction = progress.total ? progress.done / progress.total : 0
+  } else if (progress?.phase === 'saving') {
+    label = 'Saving suggestions'
+  }
+  const step = progress && progress.phase !== 'saving' ? STEPS.indexOf(progress.phase) + 1 : null
+
+  return (
+    <div className="mb-3 px-4 py-3 rounded-lg border border-violet-200/60 dark:border-violet-500/20 bg-violet-50/40 dark:bg-violet-500/5">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="font-medium text-gray-700 dark:text-gray-300">
+          {step && <span className="text-gray-400 dark:text-gray-500 font-normal">Step {step} of 3 · </span>}
+          {label}
+        </span>
+        <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">{elapsed}</span>
+      </div>
+      <div className="mt-2 h-1.5 rounded-full bg-violet-100 dark:bg-violet-500/10 overflow-hidden">
+        {fraction === null ? (
+          <div className="h-full w-full rounded-full bg-violet-400/60 animate-pulse" />
+        ) : (
+          <div className="h-full rounded-full bg-violet-500 transition-[width] duration-300" style={{ width: `${Math.round(fraction * 100)}%` }} />
+        )}
+      </div>
+      <p className="mt-1.5 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+        {counts ?? (progress?.phase === 'scanning' ? 'One pass over the whole vault — this step has no item count' : '\u00a0')}
+      </p>
+    </div>
+  )
+}
+
 export function SuggestionsSection({ suggestions, lastRunAt, notesByPath, typeColors, onSelect, onPreviewMerge, onChanged }: Props) {
   const toast = useToast()
   const [running, setRunning] = useState<'changed' | 'all' | null>(null)
+  const [progress, setProgress] = useState<ReviewProgress | null>(null)
+  const [startedAt, setStartedAt] = useState(0)
 
   async function handleRun(scope: 'changed' | 'all') {
     setRunning(scope)
+    setProgress(null)
+    setStartedAt(Date.now())
     try {
-      const res = await fetch('/api/cron/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope }),
+      await streamReview(scope, event => {
+        if (event.phase === 'done') {
+          const { added } = event.result
+          toast(added > 0 ? `${added} new suggestion${added === 1 ? '' : 's'}` : 'No new suggestions')
+          onChanged()
+        } else if (event.phase === 'error') {
+          toast(event.message, 'error')
+        } else {
+          setProgress(event)
+        }
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast(data.message ?? data.error ?? 'AI review failed', 'error')
-        return
-      }
-      toast(data.added > 0 ? `${data.added} new suggestion${data.added === 1 ? '' : 's'}` : 'No new suggestions')
-      onChanged()
+    } catch {
+      toast('AI review failed — connection lost', 'error')
     } finally {
       setRunning(null)
+      setProgress(null)
     }
   }
 
@@ -173,6 +271,7 @@ export function SuggestionsSection({ suggestions, lastRunAt, notesByPath, typeCo
           {runButton('all', 'Full scan', 'Review every note in the vault — can take a few minutes')}
         </div>
       </div>
+      {running && <RunProgress progress={progress} startedAt={startedAt} />}
       {suggestions.length === 0 ? (
         <p className="text-xs text-gray-400 dark:text-gray-600 italic px-1">No open suggestions</p>
       ) : (
