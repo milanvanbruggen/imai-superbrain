@@ -2,22 +2,27 @@ import { describe, it, expect } from 'vitest'
 import { countInboxNodes } from '../inbox-utils'
 import type { GraphNode } from '../types'
 
-function makeNode(path: string): GraphNode {
-  return { id: path, path, title: path, type: 'note', tags: [], hasDuplicateStem: false }
+function makeNode(path: string, inbox = false): GraphNode {
+  return { id: path, path, title: path, type: 'note', tags: [], hasDuplicateStem: false, inbox }
 }
 
 describe('countInboxNodes', () => {
-  it('counts nodes with path starting with inbox/', () => {
+  it('counts nodes flagged with inbox: true in frontmatter', () => {
     const nodes: GraphNode[] = [
-      makeNode('inbox/quick-thought.md'),
-      makeNode('inbox/another.md'),
+      makeNode('notes/quick-thought.md', true),
+      makeNode('people/Jan.md', true),
       makeNode('people/Milan.md'),
       makeNode('projects/superbrain.md'),
     ]
     expect(countInboxNodes(nodes)).toBe(2)
   })
 
-  it('returns 0 when inbox is empty', () => {
+  it('ignores the folder — only the frontmatter flag counts', () => {
+    const nodes: GraphNode[] = [makeNode('inbox/legacy.md')]
+    expect(countInboxNodes(nodes)).toBe(0)
+  })
+
+  it('returns 0 when no node is flagged', () => {
     const nodes: GraphNode[] = [makeNode('people/Milan.md')]
     expect(countInboxNodes(nodes)).toBe(0)
   })
