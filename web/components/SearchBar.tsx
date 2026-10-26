@@ -93,7 +93,7 @@ export function SearchBar({ nodes, onSelect, actions = [], typeColors = {} }: Pr
                   <Command.Item
                     key={n.id}
                     value={n.id}
-                    keywords={[n.title, n.type, ...n.tags]}
+                    keywords={[n.title, n.type, ...n.tags].map(String)}
                     onSelect={() => choose(() => onSelect(n.id))}
                     className={ITEM}
                   >

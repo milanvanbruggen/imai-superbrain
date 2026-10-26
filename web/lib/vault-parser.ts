@@ -11,6 +11,20 @@ function systemType(path: string): 'system' | 'template' | null {
   return null
 }
 
+// YAML reads `title: 2024`, `tags: [2026]` or `tags: werk` as a number, a list of numbers or a
+// single string; the rest of the app expects text, so these are normalised here.
+function asText(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (typeof value === 'string') return value.trim() || null
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return null
+}
+
+function asTags(value: unknown): string[] {
+  const list = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[,\s]+/) : []
+  return list.map(asText).filter((t): t is string => !!t)
+}
+
 function stemToTitle(stem: string): string {
   return stem.replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
@@ -47,10 +61,10 @@ export function parseNote(path: string, raw: string): VaultNote {
   return {
     path,
     stem,
-    title: data.title ?? stemToTitle(stem),
+    title: asText(data.title) ?? stemToTitle(stem),
     type: systemType(path) ?? (typeof data.type === 'string' && data.type.trim() ? data.type.trim() : 'note'),
     inbox: data.inbox === true,
-    tags: data.tags ?? [],
+    tags: asTags(data.tags),
     date: data.date instanceof Date
       ? data.date.toISOString().slice(0, 10)
       : typeof data.date === 'string'

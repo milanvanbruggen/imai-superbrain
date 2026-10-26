@@ -234,3 +234,17 @@ describe('buildGraph - untyped frontmatter relation', () => {
     expect(edges).toHaveLength(1)
   })
 })
+
+describe('parseNote — titles and tags that YAML does not read as text', () => {
+  it('turns a number or date title into text', () => {
+    expect(parseNote('notes/a.md', '---\ntitle: 2024\n---\n').title).toBe('2024')
+    expect(parseNote('notes/b.md', '---\ntitle: 2026-10-26\n---\n').title).toBe('2026-10-26')
+    expect(parseNote('notes/c.md', '---\ntitle:\n---\n').title).toBe('C')
+  })
+
+  it('turns tags into a list of text, whatever form they take', () => {
+    expect(parseNote('notes/a.md', '---\ntags: [2026, werk, null]\n---\n').tags).toEqual(['2026', 'werk'])
+    expect(parseNote('notes/b.md', '---\ntags: werk, ddz\n---\n').tags).toEqual(['werk', 'ddz'])
+    expect(parseNote('notes/c.md', '---\ntags:\n---\n').tags).toEqual([])
+  })
+})
