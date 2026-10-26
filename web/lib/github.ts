@@ -18,6 +18,42 @@ interface FileContent {
   sha: string
 }
 
+interface GitHubTreeItem {
+  path: string
+  type: string
+  sha: string
+}
+
+// ETag cache for GET requests, shared across clients within a server instance.
+// A conditional request answered with 304 Not Modified does not count against
+// GitHub's rate limit, so polling an unchanged vault is effectively free.
+const MAX_ETAG_ENTRIES = 5000
+const etagCache = new Map<string, { etag: string; body: unknown }>()
+
+function rememberEtag(url: string, etag: string, body: unknown): void {
+  etagCache.delete(url)
+  etagCache.set(url, { etag, body })
+  if (etagCache.size > MAX_ETAG_ENTRIES) {
+    etagCache.delete(etagCache.keys().next().value!)
+  }
+}
+
+/** Builds an error that keeps GitHub's own explanation (rate limit, missing permission, SSO). */
+async function githubError(prefix: string, res: Response): Promise<Error> {
+  let detail = ''
+  try {
+    const body = await res.json()
+    if (body?.message) detail = body.message
+  } catch {}
+  const remaining = res.headers?.get('x-ratelimit-remaining')
+  const reset = res.headers?.get('x-ratelimit-reset')
+  if (remaining === '0' && reset) {
+    const resetAt = new Date(Number(reset) * 1000).toISOString().slice(11, 16)
+    detail = `GitHub API rate limit exceeded, resets at ${resetAt} UTC`
+  }
+  return new Error(`${prefix}: ${res.status}${detail ? ` (${detail})` : ''}`)
+}
+
 export class GitHubVaultClient implements VaultClient {
   private base: string
   private headers: Record<string, string>
@@ -31,52 +67,52 @@ export class GitHubVaultClient implements VaultClient {
     }
   }
 
-  async getMarkdownTree(): Promise<TreeFile[]> {
+  private async getJson<T>(url: string, errorPrefix: string): Promise<T> {
+    const cached = etagCache.get(url)
+    const headers = cached ? { ...this.headers, 'If-None-Match': cached.etag } : this.headers
+    const res = await fetch(url, { headers })
+    if (res.status === 304 && cached) return cached.body as T
+    if (!res.ok) throw await githubError(errorPrefix, res)
+    const body = await res.json()
+    const etag = res.headers?.get('etag')
+    if (etag) rememberEtag(url, etag, body)
+    return body as T
+  }
+
+  private async getTree(): Promise<GitHubTreeItem[]> {
     const branch = this.config.branch ?? 'main'
-    const branchRes = await fetch(`${this.base}/branches/${branch}`, { headers: this.headers })
-    if (!branchRes.ok) throw new Error(`Failed to get branch: ${branchRes.status}`)
-    const branchData = await branchRes.json()
+    const branchData = await this.getJson<{ commit: { sha: string } }>(`${this.base}/branches/${branch}`, 'Failed to get branch')
     const treeSha = branchData.commit.sha
+    const tree = await this.getJson<{ tree: GitHubTreeItem[] }>(`${this.base}/git/trees/${treeSha}?recursive=1`, 'Failed to get tree')
+    return tree.tree
+  }
 
-    const treeRes = await fetch(`${this.base}/git/trees/${treeSha}?recursive=1`, { headers: this.headers })
-    if (!treeRes.ok) throw new Error(`Failed to get tree: ${treeRes.status}`)
-    const tree = await treeRes.json()
-
-    return (tree.tree as any[])
-      .filter((item: any) => {
+  async getMarkdownTree(): Promise<TreeFile[]> {
+    const tree = await this.getTree()
+    return tree
+      .filter(item => {
         if (item.type !== 'blob' || !item.path.endsWith('.md')) return false
         if (item.path.split('/')[0] === 'archive') return false
         return true
       })
-      .map((item: any) => ({ path: item.path, sha: item.sha }))
+      .map(item => ({ path: item.path, sha: item.sha }))
   }
 
   async getSystemFiles(dirs: string[]): Promise<{ path: string }[]> {
-    const branch = this.config.branch ?? 'main'
-    const branchRes = await fetch(`${this.base}/branches/${branch}`, { headers: this.headers })
-    if (!branchRes.ok) throw new Error(`Failed to get branch: ${branchRes.status}`)
-    const branchData = await branchRes.json()
-    const treeSha = branchData.commit.sha
-
-    const treeRes = await fetch(`${this.base}/git/trees/${treeSha}?recursive=1`, { headers: this.headers })
-    if (!treeRes.ok) throw new Error(`Failed to get tree: ${treeRes.status}`)
-    const tree = await treeRes.json()
-
+    const tree = await this.getTree()
     const dirSet = new Set(dirs)
-    return (tree.tree as any[])
-      .filter((item: any) => {
+    return tree
+      .filter(item => {
         if (item.type !== 'blob' || !item.path.endsWith('.md')) return false
         const topDir = item.path.split('/')[0]
         return dirSet.has(topDir)
       })
-      .map((item: any) => ({ path: item.path }))
+      .map(item => ({ path: item.path }))
   }
 
   async readFile(path: string): Promise<FileContent> {
     validateVaultPath(path)
-    const res = await fetch(`${this.base}/contents/${path}`, { headers: this.headers })
-    if (!res.ok) throw new Error(`Failed to read file ${path}: ${res.status}`)
-    const data = await res.json()
+    const data = await this.getJson<{ content: string; sha: string }>(`${this.base}/contents/${path}`, `Failed to read file ${path}`)
     const content = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8')
     return { content, sha: data.sha }
   }
