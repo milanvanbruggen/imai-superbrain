@@ -14,6 +14,8 @@ const MAX_NOTE_CHARS = 12_000
 // Stage 2 checks candidates in small parallel batches: faster, and progress can be reported per batch
 const VERIFY_BATCH_SIZE = 5
 const VERIFY_CONCURRENCY = 4
+// Unconnected notes are matched against the owner's network in batches as well
+const ORPHAN_BATCH_SIZE = 8
 
 export interface SuggestionDraft {
   kind: SuggestionKind
@@ -115,6 +117,29 @@ const SYSTEM_PROMPT = `You maintain a personal knowledge vault of markdown notes
 - relation: two notes are about clearly connected things but neither links to the other yet.
 
 Your suggestions are shown to the vault owner for approval, and a merge deletes one of the two notes, so be conservative. Only suggest what a careful human who knows the vault would agree with. A shared tag or a vague thematic overlap is not enough for a relation: the notes must concern the same concrete person, project, event or organisation, or one must be part of or directly inspired by the other. Two different people who share a first name are not a merge.`
+
+const ORPHAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    matches: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          orphan: { type: 'string', description: 'path of the unconnected note' },
+          target: { type: 'string', description: 'path of the best note from the network, or "none"' },
+          relationType: { type: 'string', enum: [...RELATION_TYPES, 'none'] },
+          reason: { type: 'string' },
+          confidence: { type: 'number', description: '0 to 1' },
+        },
+        required: ['orphan', 'target', 'relationType', 'reason', 'confidence'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['matches'],
+  additionalProperties: false,
+} as const
 
 type ParseParams = Parameters<Anthropic['messages']['parse']>[0]
 
@@ -249,4 +274,89 @@ ${list}
     })
   }
   return drafts
+}
+
+export interface OrphanInput {
+  /** Notes without any link in either direction */
+  orphans: VaultNote[]
+  /** The owner's note plus the notes directly connected to it */
+  network: VaultNote[]
+  blockedKeys: Set<string>
+}
+
+/**
+ * For each unconnected note, looks for the best note in the owner's network to connect it to.
+ * Returns relation drafts (source = the unconnected note) and the paths for which no good match exists.
+ */
+export async function matchOrphans(
+  anthropic: Anthropic,
+  input: OrphanInput,
+  onProgress?: (progress: ReviewProgress) => void,
+): Promise<{ drafts: SuggestionDraft[]; unmatched: string[] }> {
+  const { orphans, network, blockedKeys } = input
+  if (orphans.length === 0 || network.length === 0) return { drafts: [], unmatched: orphans.map(o => o.path) }
+
+  const networkPaths = new Set(network.map(n => n.path))
+  const networkIndex = network.map(n => indexLine(n, false)).join('\n')
+  const batches: VaultNote[][] = []
+  for (let i = 0; i < orphans.length; i += ORPHAN_BATCH_SIZE) batches.push(orphans.slice(i, i + ORPHAN_BATCH_SIZE))
+
+  let matched = 0
+  onProgress?.({ phase: 'orphans', done: 0, total: orphans.length })
+  const results = await mapWithConcurrency(batches, VERIFY_CONCURRENCY, async batch => {
+    const excluded = batch.map(o => {
+      const blocked = network.filter(n => blockedKeys.has(pairKey('relation', o.path, n.path))).map(n => n.path)
+      return blocked.length ? `- ${o.path}: do not suggest ${blocked.join(', ')} (the owner already declined these)` : ''
+    }).filter(Boolean)
+
+    const { matches } = await ask<{ matches: {
+      orphan: string; target: string; relationType: RelationType | 'none'; reason: string; confidence: number
+    }[] }>(anthropic, {
+      model: SUGGESTION_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: 'medium', format: jsonSchemaOutputFormat(ORPHAN_SCHEMA) },
+      system: SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: `The notes below are not connected to anything in the vault. The owner wants every note linked to their own network: their own note or a note directly connected to it.
+
+<network>
+${networkIndex}
+</network>
+
+<unconnected>
+${batch.map(fullNote).join('\n\n')}
+</unconnected>
+${excluded.length ? `\nAlready declined by the owner:\n${excluded.join('\n')}\n` : ''}
+For each unconnected note, give one match: the network note it most clearly belongs to, or target "none" when no network note is a genuinely good fit. A forced link pollutes the graph, so "none" is the right answer when nothing fits; the owner will then look at the note themselves.
+
+- relationType: "part_of" when the unconnected note is part of the target, "inspired_by" when it was inspired by the target, otherwise "works_with". Use "none" when target is "none".
+- reason: one short sentence the owner will read, in the language the notes are written in.
+- confidence: 0 to 1, how sure you are the owner would approve.`,
+      }],
+    })
+
+    const drafts: SuggestionDraft[] = []
+    const found = new Set<string>()
+    for (const m of matches) {
+      const orphan = batch.find(o => o.path === m.orphan)
+      if (!orphan || found.has(orphan.path)) continue
+      if (m.target === 'none' || m.relationType === 'none' || !networkPaths.has(m.target)) continue
+      if (m.confidence < MIN_CONFIDENCE || blockedKeys.has(pairKey('relation', orphan.path, m.target))) continue
+      found.add(orphan.path)
+      drafts.push({
+        kind: 'relation',
+        source: orphan.path,
+        target: m.target,
+        relationType: m.relationType,
+        reason: m.reason.trim(),
+        confidence: Math.min(1, Math.max(0, m.confidence)),
+      })
+    }
+    matched += batch.length
+    onProgress?.({ phase: 'orphans', done: matched, total: orphans.length })
+    return { drafts, unmatched: batch.filter(o => !found.has(o.path)).map(o => o.path) }
+  })
+
+  return { drafts: results.flatMap(r => r.drafts), unmatched: results.flatMap(r => r.unmatched) }
 }

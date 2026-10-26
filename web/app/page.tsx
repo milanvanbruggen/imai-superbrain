@@ -13,7 +13,7 @@ import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
 import { DiffPanel } from '@/components/DiffPanel'
 import { markSuggestion } from '@/components/SuggestionsSection'
-import { visibleSuggestions, type Suggestion } from '@/lib/suggestions'
+import { unconnectedPaths, visibleSuggestions, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
@@ -93,11 +93,20 @@ export default function BrainPage() {
   const [diffPreview, setDiffPreview] = useState<{ note: VaultNote; duplicate: VaultNote; suggestionId?: string } | null>(null)
   const [aiSuggestions, setAiSuggestions] = useState<Suggestion[]>([])
   const [suggestionsLastRunAt, setSuggestionsLastRunAt] = useState<string | null>(null)
+  const [unlinkedNotes, setUnlinkedNotes] = useState<string[]>([])
+  const [ownerNote, setOwnerNote] = useState<string | null>(null)
 
   const openSuggestions = useMemo(
     () => (graph ? visibleSuggestions(aiSuggestions, graph.notesByPath) : []),
     [graph, aiSuggestions]
   )
+
+  // Notes the review left for manual review, minus the ones that got connected since
+  const openUnlinked = useMemo(() => {
+    if (!graph) return []
+    const unconnected = unconnectedPaths(graph.nodes, graph.edges)
+    return unlinkedNotes.filter(p => unconnected.has(p))
+  }, [graph, unlinkedNotes])
 
   const inboxCount = useMemo(
     () => (graph?.nodes.filter(n => n.inbox).length ?? 0) + openSuggestions.length,
@@ -111,6 +120,8 @@ export default function BrainPage() {
         if (!data) return
         setAiSuggestions(data.suggestions ?? [])
         setSuggestionsLastRunAt(data.lastRunAt ?? null)
+        setUnlinkedNotes(data.unlinked ?? [])
+        setOwnerNote(data.ownerNote ?? null)
       })
       .catch(() => {})
   }
@@ -682,6 +693,8 @@ export default function BrainPage() {
                 setPanelWidth(prevWidthRef.current)
               }}
               aiSuggestions={openSuggestions}
+              unlinkedNotes={openUnlinked}
+              ownerNote={ownerNote}
               suggestionsLastRunAt={suggestionsLastRunAt}
               onPreviewSuggestedMerge={(note, duplicate, suggestionId) => {
                 setDiffPreview({ note, duplicate, suggestionId })
@@ -803,10 +816,14 @@ export default function BrainPage() {
       </div>
 
       {showSettings && (
-        <SettingsModal onClose={() => {
-          setShowSettings(false)
-          fetch('/api/vault/sync').then(r => r.json().catch(() => null)).then(d => { if (d) syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
-        }} />
+        <SettingsModal
+          notes={graph.nodes}
+          onClose={() => {
+            setShowSettings(false)
+            fetch('/api/vault/sync').then(r => r.json().catch(() => null)).then(d => { if (d) syncEnabledRef.current = d.syncEnabled ?? false }).catch(() => {})
+            loadSuggestions()
+          }}
+        />
       )}
       {showNewNote && (
         <NewNoteModal

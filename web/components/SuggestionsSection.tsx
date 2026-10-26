@@ -6,6 +6,9 @@ import { useToast } from '@/components/Toaster'
 
 interface Props {
   suggestions: Suggestion[]
+  /** Unconnected notes the last review found no good match for */
+  unlinked: string[]
+  ownerNote: string | null
   lastRunAt: string | null
   notesByPath: Record<string, VaultNote>
   typeColors: Record<string, string>
@@ -103,7 +106,12 @@ function SuggestionCard({
             </span>
             <NoteLink note={target} color={typeColors[target.type] ?? '#94a3b8'} onSelect={onSelect} />
           </div>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{suggestion.reason}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+            {suggestion.origin === 'chat' && (
+              <span className="mr-1.5 px-1.5 py-px rounded text-[10px] font-medium bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300">from chat</span>
+            )}
+            {suggestion.reason}
+          </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
           <button
@@ -163,13 +171,13 @@ async function streamReview(scope: 'changed' | 'all', onEvent: (event: RunEvent)
   if (!finished) onEvent({ phase: 'error', message: 'The review stopped before finishing (time limit reached?)' })
 }
 
-const STEPS = ['reading', 'scanning', 'verifying'] as const
+const STEPS = ['reading', 'scanning', 'verifying', 'orphans'] as const
 
 function formatElapsed(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
-function RunProgress({ progress, startedAt }: { progress: ReviewProgress | null; startedAt: number }) {
+function RunProgress({ progress, startedAt, totalSteps }: { progress: ReviewProgress | null; startedAt: number; totalSteps: number }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000)
@@ -190,6 +198,10 @@ function RunProgress({ progress, startedAt }: { progress: ReviewProgress | null;
     label = 'Checking candidates in full'
     counts = `${progress.done} / ${progress.total} checked · ${progress.total - progress.done} to go`
     fraction = progress.total ? progress.done / progress.total : 0
+  } else if (progress?.phase === 'orphans') {
+    label = 'Linking unconnected notes to your network'
+    counts = `${progress.done} / ${progress.total} notes · ${progress.total - progress.done} to go`
+    fraction = progress.total ? progress.done / progress.total : 0
   } else if (progress?.phase === 'saving') {
     label = 'Saving suggestions'
   }
@@ -199,7 +211,7 @@ function RunProgress({ progress, startedAt }: { progress: ReviewProgress | null;
     <div className="mb-3 px-4 py-3 rounded-lg border border-violet-200/60 dark:border-violet-500/20 bg-violet-50/40 dark:bg-violet-500/5">
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="font-medium text-gray-700 dark:text-gray-300">
-          {step && <span className="text-gray-400 dark:text-gray-500 font-normal">Step {step} of 3 · </span>}
+          {step && <span className="text-gray-400 dark:text-gray-500 font-normal">Step {step} of {totalSteps} · </span>}
           {label}
         </span>
         <span className="text-[11px] text-gray-400 dark:text-gray-500 tabular-nums shrink-0">{elapsed}</span>
@@ -218,7 +230,7 @@ function RunProgress({ progress, startedAt }: { progress: ReviewProgress | null;
   )
 }
 
-export function SuggestionsSection({ suggestions, lastRunAt, notesByPath, typeColors, onSelect, onPreviewMerge, onChanged }: Props) {
+export function SuggestionsSection({ suggestions, unlinked, ownerNote, lastRunAt, notesByPath, typeColors, onSelect, onPreviewMerge, onChanged }: Props) {
   const toast = useToast()
   const [running, setRunning] = useState<'changed' | 'all' | null>(null)
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
@@ -271,7 +283,7 @@ export function SuggestionsSection({ suggestions, lastRunAt, notesByPath, typeCo
           {runButton('all', 'Full scan', 'Review every note in the vault — can take a few minutes')}
         </div>
       </div>
-      {running && <RunProgress progress={progress} startedAt={startedAt} />}
+      {running && <RunProgress progress={progress} startedAt={startedAt} totalSteps={ownerNote ? 4 : 3} />}
       {suggestions.length === 0 ? (
         <p className="text-xs text-gray-400 dark:text-gray-600 italic px-1">No open suggestions</p>
       ) : (
@@ -289,6 +301,38 @@ export function SuggestionsSection({ suggestions, lastRunAt, notesByPath, typeCo
             />
           ))}
         </div>
+      )}
+      {ownerNote ? (
+        unlinked.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider mb-1 px-1">
+              Not connected · no good match ({unlinked.length})
+            </p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-600 mb-2 px-1">
+              These notes have no links, and nothing in your network clearly fits. Connect them yourself, or archive them.
+            </p>
+            <div className="flex flex-wrap gap-1.5 px-1">
+              {unlinked.map(path => {
+                const note = notesByPath[path]
+                if (!note) return null
+                return (
+                  <button
+                    key={path}
+                    onClick={() => onSelect(path)}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: typeColors[note.type] ?? '#94a3b8' }} />
+                    {note.title}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )
+      ) : (
+        <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-600 px-1">
+          Set <span className="font-medium">Your note</span> in Settings to also check notes that aren&apos;t connected to anything.
+        </p>
       )}
     </section>
   )

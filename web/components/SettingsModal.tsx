@@ -35,9 +35,11 @@ interface SyncStatus {
 
 interface Props {
   onClose: () => void
+  /** Notes to choose "Your note" from; the setting is hidden when the graph isn't loaded */
+  notes?: { path: string; title: string }[]
 }
 
-export function SettingsModal({ onClose }: Props) {
+export function SettingsModal({ onClose, notes }: Props) {
   const toast = useToast()
   const [config, setConfig] = useState<VaultConfig | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
@@ -62,6 +64,49 @@ export function SettingsModal({ onClose }: Props) {
     setInboxReminder(next)
     localStorage.setItem('superbrain_inbox_reminder', next ? 'true' : 'false')
     toast(next ? 'Inbox reminder enabled' : 'Inbox reminder disabled', 'info')
+  }
+
+  // Owner note for the AI review (stored in the vault, so it also works on Vercel)
+  const [ownerNote, setOwnerNote] = useState('')
+  const [savedOwnerNote, setSavedOwnerNote] = useState('')
+  const [savingOwnerNote, setSavingOwnerNote] = useState(false)
+  // Depends on whether notes exist, not on the array itself: the graph refreshes in the
+  // background and must not reset what the user is typing
+  const hasNotes = !!notes
+  useEffect(() => {
+    if (!hasNotes) return
+    fetch('/api/vault/preferences')
+      .then(r => (r.ok ? r.json() : null))
+      .then(p => {
+        if (!p) return
+        setOwnerNote(p.ownerNote ?? '')
+        setSavedOwnerNote(p.ownerNote ?? '')
+      })
+      .catch(() => {})
+  }, [hasNotes])
+  async function saveOwnerNote() {
+    const value = ownerNote.trim()
+    if (value && !notes?.some(n => n.path === value)) {
+      toast('Pick a note from the list', 'error')
+      return
+    }
+    setSavingOwnerNote(true)
+    try {
+      const res = await fetch('/api/vault/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerNote: value || null }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast(data.error ?? 'Failed to save', 'error')
+        return
+      }
+      setSavedOwnerNote(value)
+      toast(value ? 'Your note saved' : 'Your note cleared', 'info')
+    } finally {
+      setSavingOwnerNote(false)
+    }
   }
 
   // Editable fields
@@ -291,6 +336,38 @@ export function SettingsModal({ onClose }: Props) {
                 ) : null}
               </div>
             </div>
+
+            {/* AI review */}
+            {notes && (
+              <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">
+                <span className="text-xs text-slate-500 dark:text-gray-500 uppercase tracking-wider font-medium">AI review</span>
+                <div>
+                  <p className="text-xs text-gray-700 dark:text-gray-300">Your note</p>
+                  <p className="text-[11px] text-slate-400 dark:text-gray-600 mt-0.5">
+                    The note that represents you. The AI review tries to connect notes without any link to this note or to a note directly connected to it.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      list="owner-note-options"
+                      value={ownerNote}
+                      onChange={e => setOwnerNote(e.target.value)}
+                      placeholder="Search a note, e.g. people/Milan.md"
+                      className="flex-1 min-w-0 px-2.5 py-1.5 text-xs rounded-md border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-slate-100"
+                    />
+                    <datalist id="owner-note-options">
+                      {notes.map(n => <option key={n.path} value={n.path}>{n.title}</option>)}
+                    </datalist>
+                    <button
+                      onClick={saveOwnerNote}
+                      disabled={savingOwnerNote || ownerNote.trim() === savedOwnerNote}
+                      className="px-3 py-1.5 text-xs rounded-md font-medium bg-teal-600 text-white hover:bg-teal-500 transition-colors cursor-pointer disabled:opacity-40"
+                    >
+                      {savingOwnerNote ? '…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Notifications */}
             <div className="bg-slate-50 dark:bg-gray-800/50 rounded-lg p-4 space-y-3">

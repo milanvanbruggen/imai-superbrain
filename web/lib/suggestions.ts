@@ -24,6 +24,8 @@ export interface Suggestion {
   confidence: number
   createdAt: string
   status: SuggestionStatus
+  /** 'chat' when filed through the MCP tools from a conversation; absent for the automatic review */
+  origin?: 'review' | 'chat'
 }
 
 /** Live progress of a review run, streamed to the Inbox while a manual scan runs. */
@@ -31,6 +33,7 @@ export type ReviewProgress =
   | { phase: 'reading'; done: number; total: number }
   | { phase: 'scanning'; notes: number }
   | { phase: 'verifying'; done: number; total: number }
+  | { phase: 'orphans'; done: number; total: number }
   | { phase: 'saving' }
 
 export interface SuggestionStore {
@@ -39,6 +42,8 @@ export interface SuggestionStore {
   /** path → blob sha at the last run, used to find notes that changed since then */
   seen: Record<string, string>
   suggestions: Suggestion[]
+  /** Notes without any link for which the last run found no good match — shown for manual review */
+  unlinked?: string[]
 }
 
 /** True when either note already links to the other, via a frontmatter relation or a body wikilink. */
@@ -56,6 +61,17 @@ export function visibleSuggestions(suggestions: Suggestion[], notesByPath: Recor
     if (!a || !b) return false
     return s.kind === 'merge' || !areLinked(a, b)
   })
+}
+
+/** Paths of notes with no relation or wikilink in either direction, judged on the current graph. */
+export function unconnectedPaths(nodes: { id: string; path: string }[], edges: { source: string; target: string }[]): Set<string> {
+  const linked = new Set<string>()
+  for (const e of edges) {
+    if (e.source === e.target) continue
+    linked.add(e.source)
+    linked.add(e.target)
+  }
+  return new Set(nodes.filter(n => !linked.has(n.id)).map(n => n.path))
 }
 
 export function emptyStore(): SuggestionStore {

@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import { parseNote } from '../vault-parser'
-import { areLinked, pairKey, pruneSuggestions, visibleSuggestions, SUGGESTIONS_PATH, type Suggestion } from '../suggestions'
-import { generateSuggestions, MIN_CONFIDENCE } from '../suggestion-engine'
-import { runSuggestionReview } from '../suggestion-review'
+import { areLinked, pairKey, pruneSuggestions, unconnectedPaths, visibleSuggestions, SUGGESTIONS_PATH, type Suggestion } from '../suggestions'
+import { generateSuggestions, matchOrphans, MIN_CONFIDENCE } from '../suggestion-engine'
+import { fileSuggestion, runSuggestionReview } from '../suggestion-review'
+import { PREFERENCES_PATH } from '../vault-preferences'
 import { mapWithConcurrency } from '../concurrency'
 import type { VaultClient } from '../vault-client'
 
@@ -24,6 +25,22 @@ function fakeAnthropic(...outputs: unknown[]) {
   const parse = vi.fn()
   for (const output of outputs) parse.mockResolvedValueOnce({ stop_reason: 'end_turn', parsed_output: output })
   return { client: { messages: { parse } } as unknown as Anthropic, parse }
+}
+
+function memoryVault(files: Record<string, string>) {
+  const shas: Record<string, string> = {}
+  let version = 0
+  const client: VaultClient = {
+    getMarkdownTree: async () => Object.keys(files).filter(p => p.endsWith('.md')).map(path => ({ path, sha: shas[path] ?? `sha-${path}` })),
+    getSystemFiles: async () => [],
+    readFile: async path => {
+      if (!(path in files)) throw new Error(`Failed to read file ${path}: 404`)
+      return { content: files[path], sha: shas[path] ?? `sha-${path}` }
+    },
+    writeFile: async (path, content) => { files[path] = content; shas[path] = `v${++version}` },
+    deleteFile: async path => { delete files[path] },
+  }
+  return { client, files, shas }
 }
 
 describe('suggestion helpers', () => {
@@ -176,21 +193,6 @@ describe('generateSuggestions', () => {
 })
 
 describe('runSuggestionReview', () => {
-  function memoryVault(files: Record<string, string>) {
-    const shas: Record<string, string> = {}
-    let version = 0
-    const client: VaultClient = {
-      getMarkdownTree: async () => Object.keys(files).filter(p => p.endsWith('.md')).map(path => ({ path, sha: shas[path] ?? `sha-${path}` })),
-      getSystemFiles: async () => [],
-      readFile: async path => {
-        if (!(path in files)) throw new Error(`Failed to read file ${path}: 404`)
-        return { content: files[path], sha: shas[path] ?? `sha-${path}` }
-      },
-      writeFile: async (path, content) => { files[path] = content; shas[path] = `v${++version}` },
-      deleteFile: async path => { delete files[path] },
-    }
-    return { client, files, shas }
-  }
 
   const raw = {
     [jan.path]: '---\ntype: person\n---\nJan works on [[Superbrain]].',
@@ -241,5 +243,123 @@ describe('mapWithConcurrency', () => {
     })
     expect(results).toEqual([60, 20, 40, 0, 10])
     expect(maxInFlight).toBe(2)
+  })
+})
+
+describe('unconnected notes', () => {
+  const me = parseNote('people/Milan.md', '---\ntype: person\n---\nWorks on [[DDZ]].')
+  const ddz = parseNote('companies/DDZ.md', '---\ntype: company\n---\nDigital District Zwolle.')
+  const lonely = parseNote('notes/Meetup idea.md', '---\ntype: idea\n---\nTech meetup at DDZ.')
+  const random = parseNote('notes/Recipe.md', '---\ntype: note\n---\nPancakes.')
+
+  it('unconnectedPaths finds notes without links in either direction', () => {
+    const nodes = [me, ddz, lonely].map(n => ({ id: n.path, path: n.path }))
+    expect([...unconnectedPaths(nodes, [{ source: me.path, target: ddz.path }])]).toEqual([lonely.path])
+  })
+
+  it('matchOrphans links good fits and reports the rest as unmatched', async () => {
+    const { client, parse } = fakeAnthropic({ matches: [
+      { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
+      { orphan: random.path, target: 'none', relationType: 'none', reason: 'Geen match', confidence: 0 },
+    ] })
+    const events: unknown[] = []
+    const result = await matchOrphans(client, { orphans: [lonely, random], network: [me, ddz], blockedKeys: new Set() }, e => events.push(e))
+
+    expect(result.drafts).toEqual([
+      { kind: 'relation', source: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
+    ])
+    expect(result.unmatched).toEqual([random.path])
+    expect(events).toEqual([{ phase: 'orphans', done: 0, total: 2 }, { phase: 'orphans', done: 2, total: 2 }])
+    const prompt = parse.mock.calls[0][0].messages[0].content as string
+    expect(prompt).toContain(`- | ${ddz.path}`)
+    expect(prompt).toContain('target "none"')
+  })
+
+  it('matchOrphans never suggests a pair the owner declined, and says so in the prompt', async () => {
+    const blocked = new Set([pairKey('relation', lonely.path, ddz.path)])
+    const { client, parse } = fakeAnthropic({ matches: [
+      { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'r', confidence: 0.9 },
+    ] })
+    const result = await matchOrphans(client, { orphans: [lonely], network: [me, ddz], blockedKeys: blocked })
+    expect(result.drafts).toEqual([])
+    expect(result.unmatched).toEqual([lonely.path])
+    expect(parse.mock.calls[0][0].messages[0].content).toContain(`${lonely.path}: do not suggest ${ddz.path}`)
+  })
+
+  it('a run with an owner note checks unconnected notes and stores the unmatched ones', async () => {
+    const vault = memoryVault({
+      [me.path]: '---\ntype: person\n---\nWorks on [[DDZ]].',
+      [ddz.path]: '---\ntype: company\n---\nDigital District Zwolle.',
+      [lonely.path]: '---\ntype: idea\n---\nTech meetup at DDZ.',
+      [random.path]: '---\ntype: note\n---\nPancakes.',
+      [PREFERENCES_PATH]: JSON.stringify({ ownerNote: me.path }),
+    })
+    const { client, parse } = fakeAnthropic(
+      { candidates: [] },
+      { matches: [
+        { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
+        { orphan: random.path, target: 'none', relationType: 'none', reason: '-', confidence: 0 },
+      ] },
+    )
+    const result = await runSuggestionReview(vault.client, client)
+    expect(result).toMatchObject({ added: 1, unlinked: 1, ownerNoteSet: true })
+
+    // The network sent to Claude is the owner plus direct neighbours only
+    const orphanPrompt = parse.mock.calls[1][0].messages[0].content as string
+    const network = orphanPrompt.slice(orphanPrompt.indexOf('<network>'), orphanPrompt.indexOf('</network>'))
+    expect(network).toContain(me.path)
+    expect(network).toContain(ddz.path)
+    expect(network).not.toContain(random.path)
+
+    const stored = JSON.parse(vault.files[SUGGESTIONS_PATH])
+    expect(stored.unlinked).toEqual([random.path])
+
+    // Next incremental run: nothing changed, the unmatched note is carried over without asking again
+    const next = fakeAnthropic()
+    const again = await runSuggestionReview(vault.client, next.client)
+    expect(again).toMatchObject({ added: 0, unlinked: 1 })
+    expect(next.parse).not.toHaveBeenCalled()
+  })
+})
+
+describe('fileSuggestion (MCP)', () => {
+  const files = {
+    [jan.path]: '---\ntype: person\n---\nJan works on [[Superbrain]].',
+    [superbrain.path]: '---\ntype: project\n---\nKnowledge graph app.',
+    [idea.path]: '---\ntype: idea\n---\nSearch the graph.',
+  }
+
+  it('adds a chat suggestion to the Inbox store', async () => {
+    const vault = memoryVault({ ...files })
+    const result = await fileSuggestion(vault.client, {
+      kind: 'relation', source: idea.path, target: superbrain.path, relationType: 'part_of', reason: 'Feature van Superbrain',
+    })
+    expect(result.status).toBe('added')
+    const stored = JSON.parse(vault.files[SUGGESTIONS_PATH])
+    expect(stored.suggestions[0]).toMatchObject({ origin: 'chat', status: 'pending', source: idea.path })
+  })
+
+  it('refuses unknown notes, already linked pairs and duplicates', async () => {
+    const vault = memoryVault({ ...files })
+    expect((await fileSuggestion(vault.client, { kind: 'merge', source: 'x.md', target: jan.path, reason: 'r' })).status).toBe('not_found')
+    expect((await fileSuggestion(vault.client, {
+      kind: 'relation', source: jan.path, target: superbrain.path, relationType: 'works_with', reason: 'r',
+    })).status).toBe('already_linked')
+    await fileSuggestion(vault.client, { kind: 'merge', source: idea.path, target: superbrain.path, reason: 'r' })
+    expect((await fileSuggestion(vault.client, { kind: 'merge', source: superbrain.path, target: idea.path, reason: 'r' })).status).toBe('already_pending')
+  })
+
+  it('re-opens a pair that was dismissed before', async () => {
+    const vault = memoryVault({ ...files })
+    await fileSuggestion(vault.client, { kind: 'merge', source: idea.path, target: superbrain.path, reason: 'old' })
+    const stored = JSON.parse(vault.files[SUGGESTIONS_PATH])
+    stored.suggestions[0].status = 'dismissed'
+    vault.files[SUGGESTIONS_PATH] = JSON.stringify(stored)
+
+    const result = await fileSuggestion(vault.client, { kind: 'merge', source: idea.path, target: superbrain.path, reason: 'new' })
+    expect(result.status).toBe('reopened')
+    const after = JSON.parse(vault.files[SUGGESTIONS_PATH])
+    expect(after.suggestions).toHaveLength(1)
+    expect(after.suggestions[0]).toMatchObject({ status: 'pending', reason: 'new' })
   })
 })

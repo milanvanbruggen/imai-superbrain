@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { withAuth } from '@/lib/api-utils'
 import { getVaultClient } from '@/lib/vault-client'
 import { readSuggestionStore, writeSuggestionStore } from '@/lib/suggestions'
+import { readVaultPreferences } from '@/lib/vault-preferences'
 
 export async function GET() {
   return withAuth(async () => {
@@ -11,10 +12,12 @@ export async function GET() {
     } catch {
       return NextResponse.json({ error: 'vault_not_configured' }, { status: 422 })
     }
-    const { store } = await readSuggestionStore(client)
+    const [{ store }, { prefs }] = await Promise.all([readSuggestionStore(client), readVaultPreferences(client)])
     return NextResponse.json({
       lastRunAt: store.lastRunAt,
       suggestions: store.suggestions.filter(s => s.status === 'pending'),
+      unlinked: store.unlinked ?? [],
+      ownerNote: prefs.ownerNote ?? null,
     })
   })
 }
