@@ -84,6 +84,53 @@ export function unconnectedPaths(nodes: { id: string; path: string }[], edges: {
   return new Set(nodes.filter(n => !linked.has(n.id)).map(n => n.path))
 }
 
+/**
+ * Notes that no path of links connects to the owner's note, grouped: a note without any link is a
+ * group of one, notes that only link to each other form an island. Each group lists its
+ * best-connected note first.
+ */
+export function detachedGroups(
+  nodes: { id: string; path: string }[],
+  edges: { source: string; target: string }[],
+  ownerId: string,
+): string[][] {
+  const parent = new Map(nodes.map(n => [n.id, n.id]))
+  const find = (id: string): string => {
+    let root = id
+    while (parent.get(root) !== root) root = parent.get(root)!
+    parent.set(id, root)
+    return root
+  }
+  const degree = new Map<string, number>()
+  for (const e of edges) {
+    if (e.source === e.target || !parent.has(e.source) || !parent.has(e.target)) continue
+    parent.set(find(e.source), find(e.target))
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1)
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1)
+  }
+  const ownerRoot = parent.has(ownerId) ? find(ownerId) : null
+  const groups = new Map<string, { id: string; path: string }[]>()
+  for (const n of nodes) {
+    const root = find(n.id)
+    if (root === ownerRoot) continue
+    groups.set(root, [...(groups.get(root) ?? []), n])
+  }
+  return [...groups.values()]
+    .map(g => g
+      .sort((a, b) => (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) || a.path.localeCompare(b.path))
+      .map(n => n.path))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+}
+
+/** Every note that no path of links connects to the owner's note. */
+export function detachedPaths(
+  nodes: { id: string; path: string }[],
+  edges: { source: string; target: string }[],
+  ownerId: string,
+): Set<string> {
+  return new Set(detachedGroups(nodes, edges, ownerId).flat())
+}
+
 export function emptyStore(): SuggestionStore {
   return { version: 1, lastRunAt: null, seen: {}, suggestions: [] }
 }

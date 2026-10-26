@@ -5,7 +5,7 @@ import { mapWithConcurrency } from './concurrency'
 import { generateSuggestions, matchOrphans, reviewableNotes } from './suggestion-engine'
 import { readVaultPreferences } from './vault-preferences'
 import {
-  areLinked, pairKey, pruneSuggestions, readSuggestionStore, unconnectedPaths, writeSuggestionStore,
+  areLinked, detachedGroups, pairKey, pruneSuggestions, readSuggestionStore, writeSuggestionStore,
   type RelationType, type ReviewProgress, type Suggestion, type SuggestionKind,
 } from './suggestions'
 
@@ -16,9 +16,9 @@ export interface ReviewResult {
   focusNotes: number
   added: number
   pending: number
-  /** Unconnected notes without a good match, left for manual review */
+  /** Notes (or islands of notes) not connected to the owner, without a good match: left for manual review */
   unlinked: number
-  /** false when no owner note is set, so unconnected notes were not checked */
+  /** false when no owner note is set, so detached notes were not checked */
   ownerNoteSet: boolean
 }
 
@@ -62,30 +62,37 @@ export async function runSuggestionReview(
   // Keep the previous run's rejections when nothing was scanned this time
   const rejected = review.scanned ? review.rejected : (store.rejected ?? [])
 
-  // Unconnected notes: try to link each one to the owner's note or a note directly connected to it
+  // Notes no path connects to the owner (single notes and islands): try to link each group to
+  // the owner's note or a note directly connected to it
   const owner = prefs.ownerNote ? byPath.get(prefs.ownerNote) : undefined
   let unlinked: string[] = []
   if (owner) {
-    const unconnected = unconnectedPaths(graph.nodes, graph.edges)
-    const pendingPaths = new Set([
-      ...existing.filter(s => s.status === 'pending').flatMap(s => [s.source, s.target]),
-      ...drafts.flatMap(d => [d.source, d.target]),
-    ])
-    const candidates = reviewableNotes(notes).filter(n =>
-      unconnected.has(n.path) && n.path !== owner.path && !pendingPaths.has(n.path))
-    // Incremental runs don't re-ask about unchanged notes that already had no match last time
+    const reviewable = new Set(reviewableNotes(notes).map(n => n.path))
+    // A pending suggestion from a group to a note outside it may already connect the group
+    const pendingPairs = [
+      ...existing.filter(s => s.status === 'pending'),
+      ...drafts,
+    ].map(s => [s.source, s.target] as const)
+    const candidates = detachedGroups(graph.nodes, graph.edges, owner.path)
+      .map(g => g.filter(p => reviewable.has(p)).map(p => byPath.get(p)!))
+      .filter(g => {
+        if (g.length === 0) return false
+        const inGroup = new Set(g.map(n => n.path))
+        return !pendingPairs.some(([a, b]) => inGroup.has(a) !== inGroup.has(b))
+      })
+    // Incremental runs don't re-ask about unchanged groups that already had no match last time
     const previouslyUnmatched = new Set(store.unlinked ?? [])
-    const orphans = fullScan
+    const groups = fullScan
       ? candidates
-      : candidates.filter(n => changedPaths.has(n.path) || !previouslyUnmatched.has(n.path))
-    const carriedOver = candidates.filter(n => !orphans.includes(n)).map(n => n.path)
+      : candidates.filter(g => g.some(n => changedPaths.has(n.path)) || !previouslyUnmatched.has(g[0].path))
+    const carriedOver = candidates.filter(g => !groups.includes(g)).map(g => g[0].path)
 
     const neighbours = new Set(graph.edges.flatMap(e =>
       e.source === owner.path ? [e.target] : e.target === owner.path ? [e.source] : []))
     const network = [owner, ...reviewableNotes(notes).filter(n => neighbours.has(n.path))]
 
     const orphanBlocked = new Set([...blockedKeys, ...drafts.map(d => pairKey(d.kind, d.source, d.target))])
-    const matched = await matchOrphans(anthropic, { orphans, network, blockedKeys: orphanBlocked }, onProgress)
+    const matched = await matchOrphans(anthropic, { groups, network, blockedKeys: orphanBlocked }, onProgress)
     drafts.push(...matched.drafts)
     unlinked = [...carriedOver, ...matched.unmatched]
   }

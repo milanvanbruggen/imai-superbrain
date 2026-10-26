@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import { parseNote } from '../vault-parser'
-import { areLinked, pairKey, pruneSuggestions, unconnectedPaths, visibleSuggestions, SUGGESTIONS_PATH, type Suggestion } from '../suggestions'
+import { areLinked, detachedGroups, pairKey, pruneSuggestions, unconnectedPaths, visibleSuggestions, SUGGESTIONS_PATH, type Suggestion } from '../suggestions'
 import { generateSuggestions, matchOrphans, MIN_CONFIDENCE } from '../suggestion-engine'
 import { fileSuggestion, runSuggestionReview } from '../suggestion-review'
 import { PREFERENCES_PATH } from '../vault-preferences'
@@ -270,13 +270,43 @@ describe('unconnected notes', () => {
     expect([...unconnectedPaths(nodes, [{ source: me.path, target: ddz.path }])]).toEqual([lonely.path])
   })
 
+  it('detachedGroups finds single notes and islands no path connects to the owner', () => {
+    const ids = ['me', 'ddz', 'a', 'b', 'c', 'lonely']
+    const nodes = ids.map(id => ({ id, path: id }))
+    const edges = [
+      { source: 'me', target: 'ddz' },
+      { source: 'a', target: 'b' }, { source: 'c', target: 'b' },
+    ]
+    // The island's best-connected note comes first
+    expect(detachedGroups(nodes, edges, 'me')).toEqual([['b', 'a', 'c'], ['lonely']])
+    expect(detachedGroups(nodes, [...edges, { source: 'c', target: 'ddz' }], 'me')).toEqual([['lonely']])
+  })
+
+  it('matchOrphans asks for one link per island, from whichever of its notes fits best', async () => {
+    const hub = parseNote('notes/Meetup series.md', '---\ntype: project\n---\nSeries. [[Meetup idea]]')
+    const { client, parse } = fakeAnthropic({ matches: [
+      { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
+      { orphan: hub.path, target: me.path, relationType: 'works_with', reason: 'second link for the same island', confidence: 0.9 },
+    ] })
+    const result = await matchOrphans(client, { groups: [[hub, lonely], [random]], network: [me, ddz], blockedKeys: new Set() })
+
+    expect(result.drafts).toEqual([
+      { kind: 'relation', source: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
+    ])
+    // A group without a match is reported by its best-connected note
+    expect(result.unmatched).toEqual([random.path])
+    const prompt = parse.mock.calls[0][0].messages[0].content as string
+    expect(prompt).toContain('<group id="1">')
+    expect(prompt).toContain(`path=${JSON.stringify(lonely.path)}`)
+  })
+
   it('matchOrphans links good fits and reports the rest as unmatched', async () => {
     const { client, parse } = fakeAnthropic({ matches: [
       { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
       { orphan: random.path, target: 'none', relationType: 'none', reason: 'Geen match', confidence: 0 },
     ] })
     const events: unknown[] = []
-    const result = await matchOrphans(client, { orphans: [lonely, random], network: [me, ddz], blockedKeys: new Set() }, e => events.push(e))
+    const result = await matchOrphans(client, { groups: [[lonely], [random]], network: [me, ddz], blockedKeys: new Set() }, e => events.push(e))
 
     expect(result.drafts).toEqual([
       { kind: 'relation', source: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 },
@@ -293,10 +323,29 @@ describe('unconnected notes', () => {
     const { client, parse } = fakeAnthropic({ matches: [
       { orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'r', confidence: 0.9 },
     ] })
-    const result = await matchOrphans(client, { orphans: [lonely], network: [me, ddz], blockedKeys: blocked })
+    const result = await matchOrphans(client, { groups: [[lonely]], network: [me, ddz], blockedKeys: blocked })
     expect(result.drafts).toEqual([])
     expect(result.unmatched).toEqual([lonely.path])
     expect(parse.mock.calls[0][0].messages[0].content).toContain(`${lonely.path}: do not suggest ${ddz.path}`)
+  })
+
+  it('a run also offers a link for an island of notes that only link to each other', async () => {
+    const vault = memoryVault({
+      [me.path]: '---\ntype: person\n---\nWorks on [[DDZ]].',
+      [ddz.path]: '---\ntype: company\n---\nDigital District Zwolle.',
+      'notes/Meetup series.md': '---\ntype: project\n---\nSeries. [[Meetup idea]]',
+      [lonely.path]: '---\ntype: idea\n---\nTech meetup at DDZ.',
+      [PREFERENCES_PATH]: JSON.stringify({ ownerNote: me.path }),
+    })
+    const { client, parse } = fakeAnthropic(
+      { candidates: [] },
+      { matches: [{ orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 }] },
+    )
+    const result = await runSuggestionReview(vault.client, client)
+    expect(result).toMatchObject({ added: 1, unlinked: 0 })
+    const prompt = parse.mock.calls[1][0].messages[0].content as string
+    expect(prompt.match(/<group id=/g)).toHaveLength(1)
+    expect(prompt).toContain('notes/Meetup series.md')
   })
 
   it('a run with an owner note checks unconnected notes and stores the unmatched ones', async () => {

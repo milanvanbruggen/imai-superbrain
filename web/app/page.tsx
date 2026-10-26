@@ -13,7 +13,7 @@ import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
 import { DiffPanel } from '@/components/DiffPanel'
 import { markSuggestion } from '@/components/SuggestionsSection'
-import { unconnectedPaths, visibleSuggestions, type RejectedCandidate, type Suggestion } from '@/lib/suggestions'
+import { detachedPaths, unconnectedPaths, visibleSuggestions, type RejectedCandidate, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
@@ -105,9 +105,9 @@ export default function BrainPage() {
   // Notes the review left for manual review, minus the ones that got connected since
   const openUnlinked = useMemo(() => {
     if (!graph) return []
-    const unconnected = unconnectedPaths(graph.nodes, graph.edges)
-    return unlinkedNotes.filter(p => unconnected.has(p))
-  }, [graph, unlinkedNotes])
+    const detached = ownerNote ? detachedPaths(graph.nodes, graph.edges, ownerNote) : unconnectedPaths(graph.nodes, graph.edges)
+    return unlinkedNotes.filter(p => detached.has(p))
+  }, [graph, unlinkedNotes, ownerNote])
 
   const inboxCount = useMemo(
     () => (graph?.nodes.filter(n => n.inbox).length ?? 0) + openSuggestions.length,

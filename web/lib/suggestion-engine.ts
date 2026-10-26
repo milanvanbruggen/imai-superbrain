@@ -17,6 +17,8 @@ const VERIFY_BATCH_SIZE = 5
 const VERIFY_CONCURRENCY = 4
 // Unconnected notes are matched against the owner's network in batches as well
 const ORPHAN_BATCH_SIZE = 8
+// Notes of an island sent in full; the rest of a bigger island is listed by title and excerpt
+const MAX_GROUP_NOTES = 5
 
 export interface SuggestionDraft {
   kind: SuggestionKind
@@ -127,7 +129,7 @@ const ORPHAN_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          orphan: { type: 'string', description: 'path of the unconnected note' },
+          orphan: { type: 'string', description: 'path of the note in the group that gets the link' },
           target: { type: 'string', description: 'path of the best note from the network, or "none"' },
           relationType: { type: 'string', enum: [...RELATION_TYPES, 'none'] },
           reason: { type: 'string' },
@@ -287,34 +289,54 @@ ${list}
 }
 
 export interface OrphanInput {
-  /** Notes without any link in either direction */
-  orphans: VaultNote[]
+  /**
+   * Groups of notes that no path connects to the owner's network: a single note without links,
+   * or an island of notes that only link to each other. Best-connected note first.
+   */
+  groups: VaultNote[][]
   /** The owner's note plus the notes directly connected to it */
   network: VaultNote[]
   blockedKeys: Set<string>
 }
 
 /**
- * For each unconnected note, looks for the best note in the owner's network to connect it to.
- * Returns relation drafts (source = the unconnected note) and the paths for which no good match exists.
+ * For each detached group, looks for one link from one of its notes to the owner's network:
+ * once one note is linked, the whole group is connected.
+ * Returns relation drafts (source = the note in the group) and, for groups without a good match,
+ * the path of their best-connected note.
  */
 export async function matchOrphans(
   anthropic: Anthropic,
   input: OrphanInput,
   onProgress?: (progress: ReviewProgress) => void,
 ): Promise<{ drafts: SuggestionDraft[]; unmatched: string[] }> {
-  const { orphans, network, blockedKeys } = input
-  if (orphans.length === 0 || network.length === 0) return { drafts: [], unmatched: orphans.map(o => o.path) }
+  const groups = input.groups.filter(g => g.length > 0)
+  const { network, blockedKeys } = input
+  if (groups.length === 0 || network.length === 0) return { drafts: [], unmatched: groups.map(g => g[0].path) }
 
   const networkPaths = new Set(network.map(n => n.path))
   const networkIndex = network.map(n => indexLine(n, false)).join('\n')
-  const batches: VaultNote[][] = []
-  for (let i = 0; i < orphans.length; i += ORPHAN_BATCH_SIZE) batches.push(orphans.slice(i, i + ORPHAN_BATCH_SIZE))
+  // Batches hold up to ORPHAN_BATCH_SIZE notes in full, so a few islands share a request
+  const batches: VaultNote[][][] = [[]]
+  let inBatch = 0
+  for (const g of groups) {
+    const size = Math.min(g.length, MAX_GROUP_NOTES)
+    if (inBatch > 0 && inBatch + size > ORPHAN_BATCH_SIZE) { batches.push([]); inBatch = 0 }
+    batches[batches.length - 1].push(g)
+    inBatch += size
+  }
+
+  const groupText = (g: VaultNote[], i: number) => {
+    const rest = g.slice(MAX_GROUP_NOTES)
+    return `<group id="${i + 1}">\n${g.slice(0, MAX_GROUP_NOTES).map(fullNote).join('\n\n')}${
+      rest.length ? `\nAlso in this group:\n${rest.map(n => indexLine(n, false)).join('\n')}` : ''
+    }\n</group>`
+  }
 
   let matched = 0
-  onProgress?.({ phase: 'orphans', done: 0, total: orphans.length })
+  onProgress?.({ phase: 'orphans', done: 0, total: groups.length })
   const results = await mapWithConcurrency(batches, VERIFY_CONCURRENCY, async batch => {
-    const excluded = batch.map(o => {
+    const excluded = batch.flat().map(o => {
       const blocked = network.filter(n => blockedKeys.has(pairKey('relation', o.path, n.path))).map(n => n.path)
       return blocked.length ? `- ${o.path}: do not suggest ${blocked.join(', ')} (the owner already declined these)` : ''
     }).filter(Boolean)
@@ -328,35 +350,36 @@ export async function matchOrphans(
       system: SYSTEM_PROMPT,
       messages: [{
         role: 'user',
-        content: `The notes below are not connected to anything in the vault. The owner wants every note linked to their own network: their own note or a note directly connected to it.
+        content: `The groups of notes below are not connected to the owner's network by any path of links. A group is either a single note without any links, or a few notes that only link to each other. The owner wants every note linked to their own network: their own note or a note directly connected to it.
 
 <network>
 ${networkIndex}
 </network>
 
 <unconnected>
-${batch.map(fullNote).join('\n\n')}
+${batch.map(groupText).join('\n\n')}
 </unconnected>
 ${excluded.length ? `\nAlready declined by the owner:\n${excluded.join('\n')}\n` : ''}
-For each unconnected note, give one match: the network note it most clearly belongs to, or target "none" when no network note is a genuinely good fit. A forced link pollutes the graph, so "none" is the right answer when nothing fits; the owner will then look at the note themselves.
+For each group, give one match: the note in the group that should carry the link (orphan) and the network note it most clearly belongs to (target), or target "none" when no network note is a genuinely good fit. One link per group is enough, since it connects the whole group. A forced link pollutes the graph, so "none" is the right answer when nothing fits; the owner will then look at the notes themselves.
 
-- relationType: "part_of" when the unconnected note is part of the target, "inspired_by" when it was inspired by the target, otherwise "works_with". Use "none" when target is "none".
+- orphan: the path of the note in the group that fits the target best.
+- relationType: "part_of" when that note is part of the target, "inspired_by" when it was inspired by the target, otherwise "works_with". Use "none" when target is "none".
 - reason: one short sentence the owner will read, in the language the notes are written in.
 - confidence: 0 to 1, how sure you are the owner would approve.`,
       }],
     })
 
     const drafts: SuggestionDraft[] = []
-    const found = new Set<string>()
+    const found = new Set<VaultNote[]>()
     for (const m of matches) {
-      const orphan = batch.find(o => o.path === m.orphan)
-      if (!orphan || found.has(orphan.path)) continue
+      const group = batch.find(g => g.some(n => n.path === m.orphan))
+      if (!group || found.has(group)) continue
       if (m.target === 'none' || m.relationType === 'none' || !networkPaths.has(m.target)) continue
-      if (m.confidence < MIN_CONFIDENCE || blockedKeys.has(pairKey('relation', orphan.path, m.target))) continue
-      found.add(orphan.path)
+      if (m.confidence < MIN_CONFIDENCE || blockedKeys.has(pairKey('relation', m.orphan, m.target))) continue
+      found.add(group)
       drafts.push({
         kind: 'relation',
-        source: orphan.path,
+        source: m.orphan,
         target: m.target,
         relationType: m.relationType,
         reason: m.reason.trim(),
@@ -364,8 +387,8 @@ For each unconnected note, give one match: the network note it most clearly belo
       })
     }
     matched += batch.length
-    onProgress?.({ phase: 'orphans', done: matched, total: orphans.length })
-    return { drafts, unmatched: batch.filter(o => !found.has(o.path)).map(o => o.path) }
+    onProgress?.({ phase: 'orphans', done: matched, total: groups.length })
+    return { drafts, unmatched: batch.filter(g => !found.has(g)).map(g => g[0].path) }
   })
 
   return { drafts: results.flatMap(r => r.drafts), unmatched: results.flatMap(r => r.unmatched) }

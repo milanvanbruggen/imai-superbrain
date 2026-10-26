@@ -201,8 +201,8 @@ function RunProgress({ progress, startedAt, totalSteps }: { progress: ReviewProg
     counts = `${progress.done} / ${progress.total} checked · ${progress.total - progress.done} to go`
     fraction = progress.total ? progress.done / progress.total : 0
   } else if (progress?.phase === 'orphans') {
-    label = 'Linking unconnected notes to your network'
-    counts = `${progress.done} / ${progress.total} notes · ${progress.total - progress.done} to go`
+    label = 'Linking detached notes to your network'
+    counts = `${progress.done} / ${progress.total} groups · ${progress.total - progress.done} to go`
     fraction = progress.total ? progress.done / progress.total : 0
   } else if (progress?.phase === 'saving') {
     label = 'Saving suggestions'
@@ -341,7 +341,7 @@ export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote,
               Not connected · no good match ({unlinked.length})
             </p>
             <p className="text-[11px] text-gray-400 dark:text-gray-600 mb-2 px-1">
-              These notes have no links, and nothing in your network clearly fits. Connect them yourself, or archive them.
+              No path of links connects these notes to yours (a note in a group of linked notes stands for its group), and nothing in your network clearly fits. Connect them yourself, or archive them.
             </p>
             <div className="flex flex-wrap gap-1.5 px-1">
               {unlinked.map(path => {
@@ -363,7 +363,7 @@ export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote,
         )
       ) : (
         <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-600 px-1">
-          Set <span className="font-medium">Your note</span> in Settings to also check notes that aren&apos;t connected to anything.
+          Set <span className="font-medium">Your note</span> in Settings to also check notes that aren&apos;t connected to your network.
         </p>
       )}
     </section>
