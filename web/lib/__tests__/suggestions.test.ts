@@ -348,6 +348,25 @@ describe('unconnected notes', () => {
     expect(prompt).toContain('notes/Meetup series.md')
   })
 
+  it('a link through an inbox note or a system file does not connect a group', async () => {
+    const vault = memoryVault({
+      [me.path]: '---\ntype: person\n---\nWorks on [[DDZ]].',
+      [ddz.path]: '---\ntype: company\n---\nDigital District Zwolle.',
+      // Hidden in the graph, yet both link the lonely note to the owner's network
+      'inbox/New contact.md': '---\ntype: person\ninbox: true\n---\nMet at [[DDZ]], about [[Meetup idea]].',
+      'Claude/Index.md': '- [[Milan]]\n- [[Meetup idea]]',
+      [lonely.path]: '---\ntype: idea\n---\nTech meetup at DDZ.',
+      [PREFERENCES_PATH]: JSON.stringify({ ownerNote: me.path }),
+    })
+    const { client, parse } = fakeAnthropic(
+      { candidates: [] },
+      { matches: [{ orphan: lonely.path, target: ddz.path, relationType: 'part_of', reason: 'Meetup bij DDZ', confidence: 0.85 }] },
+    )
+    const result = await runSuggestionReview(vault.client, client)
+    expect(result).toMatchObject({ added: 1 })
+    expect(parse.mock.calls[1][0].messages[0].content).toContain(`path=${JSON.stringify(lonely.path)}`)
+  })
+
   it('a run with an owner note checks unconnected notes and stores the unmatched ones', async () => {
     const vault = memoryVault({
       [me.path]: '---\ntype: person\n---\nWorks on [[DDZ]].',

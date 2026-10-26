@@ -105,7 +105,11 @@ export default function BrainPage() {
   // Notes the review left for manual review, minus the ones that got connected since
   const openUnlinked = useMemo(() => {
     if (!graph) return []
-    const detached = ownerNote ? detachedPaths(graph.nodes, graph.edges, ownerNote) : unconnectedPaths(graph.nodes, graph.edges)
+    // The same notes the graph shows: inbox notes and system files don't connect anything
+    const shown = graph.nodes.filter(n => !n.inbox && n.type !== 'system' && n.type !== 'template')
+    const shownIds = new Set(shown.map(n => n.id))
+    const edges = graph.edges.filter(e => shownIds.has(e.source) && shownIds.has(e.target))
+    const detached = ownerNote ? detachedPaths(shown, edges, ownerNote) : unconnectedPaths(shown, edges)
     return unlinkedNotes.filter(p => detached.has(p))
   }, [graph, unlinkedNotes, ownerNote])
 

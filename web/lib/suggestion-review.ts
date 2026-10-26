@@ -67,14 +67,18 @@ export async function runSuggestionReview(
   const owner = prefs.ownerNote ? byPath.get(prefs.ownerNote) : undefined
   let unlinked: string[] = []
   if (owner) {
+    // Connections count only through notes the graph shows: a link via an inbox note or a
+    // system file doesn't connect a group, because that note is hidden in the graph
     const reviewable = new Set(reviewableNotes(notes).map(n => n.path))
+    const shownNodes = graph.nodes.filter(n => reviewable.has(n.path))
+    const shownEdges = graph.edges.filter(e => reviewable.has(e.source) && reviewable.has(e.target))
     // A pending suggestion from a group to a note outside it may already connect the group
     const pendingPairs = [
       ...existing.filter(s => s.status === 'pending'),
       ...drafts,
     ].map(s => [s.source, s.target] as const)
-    const candidates = detachedGroups(graph.nodes, graph.edges, owner.path)
-      .map(g => g.filter(p => reviewable.has(p)).map(p => byPath.get(p)!))
+    const candidates = detachedGroups(shownNodes, shownEdges, owner.path)
+      .map(g => g.map(p => byPath.get(p)!))
       .filter(g => {
         if (g.length === 0) return false
         const inGroup = new Set(g.map(n => n.path))
@@ -87,7 +91,7 @@ export async function runSuggestionReview(
       : candidates.filter(g => g.some(n => changedPaths.has(n.path)) || !previouslyUnmatched.has(g[0].path))
     const carriedOver = candidates.filter(g => !groups.includes(g)).map(g => g[0].path)
 
-    const neighbours = new Set(graph.edges.flatMap(e =>
+    const neighbours = new Set(shownEdges.flatMap(e =>
       e.source === owner.path ? [e.target] : e.target === owner.path ? [e.source] : []))
     const network = [owner, ...reviewableNotes(notes).filter(n => neighbours.has(n.path))]
 
