@@ -227,8 +227,11 @@ export default function BrainPage() {
   const syncEnabledRef = useRef(false)
   const lastRemoteSyncRef = useRef<number>(0)
   const sseActiveRef = useRef(false)
+  const lastHashPollRef = useRef<number>(0)
 
   async function refreshGraphSilently() {
+    // Background tabs don't poll — every hash check costs GitHub API calls in remote mode
+    if (document.hidden) return
     try {
       if (syncEnabledRef.current) {
         // Check local hash first — only sync if something changed locally,
@@ -264,6 +267,8 @@ export default function BrainPage() {
 
       // Hash-based polling for non-sync mode — skip when SSE is handling local changes
       if (sseActiveRef.current) return
+      if (Date.now() - lastHashPollRef.current < 30_000) return
+      lastHashPollRef.current = Date.now()
       const res = await fetch('/api/vault/hash')
       if (!res.ok) return
       const { hash } = await res.json()
@@ -293,11 +298,21 @@ export default function BrainPage() {
       .catch(() => {})
   }, [])
 
-  // Poll vault hash every 5 seconds for background updates (remote / fallback)
+  // Tick every 5 seconds for background updates; remote hash polling throttles itself to 30s
   useEffect(() => {
     if (vaultError || error) return
     const id = setInterval(refreshGraphSilently, 5000)
-    return () => clearInterval(id)
+    // Catch up right away when the tab becomes visible again
+    function onVisible() {
+      if (document.hidden) return
+      lastHashPollRef.current = 0
+      refreshGraphSilently()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [vaultError, error])
 
   // SSE filesystem watch — local vault only, replaces hash polling when active
