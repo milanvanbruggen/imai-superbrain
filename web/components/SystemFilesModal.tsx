@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import type { SystemFile } from '@/app/api/vault/system/route'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 interface Props {
   onClose: () => void
@@ -143,27 +144,18 @@ export function SystemFilesModal({ onClose }: Props) {
   files.forEach(f => { (groups[f.dir] ??= []).push(f) })
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl shadow-2xl flex overflow-hidden"
-        style={{ width: 860, height: 560 }}
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="System files" className="flex overflow-hidden" style={{ width: 860, height: 560 }}>
         {/* Sidebar */}
         <div className="w-52 shrink-0 border-r border-slate-200 dark:border-gray-700/80 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-gray-700/80">
             <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">System files</span>
-            <button
-              onClick={onClose}
+            <ModalClose
               className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
-            </button>
+            </ModalClose>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {Object.entries(groups).map(([dir, groupFiles]) => (
@@ -176,7 +168,7 @@ export function SystemFilesModal({ onClose }: Props) {
                     <button
                       onClick={() => { setNewFileDir(dir); setNewFileName(''); setSelectedPath(null) }}
                       title={`New file in ${dir}/`}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-all cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-teal-600 dark:hover:text-teal-400 transition-[color,background-color,border-color,opacity,box-shadow,transform] cursor-pointer"
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -246,7 +238,7 @@ export function SystemFilesModal({ onClose }: Props) {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="ml-auto flex items-center gap-2 px-4 py-1.5 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors disabled:opacity-60 cursor-pointer"
+                  className="ml-auto flex items-center gap-2 px-4 py-1.5 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] disabled:opacity-60 cursor-pointer"
                 >
                   {saving ? (
                     <>
@@ -266,7 +258,6 @@ export function SystemFilesModal({ onClose }: Props) {
             </>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 type NoteType = 'person' | 'project' | 'idea' | 'note' | 'resource' | 'meeting' | 'daily' | 'area'
 
@@ -108,11 +109,7 @@ export function NewNoteModal({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl p-6 w-full max-w-sm shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="New note" className="p-6 w-full max-w-sm">
         <div className="flex items-center gap-2.5 mb-5">
           <div className="w-5 h-5 rounded bg-teal-100 dark:bg-teal-600/30 flex items-center justify-center">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0d9488" strokeWidth="2.5">
@@ -173,23 +170,20 @@ export function NewNoteModal({ onClose, onCreated }: Props) {
           {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
 
           <div className="flex gap-2 justify-end pt-1">
-            <button
-              type="button"
-              onClick={onClose}
+            <ModalClose
               className="px-4 py-2 text-xs text-slate-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
             >
               Cancel
-            </button>
+            </ModalClose>
             <button
               type="submit"
               disabled={saving || (!isDaily && !title.trim())}
-              className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors disabled:opacity-40 cursor-pointer"
+              className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] disabled:opacity-40 cursor-pointer"
             >
               {saving ? 'Creating...' : 'Create Note'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -99,7 +99,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
       <aside className="w-10 border-l border-slate-200 dark:border-gray-800/60 bg-white dark:bg-gray-950 shrink-0 flex flex-col items-center pt-3">
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6"/>
@@ -138,13 +138,13 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
               <button
                 onClick={handleMerge}
                 disabled={merging}
-                className="text-xs px-2.5 py-1 rounded-md bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 cursor-pointer transition-colors"
+                className="text-xs px-2.5 py-1 rounded-md bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50 cursor-pointer transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97]"
               >
                 {merging ? '…' : 'Confirm merge'}
               </button>
               <button
                 onClick={() => setConfirmMerge(false)}
-                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer transition-colors"
+                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97]"
               >
                 Cancel
               </button>
@@ -152,7 +152,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
           ) : (
             <button
               onClick={() => setConfirmMerge(true)}
-              className="text-xs px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-500 text-white font-medium transition-colors cursor-pointer"
+              className="text-xs px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-500 text-white font-medium transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
             >
               Merge
             </button>
@@ -160,7 +160,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
           <button
             onClick={onClose}
             title="Close preview"
-            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -168,7 +168,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
           </button>
           <button
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6"/>
@@ -191,7 +191,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
           onClick={() => { setSwapped(v => !v); setConfirmMerge(false) }}
           disabled={merging}
           title="Swap which note stays"
-          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors disabled:opacity-50"
+          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] disabled:opacity-50"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M7 4v16M7 4 3 8M7 4l4 4M17 20V4M17 20l-4-4M17 20l4-4"/>

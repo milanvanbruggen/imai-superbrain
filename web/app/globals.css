@@ -57,3 +57,22 @@ body {
 .prose-brain table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-bottom: 0.75rem; }
 .prose-brain th { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-weight: 600; }
 .prose-brain td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #f1f5f9; color: #475569; }
+
+/* Motion (Emil Kowalski's design-engineering defaults): strong custom curves instead of the weak
+   built-in ones. These replace Tailwind's ease-out / ease-in-out, so existing classes pick them up. */
+@theme {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Command palette group headings (cmdk renders them itself) */
+.palette-group [cmdk-group-heading] {
+  padding: 0.5rem 0.625rem 0.25rem;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+}
+.dark .palette-group [cmdk-group-heading] { color: #6b7280; }

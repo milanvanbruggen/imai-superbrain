@@ -50,7 +50,7 @@ export function ThemeToggle() {
           key={opt.value}
           onClick={() => setTheme(opt.value)}
           title={opt.label}
-          className={`p-1.5 rounded transition-colors duration-150 cursor-pointer ${
+          className={`p-1.5 rounded transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] duration-150 cursor-pointer ${
             theme === opt.value
               ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
               : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'

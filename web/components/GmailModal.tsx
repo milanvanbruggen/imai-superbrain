@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { GmailMessage } from '@/lib/types'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 interface Props {
   note: { path: string; title: string; email?: string }
@@ -160,11 +161,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl w-full max-w-lg shadow-2xl flex flex-col max-h-[80vh]"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="Gmail" className="w-full max-w-lg flex flex-col max-h-[80vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-gray-800 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -174,11 +171,11 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
             </svg>
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Emails — {note.title}</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer">
+          <ModalClose className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
-          </button>
+          </ModalClose>
         </div>
 
         {/* Body */}
@@ -290,10 +287,10 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
         <div className="flex justify-between items-center p-4 border-t border-slate-100 dark:border-gray-800 shrink-0">
           {phase === 'email-input' && (
             <>
-              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</button>
+              <ModalClose className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</ModalClose>
               <button
                 onClick={handleEmailSubmit}
-                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
               >
                 Search
               </button>
@@ -302,11 +299,11 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
 
           {phase === 'results' && (
             <>
-              <button onClick={onClose} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</button>
+              <ModalClose className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Close</ModalClose>
               <button
                 onClick={handleSummarizeClick}
                 disabled={selected.size === 0}
-                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
               >
                 Generate summary ({selected.size})
               </button>
@@ -319,7 +316,7 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
               <button
                 onClick={handleAppend}
                 disabled={appending}
-                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-60 transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 disabled:opacity-60 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
               >
                 {appending ? 'Saving...' : 'Add to note'}
               </button>
@@ -327,10 +324,9 @@ export function GmailModal({ note, onClose, onAppended }: Props) {
           )}
 
           {(phase === 'loading' || phase === 'summarizing' || phase === 'error') && (
-            <button onClick={onClose} className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</button>
+            <ModalClose className="ml-auto text-xs text-slate-400 hover:text-slate-600 dark:hover:text-gray-200 cursor-pointer">Sluiten</ModalClose>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

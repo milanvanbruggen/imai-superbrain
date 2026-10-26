@@ -1,10 +1,12 @@
 'use client'
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo, useSyncExternalStore } from 'react'
 import { VaultGraph, GraphNode, VaultNote } from '@/lib/types'
 import { BrainGraph, DEFAULT_TYPE_COLORS } from '@/components/BrainGraph'
 import { NoteTypesModal } from '@/components/NoteTypesModal'
 import { DetailPanel } from '@/components/DetailPanel'
 import { SearchBar } from '@/components/SearchBar'
+import { Button } from '@/components/ui/button'
+import { Popover } from '@base-ui/react/popover'
 import { NewNoteModal } from '@/components/NewNoteModal'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { SettingsModal } from '@/components/SettingsModal'
@@ -16,16 +18,13 @@ import { markSuggestion } from '@/components/SuggestionsSection'
 import { detachedPaths, unconnectedPaths, visibleSuggestions, type RejectedCandidate, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
-function McpStatus() {
-  const [isLocal, setIsLocal] = useState(false)
-  const [showTooltip, setShowTooltip] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const mcpUrl = typeof window !== 'undefined' ? `${window.location.origin}/mcp` : ''
+const noSubscribe = () => () => {}
 
-  useEffect(() => {
-    const host = window.location.hostname
-    setIsLocal(host === 'localhost' || host === '127.0.0.1')
-  }, [])
+function McpStatus() {
+  const [copied, setCopied] = useState(false)
+  // Read from the browser's location; on the server it renders as not local, without a URL
+  const isLocal = useSyncExternalStore(noSubscribe, () => ['localhost', '127.0.0.1'].includes(window.location.hostname), () => false)
+  const mcpUrl = useSyncExternalStore(noSubscribe, () => `${window.location.origin}/mcp`, () => '')
 
   async function copyUrl() {
     try {
@@ -38,11 +37,11 @@ function McpStatus() {
   }
 
   return (
-    // Hover handlers on the wrapper, so the pointer can move into the tooltip to copy the URL
-    <div className="relative" onMouseEnter={() => setShowTooltip(true)} onMouseLeave={() => setShowTooltip(false)}>
-      <button
-        onClick={() => setShowTooltip(v => !v)}
-        className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+    <Popover.Root>
+      <Popover.Trigger
+        openOnHover
+        delay={150}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium cursor-pointer transition-[background-color,scale] duration-150 ease-out active:scale-[0.97] ${
           isLocal
             ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400'
             : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -50,39 +49,42 @@ function McpStatus() {
       >
         <span className={`w-1.5 h-1.5 rounded-full ${isLocal ? 'bg-amber-400' : 'bg-emerald-400'}`} />
         MCP {isLocal ? 'Offline' : 'Active'}
-      </button>
-      {showTooltip && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 z-50">
-        <div className="relative w-64 p-3 rounded-lg bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 shadow-lg z-50 text-left">
-          <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white dark:bg-gray-800 border-l border-t border-slate-200 dark:border-gray-700" />
-          {isLocal ? (
-            <>
-              <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1">MCP not available</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                The MCP server requires a public URL with OAuth authentication. Deploy this app (e.g. on Vercel) to enable MCP integration with Claude Desktop and other AI tools.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1">MCP active</p>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                Your Superbrain is accessible via MCP. AI tools like Claude Desktop can read and search your vault through the remote MCP endpoint.
-              </p>
-              <div className="mt-2 flex items-center gap-1.5">
-                <code className="flex-1 min-w-0 truncate select-all text-[10px] bg-slate-100 dark:bg-gray-700 px-1.5 py-1 rounded text-gray-700 dark:text-gray-200" title={mcpUrl}>{mcpUrl}</code>
-                <button
-                  onClick={copyUrl}
-                  className="shrink-0 px-2 py-1 text-[11px] font-medium rounded bg-teal-600 hover:bg-teal-500 text-white cursor-pointer transition-colors"
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-        </div>
-      )}
-    </div>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner sideOffset={8} className="z-50">
+          <Popover.Popup
+            className={[
+              'w-64 p-3 rounded-lg bg-white dark:bg-gray-800 border border-slate-200 dark:border-gray-700 shadow-lg text-left outline-none',
+              // Grows out of the badge it belongs to
+              'origin-[var(--transform-origin)] transition-[opacity,scale] duration-150 ease-out',
+              'data-[starting-style]:opacity-0 data-[starting-style]:scale-[0.97] data-[ending-style]:opacity-0 data-[ending-style]:scale-[0.97]',
+            ].join(' ')}
+          >
+            {isLocal ? (
+              <>
+                <Popover.Title className="text-xs font-semibold text-gray-900 dark:text-white mb-1">MCP not available</Popover.Title>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  The MCP server requires a public URL with OAuth authentication. Deploy this app (e.g. on Vercel) to enable MCP integration with Claude Desktop and other AI tools.
+                </p>
+              </>
+            ) : (
+              <>
+                <Popover.Title className="text-xs font-semibold text-gray-900 dark:text-white mb-1">MCP active</Popover.Title>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Your Superbrain is accessible via MCP. AI tools like Claude Desktop can read and search your vault through the remote MCP endpoint.
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <code className="flex-1 min-w-0 truncate select-all text-[10px] bg-slate-100 dark:bg-gray-700 px-1.5 py-1 rounded text-gray-700 dark:text-gray-200" title={mcpUrl}>{mcpUrl}</code>
+                  <Button variant="primary" size="sm" onClick={copyUrl} className="h-6 px-2">
+                    {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   )
 }
 
@@ -621,13 +623,10 @@ export default function BrainPage() {
         <McpStatus />
 
         <div className="ml-auto flex items-center gap-2">
-          <button
+          <Button
             onClick={() => { setShowInboxOnly(v => !v); setActiveTypes(new Set()) }}
-            className={`relative px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${
-              showInboxOnly
-                ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
-                : 'bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700'
-            }`}
+            aria-pressed={showInboxOnly}
+            variant={showInboxOnly ? 'attention' : 'secondary'}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -639,36 +638,37 @@ export default function BrainPage() {
                 {inboxCount > 99 ? '99+' : inboxCount}
               </span>
             )}
-          </button>
-          <SearchBar nodes={graph.nodes.filter(n => !n.inbox)} onSelect={setSelectedId} />
-          <button
-            onClick={() => setShowNewNote(true)}
-            className="px-3 py-1.5 text-xs bg-teal-600 text-white rounded-md font-medium hover:bg-teal-500 transition-colors duration-150 cursor-pointer"
-          >
+          </Button>
+          <SearchBar
+            nodes={graph.nodes.filter(n => !n.inbox)}
+            onSelect={setSelectedId}
+            typeColors={typeColors}
+            actions={[
+              { id: 'new', label: 'New note', run: () => setShowNewNote(true) },
+              { id: 'inbox', label: showInboxOnly ? 'Back to the graph' : 'Open the inbox', run: () => setShowInboxOnly(v => !v) },
+              ...(hasGitHub ? [{ id: 'history', label: 'History', run: () => setShowHistory(true) }] : []),
+              { id: 'settings', label: 'Settings', run: () => setShowSettings(true) },
+            ]}
+          />
+          <Button variant="primary" onClick={() => setShowNewNote(true)}>
             + New Note
-          </button>
+          </Button>
           {hasGitHub && (
-            <button
-              onClick={() => setShowHistory(true)}
-              className="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700"
-            >
+            <Button onClick={() => setShowHistory(true)}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
               </svg>
               History
-            </button>
+            </Button>
           )}
-          <button
-            onClick={() => setShowSettings(true)}
-            className="px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer bg-slate-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-gray-700"
-          >
+          <Button onClick={() => setShowSettings(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
               <circle cx="12" cy="12" r="3"/>
             </svg>
             Settings
-          </button>
+          </Button>
           <ThemeToggle />
         </div>
       </header>
@@ -744,7 +744,7 @@ export default function BrainPage() {
               <button
                 onClick={() => { setShowSystemNodes(v => !v); setActiveTypes(new Set()); setSelectedId(null) }}
                 title={showSystemNodes ? 'Switch to notes' : 'Switch to system files'}
-                className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                className={`absolute top-3 right-3 z-10 pointer-events-auto flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] duration-150 cursor-pointer border backdrop-blur-sm ${
                   showSystemNodes
                     ? 'bg-white/90 dark:bg-gray-900/90 text-gray-600 dark:text-gray-300 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
                     : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
@@ -770,7 +770,7 @@ export default function BrainPage() {
                       key={type}
                       onClick={() => toggleType(type)}
                       title={isActive ? `Hide ${type}` : `Show only ${type}`}
-                      className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm ${
+                      className={`pointer-events-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] duration-150 cursor-pointer border backdrop-blur-sm ${
                         isActive
                           ? 'bg-white/90 dark:bg-gray-900/90 text-gray-700 dark:text-gray-200 border-gray-200/80 dark:border-gray-700/80 shadow-sm'
                           : 'bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30'
@@ -786,7 +786,7 @@ export default function BrainPage() {
                 })}
                 <button
                   onClick={() => setShowNoteTypes(true)}
-                  className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
+                  className="pointer-events-auto flex items-center px-2.5 py-1 rounded-full text-xs font-medium transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] duration-150 cursor-pointer border backdrop-blur-sm bg-white/40 dark:bg-gray-900/40 text-gray-400 dark:text-gray-600 border-gray-200/30 dark:border-gray-700/30 shrink-0 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   Edit
                 </button>

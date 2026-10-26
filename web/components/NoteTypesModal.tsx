@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 const DEFAULT_TYPE_NAMES = [
   'person', 'project', 'idea', 'note', 'resource',
@@ -106,25 +107,17 @@ export function NoteTypesModal({ onClose, onSaved, noteCounts }: Props) {
   }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl p-6 w-full max-w-sm shadow-2xl max-h-[80vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="Note types" className="p-6 w-full max-w-sm max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Note Types</h2>
-          <button
-            onClick={onClose}
+          <ModalClose
             className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
-          </button>
+          </ModalClose>
         </div>
 
         {loading ? (
@@ -211,12 +204,11 @@ export function NoteTypesModal({ onClose, onSaved, noteCounts }: Props) {
             {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
 
             <div className="flex justify-end gap-2">
-              <button
-                onClick={onClose}
+              <ModalClose
                 className="px-3 py-1.5 text-xs text-slate-500 hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer"
               >
                 Cancel
-              </button>
+              </ModalClose>
               <button
                 onClick={handleSave}
                 disabled={saving}
@@ -227,7 +219,6 @@ export function NoteTypesModal({ onClose, onSaved, noteCounts }: Props) {
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

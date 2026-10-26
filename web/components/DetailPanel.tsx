@@ -234,7 +234,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
         <button
           onClick={onToggleCollapse}
           title="Expand panel"
-          className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+          className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
         >
           {/* chevron left (expand = show panel on right) */}
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -289,9 +289,9 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
         </div>
       )}
 
-      {/* Note content */}
+      {/* Note content: fades in when you switch notes, so the change reads as a change */}
       {node && note && (
-        <>
+        <div key={note.path} className="flex flex-col flex-1 transition-opacity duration-150 ease-out starting:opacity-0 motion-reduce:transition-none">
           {/* Header */}
           <div className="p-5 border-b border-slate-100 dark:border-gray-800/60 flex items-start justify-between gap-3 sticky top-0 bg-white dark:bg-gray-950 z-10">
             <div className="min-w-0 flex-1">
@@ -376,7 +376,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => setEditing(e => !e)}
-                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-slate-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-150 cursor-pointer"
+                className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-slate-400 dark:hover:border-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] duration-150 cursor-pointer"
               >
                 {editing ? 'View' : 'Edit'}
               </button>
@@ -385,13 +385,13 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   <button
                     onClick={handleDelete}
                     disabled={deleting}
-                    className="text-xs px-2.5 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                    className="text-xs px-2.5 py-1 rounded-md bg-red-500 text-white hover:bg-red-600 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
                   >
                     {deleting ? '…' : 'Confirm'}
                   </button>
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                    className="text-xs px-2.5 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                   >
                     Cancel
                   </button>
@@ -400,7 +400,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                 <button
                   onClick={() => setConfirmDelete(true)}
                   title="Delete note"
-                  className="p-1.5 rounded-md text-slate-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                  className="p-1.5 rounded-md text-slate-400 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -412,7 +412,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   <button
                     onClick={() => setGmailOpen(true)}
                     title="Search emails in Gmail"
-                    className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
@@ -423,7 +423,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                   <button
                     onClick={() => onOpenSettings?.()}
                     title="Gmail connection expired — reconnect in settings"
-                    className="p-1.5 rounded-md text-amber-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-md text-amber-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
@@ -502,13 +502,13 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
                                   <button
                                     onClick={() => handleRemoveRelation(rel.target)}
                                     disabled={removingLink !== null}
-                                    className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer disabled:opacity-50"
+                                    className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white hover:bg-red-600 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
                                   >
                                     {removingLink === rel.target ? '…' : 'Confirm'}
                                   </button>
                                   <button
                                     onClick={() => setConfirmRemoveTarget(null)}
-                                    className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                                    className="text-xs px-1.5 py-0.5 rounded border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                                   >
                                     Cancel
                                   </button>
@@ -662,7 +662,7 @@ export function DetailPanel({ node, note, allEdges, allNodes, onNoteUpdated, onN
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
       {gmailOpen && note && (
         <GmailModal
@@ -680,7 +680,7 @@ function CollapseButton({ onToggle }: { onToggle: () => void }) {
     <button
       onClick={onToggle}
       title="Collapse panel"
-      className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+      className="p-1.5 rounded-md text-slate-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-800 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
     >
       {/* chevron right (collapse = push panel away) */}
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

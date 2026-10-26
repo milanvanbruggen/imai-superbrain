@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CommitEntry } from '@/lib/vault-history'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 interface Props {
   onClose: () => void
@@ -171,12 +172,7 @@ export function HistoryModal({ onClose, onRestored }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl p-6 w-full max-w-lg shadow-2xl flex flex-col"
-        style={{ maxHeight: '80vh' }}
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="History" className="p-6 w-full max-w-lg flex flex-col" style={{ maxHeight: '80vh' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-5 shrink-0">
           <div className="flex items-center gap-2.5">
@@ -188,11 +184,11 @@ export function HistoryModal({ onClose, onRestored }: Props) {
             </div>
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Vault History</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors">
+          <ModalClose className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
-          </button>
+          </ModalClose>
         </div>
 
         {/* Body */}
@@ -275,7 +271,6 @@ export function HistoryModal({ onClose, onRestored }: Props) {
             )}
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

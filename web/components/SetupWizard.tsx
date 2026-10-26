@@ -37,7 +37,7 @@ function StepIndicator({ current, steps }: { current: number; steps: readonly st
     <div className="flex items-center gap-1 mb-8">
       {steps.map((step, i) => (
         <div key={step} className="flex items-center gap-1">
-          <div className={`flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold transition-all duration-300 ${
+          <div className={`flex items-center justify-center w-7 h-7 rounded-full text-[11px] font-semibold transition-[color,background-color,border-color,opacity,box-shadow,transform] duration-300 ${
             i < current
               ? 'bg-teal-500 text-white'
               : i === current
@@ -176,7 +176,7 @@ export function SetupWizard({ onComplete }: Props) {
     return true
   }
 
-  const inputClass = 'w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 dark:focus:border-teal-500 font-mono placeholder:text-slate-400 dark:placeholder:text-gray-600 transition-all'
+  const inputClass = 'w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 dark:focus:border-teal-500 font-mono placeholder:text-slate-400 dark:placeholder:text-gray-600 transition-[color,background-color,border-color,opacity,box-shadow,transform]'
   const labelClass = 'block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5'
   const hintClass = 'text-[11px] text-slate-400 dark:text-gray-500 mt-1'
 
@@ -210,7 +210,7 @@ export function SetupWizard({ onComplete }: Props) {
                 />
                 <button
                   onClick={() => { navigator.clipboard.writeText(vaultConfigJson); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
-                  className="absolute top-2 right-2 px-2 py-1 text-[11px] bg-teal-600 text-white rounded font-medium hover:bg-teal-500 cursor-pointer transition-colors"
+                  className="absolute top-2 right-2 px-2 py-1 text-[11px] bg-teal-600 text-white rounded font-medium hover:bg-teal-500 cursor-pointer transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97]"
                 >
                   {copied ? 'Copied!' : 'Copy'}
                 </button>
@@ -274,7 +274,7 @@ export function SetupWizard({ onComplete }: Props) {
                   <button
                     key={String(opt.value)}
                     onClick={() => update({ useTemplate: opt.value })}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-[color,background-color,border-color,opacity,box-shadow,transform] cursor-pointer ${
                       data.useTemplate === opt.value
                         ? 'border-teal-500 bg-teal-50 dark:bg-teal-500/10'
                         : 'border-slate-200 dark:border-gray-700 hover:border-slate-300 dark:hover:border-gray-600'
@@ -305,7 +305,7 @@ export function SetupWizard({ onComplete }: Props) {
                     key={opt.value}
                     onClick={() => !opt.disabled && update({ provider: opt.value })}
                     disabled={opt.disabled}
-                    className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-[color,background-color,border-color,opacity,box-shadow,transform] ${
                       opt.disabled
                         ? 'opacity-40 cursor-not-allowed border-slate-200 dark:border-gray-700'
                         : data.provider === opt.value
@@ -579,7 +579,7 @@ export function SetupWizard({ onComplete }: Props) {
                   return next
                 })}
                 disabled={!canProceed()}
-                className="px-5 py-2.5 text-xs bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-500 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 py-2.5 text-xs bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue →
               </button>
@@ -587,7 +587,7 @@ export function SetupWizard({ onComplete }: Props) {
               <button
                 onClick={handleFinish}
                 disabled={saving}
-                className="px-5 py-2.5 text-xs bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-500 transition-colors cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 text-xs bg-teal-600 text-white rounded-lg font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 {saving ? (
                   <span className="flex items-center gap-2">

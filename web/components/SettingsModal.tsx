@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { useToast } from './Toaster'
+import { Modal, ModalClose } from '@/components/ui/modal'
 
 interface VaultConfig {
   mode: 'local' | 'github' | 'gitlab' | 'unconfigured'
@@ -186,11 +187,7 @@ export function SettingsModal({ onClose, notes }: Props) {
   const syncActive = !!(config?.syncEnabled)
 
   return (
-    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-gray-900 border border-slate-200 dark:border-gray-700/80 rounded-xl p-6 w-full max-w-md shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} label="Settings" className="p-6 w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
@@ -202,11 +199,11 @@ export function SettingsModal({ onClose, notes }: Props) {
             </div>
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Settings</h2>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors">
+          <ModalClose className="text-slate-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
-          </button>
+          </ModalClose>
         </div>
 
         {!config ? (
@@ -360,7 +357,7 @@ export function SettingsModal({ onClose, notes }: Props) {
                     <button
                       onClick={saveOwnerNote}
                       disabled={savingOwnerNote || ownerNote.trim() === savedOwnerNote}
-                      className="px-3 py-1.5 text-xs rounded-md font-medium bg-teal-600 text-white hover:bg-teal-500 transition-colors cursor-pointer disabled:opacity-40"
+                      className="px-3 py-1.5 text-xs rounded-md font-medium bg-teal-600 text-white hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-40"
                     >
                       {savingOwnerNote ? '…' : 'Save'}
                     </button>
@@ -430,7 +427,7 @@ export function SettingsModal({ onClose, notes }: Props) {
                 ) : (
                   <button
                     onClick={() => signIn('google', { callbackUrl: window.location.origin })}
-                    className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-colors cursor-pointer"
+                    className="text-xs px-3 py-1.5 bg-teal-600 text-white rounded font-medium hover:bg-teal-500 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                   >
                     Connect Gmail
                   </button>
@@ -446,7 +443,6 @@ export function SettingsModal({ onClose, notes }: Props) {
             </div>}
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

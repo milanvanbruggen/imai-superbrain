@@ -124,14 +124,14 @@ function SuggestionCard({
           <button
             onClick={handleDismiss}
             disabled={busy}
-            className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 text-gray-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800"
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50 text-gray-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-gray-800"
           >
             Dismiss
           </button>
           <button
             onClick={isMerge ? () => onPreviewMerge(source, target, suggestion.id) : handleConnect}
             disabled={busy}
-            className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-violet-600 hover:bg-violet-500 text-white"
+            className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50 bg-violet-600 hover:bg-violet-500 text-white"
           >
             {busy ? '…' : isMerge ? 'Review merge' : 'Connect'}
           </button>
@@ -382,7 +382,7 @@ export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote,
                   <button
                     key={path}
                     onClick={() => onSelect(path)}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs bg-slate-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-gray-700 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: typeColors[note.type] ?? '#94a3b8' }} />
                     {note.title}

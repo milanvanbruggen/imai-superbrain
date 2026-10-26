@@ -210,13 +210,13 @@ function NoteCard({
               <button
                 onClick={() => { setConfirmDecline(false); onDecline() }}
                 disabled={declining}
-                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer disabled:opacity-50"
+                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 {declining ? '…' : 'Confirm'}
               </button>
               <button
                 onClick={() => setConfirmDecline(false)}
-                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
               >
                 Cancel
               </button>
@@ -226,14 +226,14 @@ function NoteCard({
               <button
                 onClick={() => setConfirmDecline(true)}
                 disabled={approving || declining}
-                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 Decline
               </button>
               <button
                 onClick={onApprove}
                 disabled={approving || declining}
-                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
+                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
               >
                 {approving ? '…' : duplicate ? 'Merge' : 'Approve'}
               </button>
@@ -272,7 +272,7 @@ function NoteCard({
                 key={rel.path}
                 onClick={() => handleAddRelation(rel)}
                 disabled={addingRelation === rel.path}
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:border-teal-400 hover:text-teal-600 dark:hover:text-teal-400 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 <span className="text-gray-300 dark:text-gray-600">+</span>
                 <span>{rel.title}</span>
@@ -355,13 +355,13 @@ function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approv
               <button
                 onClick={() => { setConfirmDecline(false); onDecline() }}
                 disabled={declining}
-                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors cursor-pointer disabled:opacity-50"
+                className="px-2 py-1 text-[11px] font-medium rounded-md bg-red-500 hover:bg-red-600 text-white transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 {declining ? '…' : 'Confirm'}
               </button>
               <button
                 onClick={() => setConfirmDecline(false)}
-                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
+                className="px-2 py-1 text-[11px] rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer"
               >
                 Cancel
               </button>
@@ -371,14 +371,14 @@ function UpdatedNoteCard({ note, duplicate, typeColors, onPreviewChanges, approv
               <button
                 onClick={() => setConfirmDecline(true)}
                 disabled={approving || declining}
-                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-colors cursor-pointer disabled:opacity-50"
+                className="px-2 py-1 text-[11px] font-medium rounded-md border border-slate-200 dark:border-gray-700 text-slate-500 dark:text-gray-400 hover:border-red-300 hover:text-red-500 dark:hover:border-red-700 dark:hover:text-red-400 transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50"
               >
                 Decline
               </button>
               <button
                 onClick={onApprove}
                 disabled={approving || declining}
-                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
+                className="px-2.5 py-1 text-[11px] font-medium rounded-md transition-[color,background-color,border-color,opacity,scale] ease-out active:scale-[0.97] cursor-pointer disabled:opacity-50 bg-teal-600 hover:bg-teal-500 text-white"
               >
                 {approving ? '…' : 'Merge'}
               </button>
