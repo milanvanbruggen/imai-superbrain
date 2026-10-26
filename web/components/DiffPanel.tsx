@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { VaultNote } from '@/lib/types'
 import { computeDiff, DiffLine } from '@/lib/diff'
+import { mergedBody } from '@/lib/merge-format'
 import { useToast } from '@/components/Toaster'
 
 interface Props {
@@ -63,26 +64,11 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
 
   const color = typeColors[duplicate.type] ?? '#94a3b8'
 
-  // Mirror the server-side merge formatting so the preview matches the actual result
-  function formatNlDate(dateStr: string): string {
-    const months = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
-    const [year, month, day] = dateStr.split('-').map(Number)
-    if (!year || !month || !day) return dateStr
-    return `${day} ${months[month - 1]} ${year}`
-  }
-  function formatAsBullet(content: string, dateStr: string): string {
-    const cleaned = content.replace(/^(?:update|wijziging|change|verzoek)[^\n]*:\s*/im, '').replace(/^\s*\n/, '').trim()
-    if (!cleaned) return ''
-    const prefix = `- **${formatNlDate(dateStr)}** — `
-    const [firstPara, ...rest] = cleaned.split(/\n\n+/)
-    const bullet = prefix + firstPara.replace(/\n/g, ' ')
-    return rest.length > 0 ? bullet + '\n\n  ' + rest.join('\n\n  ') : bullet
-  }
-  const srcDate = note.modified ?? note.date ?? new Date().toISOString().slice(0, 10)
-  const formattedSrc = note.content.trim() ? formatAsBullet(note.content.trim(), srcDate) : ''
-  const mergedContent = formattedSrc
-    ? duplicate.content.trim() + '\n\n' + formattedSrc
-    : duplicate.content.trim()
+  // The same formatting as the merge itself, so the preview matches the result
+  const mergedContent = mergedBody(
+    { title: note.title, content: note.content, inbox: note.inbox, date: note.modified ?? note.date ?? undefined },
+    duplicate.content,
+  )
   const diff = computeDiff(duplicate.content.trim(), mergedContent.trim(), Infinity)
 
   async function handleMerge() {
@@ -198,6 +184,7 @@ export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typ
           {' '}into <span className="font-medium text-gray-900 dark:text-slate-100">{duplicate.title}</span>
           <span className="block text-[11px] text-slate-400 dark:text-gray-600">
             {note.title} is removed; links to it will point to {duplicate.title}.
+            {!note.inbox && note.title.toLowerCase() !== duplicate.title.toLowerCase() && ` "${note.title}" stays findable as an alias.`}
           </span>
         </span>
         <button

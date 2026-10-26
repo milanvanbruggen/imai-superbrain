@@ -7,39 +7,13 @@ import { getStemFromPath } from '@/lib/note-utils'
 import { computeVaultHash, getCachedGraph, invalidateCache } from '@/lib/graph-cache'
 import { mapWithConcurrency } from '@/lib/concurrency'
 import { linksTo, retargetLinks } from '@/lib/merge-links'
+import { mergedBody } from '@/lib/merge-format'
 
 const RELINK_CONCURRENCY = 5
 
-const NL_MONTHS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec']
-
-function formatNlDate(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  if (!year || !month || !day) return dateStr
-  return `${day} ${NL_MONTHS[month - 1]} ${year}`
-}
-
-// Strip common "update header" lines like "Update voor [[onder]]:" before formatting
-function cleanUpdateContent(content: string): string {
-  return content
-    .replace(/^(?:update|wijziging|change|verzoek)[^\n]*:\s*/im, '')
-    .replace(/^\s*\n/, '')
-    .trim()
-}
-
-function formatAsBullet(content: string, dateStr: string | undefined): string {
-  const cleaned = cleanUpdateContent(content)
-  if (!cleaned) return ''
-  const prefix = dateStr ? `- **${formatNlDate(dateStr)}** — ` : '- '
-  // If content is multi-paragraph, keep first paragraph on the bullet line and indent the rest
-  const [firstPara, ...rest] = cleaned.split(/\n\n+/)
-  const bullet = prefix + firstPara.replace(/\n/g, ' ')
-  return rest.length > 0
-    ? bullet + '\n\n  ' + rest.join('\n\n  ')
-    : bullet
-}
-
 // Merge sourcePath into targetPath (an inbox note into an existing note, or two notes in the vault).
-// Newer content from source is appended to target; tags and relations are unioned.
+// An inbox note is appended as a dated update, any other note as a section under its own title
+// (its title is kept as an alias). Tags and relations are unioned.
 // The source file is deleted after a successful merge. If deletion fails, inbox:true
 // is removed from source as a fallback so it no longer appears in the inbox.
 // Links to the source in other notes are pointed at the target, so they don't break.
@@ -96,7 +70,7 @@ export async function POST(req: NextRequest) {
   })
 
   // Merge frontmatter: target wins; add any new keys from source (skip inbox meta fields)
-  const skipKeys = new Set(['inbox', 'date', 'modified', 'title', 'type', 'tags', 'relations'])
+  const skipKeys = new Set(['inbox', 'date', 'modified', 'title', 'type', 'tags', 'relations', 'aliases'])
   const mergedData = { ...tgtData }
   delete mergedData.inbox  // ensure merged note is never an inbox item
   for (const [key, value] of Object.entries(srcData)) {
@@ -108,19 +82,27 @@ export async function POST(req: NextRequest) {
   if (mergedRelations.length > 0) mergedData.relations = mergedRelations
   else delete mergedData.relations
 
-  // Format source content as a dated bullet and append to target
-  const srcTrimmed = srcContent.trim()
-  const tgtTrimmed = tgtContent.trim()
+  // A whole note keeps its name as an alias, so you (and Obsidian) still find it by that name
+  const isUpdate = srcData.inbox === true
+  const srcTitle = typeof srcData.title === 'string' && srcData.title.trim() ? srcData.title.trim() : getStemFromPath(sourcePath)
+  const tgtTitle = typeof tgtData.title === 'string' && tgtData.title.trim() ? tgtData.title.trim() : getStemFromPath(targetPath)
+  const asList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((a): a is string => typeof a === 'string') : typeof v === 'string' ? [v] : [])
+  if (!isUpdate) {
+    const aliases = [...new Set([
+      ...asList(tgtData.aliases),
+      ...(srcTitle.toLowerCase() !== tgtTitle.toLowerCase() ? [srcTitle] : []),
+      ...asList(srcData.aliases),
+    ])].filter(a => a.toLowerCase() !== tgtTitle.toLowerCase())
+    if (aliases.length > 0) mergedData.aliases = aliases
+  }
+
   const srcDate: string | undefined =
     typeof srcData.modified === 'string' ? srcData.modified
     : srcData.modified instanceof Date ? srcData.modified.toISOString().slice(0, 10)
     : typeof srcData.date === 'string' ? srcData.date
     : srcData.date instanceof Date ? srcData.date.toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10)
-  const formattedSrc = srcTrimmed ? formatAsBullet(srcTrimmed, srcDate) : ''
-  const mergedContent = formattedSrc
-    ? tgtTrimmed ? tgtTrimmed + '\n\n' + formattedSrc : formattedSrc
-    : tgtTrimmed
+    : undefined
+  const mergedContent = mergedBody({ title: srcTitle, content: srcContent, inbox: isUpdate, date: srcDate }, tgtContent)
 
   const sourceStem = getStemFromPath(sourcePath)
   const targetStem = getStemFromPath(targetPath)
@@ -132,7 +114,7 @@ export async function POST(req: NextRequest) {
   // Delete source — if this fails, fall back to removing inbox:true so it doesn't
   // appear in the inbox or graph as a duplicate
   try {
-    await client.deleteFile(sourcePath, shaSource, `brain: remove inbox note [[${sourceStem}]] after merge`)
+    await client.deleteFile(sourcePath, shaSource, `brain: remove [[${sourceStem}]] after merge`)
   } catch {
     const { data: freshSrc, content: freshContent } = matter(rawSource)
     delete freshSrc.inbox

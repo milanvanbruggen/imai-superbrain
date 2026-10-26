@@ -44,7 +44,8 @@ describe('POST /api/vault/merge', () => {
 
     expect(files['areas/DDZ.md']).toBeUndefined()
     const target = parseNote('companies/Digital District Zwolle.md', files['companies/Digital District Zwolle.md'])
-    expect(target.content).toContain('Mijn bestuursrol.')
+    expect(target.content).toContain('Netwerk van digitale bedrijven.\n\n## DDZ\n\nMijn bestuursrol.')
+    expect(files['companies/Digital District Zwolle.md']).toContain('aliases:\n  - DDZ')
     // The relation between the two notes would point at the note itself, so it is gone
     expect(target.relations).toEqual([])
 
