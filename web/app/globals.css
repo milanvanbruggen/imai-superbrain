@@ -160,3 +160,15 @@ body {
 .ruled {
   background-image: repeating-linear-gradient(transparent 0 calc(1.5em - 1px), #7FA3C9 calc(1.5em - 1px) 1.5em);
 }
+.dark .ruled {
+  background-image: repeating-linear-gradient(transparent 0 calc(1.5em - 1px), rgba(127, 163, 201, 0.28) calc(1.5em - 1px) 1.5em);
+}
+
+/* Lines on the table appear once the cards have moved into place */
+@keyframes table-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.table-fade {
+  animation: table-fade 0.25s ease-out 0.35s both;
+}
