@@ -71,7 +71,7 @@ function McpStatus() {
 
 const MIN_PANEL_WIDTH = 280
 const MAX_PANEL_WIDTH = 700
-const DEFAULT_PANEL_WIDTH = MAX_PANEL_WIDTH
+const DEFAULT_PANEL_WIDTH = 380
 
 export default function BrainPage() {
   const toast = useToast()
@@ -617,12 +617,12 @@ export default function BrainPage() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-gray-950 text-gray-900 dark:text-slate-100" onClick={() => setSelectedId(null)}>
-      <header className="relative z-20 flex items-center gap-4 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
+      <header className="relative z-20 flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-2.5 border-b border-slate-200 dark:border-gray-800/60 shrink-0 bg-white dark:bg-gray-950/95 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
           <img src="/brand/ai-superbrain-mark.svg" alt="" width={28} height={28} className="shrink-0" />
           <h1 className="font-serif text-lg font-medium">AI Superbrain</h1>
         </div>
-        <span className="font-mono text-xs text-ink-muted tabular-nums">{graph.nodes.length} cards</span>
+        <span className="hidden md:inline font-mono text-xs text-ink-muted tabular-nums">{graph.nodes.length} cards</span>
 
         {!showInboxOnly && (
           <div role="group" aria-label="View" className="flex">
@@ -642,9 +642,9 @@ export default function BrainPage() {
           </div>
         )}
 
-        <McpStatus />
+        <div className="hidden md:block"><McpStatus /></div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             onClick={() => { setShowInboxOnly(v => !v); setActiveTypes(new Set()) }}
             className={`relative px-3 py-1.5 text-xs rounded-md font-medium transition-all duration-150 flex items-center gap-1.5 cursor-pointer ${

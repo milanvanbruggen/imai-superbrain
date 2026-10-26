@@ -17,13 +17,16 @@ interface Props {
   onOpenInbox: () => void
 }
 
-const MAX_RING = 12
+const MAX_RING = 10
+// Plain references of one type become a stack once there are this many, so busy cards stay readable
+const STACK_FROM = 3
 const MAX_FAR_PER_NEIGHBOUR = 3
 const CARD_W = 176
 const CARD_H = 62
-const NARROW = 720
+const NARROW = 560
 
 interface Ref { node: GraphNode; relation: string | null; suggestion?: Suggestion }
+interface RingItem { key: string; ref?: Ref; stack?: { type: string; refs: Ref[] } }
 
 export function excerpt(markdown: string, max = 180): string {
   const text = markdown
@@ -52,6 +55,26 @@ function useSize() {
   return [setEl, size] as const
 }
 
+const FOCUS_HALF = { w: 160, h: 105 }
+const CARD_HALF = { w: CARD_W / 2, h: CARD_H / 2 }
+
+/** Where a ray from a box centre leaves that box, as a fraction t of the vector (dx, dy). */
+function exitT(dx: number, dy: number, half: { w: number; h: number }): number {
+  const tx = dx === 0 ? Infinity : half.w / Math.abs(dx)
+  const ty = dy === 0 ? Infinity : half.h / Math.abs(dy)
+  return Math.min(tx, ty)
+}
+
+/** A relation label sits halfway along the visible stretch of line, between the two cards. */
+function labelPosition(cx: number, cy: number, x: number, y: number): React.CSSProperties {
+  const dx = x - cx
+  const dy = y - cy
+  const start = exitT(dx, dy, FOCUS_HALF)
+  const end = 1 - exitT(dx, dy, CARD_HALF)
+  const t = start < end ? (start + end) / 2 : 0.5
+  return { left: cx + dx * t, top: cy + dy * t }
+}
+
 function typeLabel(type: string): string {
   return type.toUpperCase()
 }
@@ -59,6 +82,7 @@ function typeLabel(type: string): string {
 export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColors, suggestions, onOpenInbox }: Props) {
   const [depth, setDepth] = useState<1 | 2>(1)
   const [showAll, setShowAll] = useState(false)
+  const [openStack, setOpenStack] = useState<string | null>(null)
   const [outerRef, outer] = useSize()
   const [areaRef, size] = useSize()
   const narrow = outer.w > 0 && outer.w < NARROW
@@ -92,16 +116,32 @@ export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColo
       || a.node.title.localeCompare(b.node.title))
   }, [focus, edges, suggestions, byId])
 
-  const ring = showAll ? refs : refs.slice(0, MAX_RING)
-  const hidden = refs.length - ring.length
+  // Suggestions and typed relations stay single cards; plain references of one type pile up
+  const items = useMemo<RingItem[]>(() => {
+    const singles = refs.filter(r => r.suggestion || r.relation)
+    const plain = refs.filter(r => !r.suggestion && !r.relation)
+    const byType = new Map<string, Ref[]>()
+    for (const r of plain) byType.set(r.node.type, [...(byType.get(r.node.type) ?? []), r])
+    const stacks: RingItem[] = []
+    const loose: RingItem[] = []
+    for (const [type, list] of byType) {
+      if (list.length >= STACK_FROM) stacks.push({ key: `stack:${type}`, stack: { type, refs: list } })
+      else loose.push(...list.map(r => ({ key: r.node.id, ref: r })))
+    }
+    return [...singles.map(r => ({ key: r.node.id, ref: r })), ...stacks, ...loose]
+  }, [refs])
+
+  const ring = useMemo(() => (showAll ? items : items.slice(0, MAX_RING)), [items, showAll])
+  const hidden = items.length - ring.length
+  const stackOpen = ring.find(i => i.key === openStack)?.stack
 
   // Second step: references of references, drawn small beyond their parent card
   const far = useMemo(() => {
     if (!focus || depth === 1) return new Map<string, GraphNode[]>()
-    const near = new Set([focus.id, ...ring.map(r => r.node.id)])
+    const near = new Set([focus.id, ...refs.map(r => r.node.id)])
     const used = new Set<string>()
     const result = new Map<string, GraphNode[]>()
-    for (const r of ring) {
+    for (const r of ring.flatMap(i => (i.ref ? [i.ref] : []))) {
       const list: GraphNode[] = []
       for (const e of edges) {
         const other = e.source === r.node.id ? e.target : e.target === r.node.id ? e.source : null
@@ -115,26 +155,27 @@ export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColo
       result.set(r.node.id, list)
     }
     return result
-  }, [focus, depth, ring, edges, byId])
+  }, [focus, depth, ring, refs, edges, byId])
 
   // Card positions on one or two ellipses around the centre
   const layout = useMemo(() => {
     const cx = size.w / 2
     const cy = size.h / 2
     const twoRings = ring.length > 8
-    return ring.map((r, i) => {
+    return ring.map((item, i) => {
       const angle = -Math.PI / 2 + (i / Math.max(ring.length, 1)) * Math.PI * 2
       const outer = !twoRings || i % 2 === 0
-      const rx = Math.max(220, size.w * (outer ? 0.38 : 0.27))
-      const ry = Math.max(150, size.h * (outer ? 0.38 : 0.27))
+      const rx = Math.max(300, size.w * (outer ? 0.4 : 0.28))
+      const ry = Math.max(170, size.h * (outer ? 0.38 : 0.27))
       const x = cx + Math.cos(angle) * rx
       const y = cy + Math.sin(angle) * ry
-      const farNodes = (far.get(r.node.id) ?? []).map((n, j, all) => {
+      const farNodes = (item.ref ? far.get(item.ref.node.id) ?? [] : []).map((n, j, all) => {
         const spread = (j - (all.length - 1) / 2) * 0.22
         const a = angle + spread
-        return { node: n, x: x + Math.cos(a) * 120, y: y + Math.sin(a) * 92 }
+        const clamp = (v: number, max: number) => Math.min(max - 16, Math.max(16, v))
+        return { node: n, x: clamp(x + Math.cos(a) * 120, size.w), y: clamp(y + Math.sin(a) * 92, size.h) }
       })
-      return { ...r, x, y, far: farNodes }
+      return { ...item, x, y, far: farNodes }
     })
   }, [ring, far, size])
 
@@ -188,7 +229,7 @@ export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColo
         <span className={`block text-[11px] leading-[14px] font-semibold tracking-[0.08em] ${r.suggestion ? 'text-catalog-red' : 'text-ink-muted'}`}>
           {typeLabel(r.node.type)}{r.suggestion && ' · SUGGESTION'}
         </span>
-        <span className="block font-serif font-medium text-base leading-[21px] text-ink truncate">{r.node.title}</span>
+        <span className="block font-serif font-medium text-base leading-[21px] text-ink line-clamp-2">{r.node.title}</span>
       </button>
     )
   }
@@ -250,31 +291,31 @@ export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColo
           <>
             <svg aria-hidden="true" className="absolute inset-0 w-full h-full pointer-events-none">
               {layout.flatMap(p => p.far.map(f => (
-                <line key={`far-${p.node.id}-${f.node.id}`} x1={p.x} y1={p.y} x2={f.x} y2={f.y} stroke="var(--color-line)" strokeWidth={1} />
+                <line key={`far-${p.key}-${f.node.id}`} x1={p.x} y1={p.y} x2={f.x} y2={f.y} stroke="var(--color-line)" strokeWidth={1} />
               )))}
               {layout.map(p => (
                 <line
-                  key={`l-${p.node.id}`} x1={cx} y1={cy} x2={p.x} y2={p.y}
-                  stroke={p.suggestion ? 'var(--color-catalog-red)' : 'var(--color-ruling-blue)'}
+                  key={`l-${p.key}`} x1={cx} y1={cy} x2={p.x} y2={p.y}
+                  stroke={p.ref?.suggestion ? 'var(--color-catalog-red)' : 'var(--color-ruling-blue)'}
                   strokeWidth={1.5}
-                  strokeDasharray={p.suggestion ? '5 5' : undefined}
+                  strokeDasharray={p.ref?.suggestion ? '5 5' : undefined}
                 />
               ))}
             </svg>
 
-            {layout.map(p => (p.relation || p.suggestion) && (
+            {layout.map(p => p.ref && (p.ref.relation || p.ref.suggestion) && (
               <span
-                key={`t-${p.node.id}`}
-                className={`absolute font-mono text-xs px-1 bg-paper -translate-x-1/2 -translate-y-1/2 pointer-events-none ${p.suggestion ? 'text-catalog-red' : 'text-ruling-blue'}`}
-                style={{ left: cx + (p.x - cx) * 0.55, top: cy + (p.y - cy) * 0.55 }}
+                key={`t-${p.key}`}
+                className={`absolute z-[5] font-mono text-xs px-1 bg-paper -translate-x-1/2 -translate-y-1/2 pointer-events-none ${p.ref.suggestion ? 'text-catalog-red' : 'text-ruling-blue'}`}
+                style={labelPosition(cx, cy, p.x, p.y)}
               >
-                {p.suggestion ? `suggestion · ${p.suggestion.kind === 'merge' ? 'merge?' : p.suggestion.relationType}` : p.relation}
+                {p.ref.suggestion ? `suggestion · ${p.ref.suggestion.kind === 'merge' ? 'merge?' : p.ref.suggestion.relationType}` : p.ref.relation}
               </span>
             ))}
 
             {layout.flatMap(p => p.far.map(f => (
               <button
-                key={`f-${p.node.id}-${f.node.id}`}
+                key={`f-${p.key}-${f.node.id}`}
                 type="button"
                 title={f.node.title}
                 aria-label={f.node.title}
@@ -286,9 +327,44 @@ export function CardView({ nodes, edges, notesByPath, focusId, onFocus, typeColo
 
             <div className="absolute -translate-x-1/2 -translate-y-1/2 z-10" style={{ left: cx, top: cy }}>{focusCard}</div>
 
-            {layout.map(p => refCard(p, {
-              position: 'absolute', left: p.x, top: p.y, width: CARD_W, minHeight: CARD_H, transform: 'translate(-50%, -50%)',
-            }))}
+            {layout.map(p => {
+              const place: React.CSSProperties = { position: 'absolute', left: p.x, top: p.y, width: CARD_W, minHeight: CARD_H, transform: 'translate(-50%, -50%)' }
+              if (p.ref) return refCard(p.ref, place)
+              const stack = p.stack!
+              const ink = typeColors[stack.type] ?? '#6E7573'
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  aria-expanded={openStack === p.key}
+                  onClick={() => setOpenStack(openStack === p.key ? null : p.key)}
+                  style={{ ...place, boxShadow: '3px 3px 0 -1px var(--color-card), 3px 3px 0 0 var(--color-line), 6px 6px 0 -1px var(--color-card), 6px 6px 0 0 var(--color-line)' }}
+                  className="text-left bg-card rounded-[3px] px-3 py-2 cursor-pointer border border-line"
+                >
+                  <span className="block -mx-3 -mt-2 mb-1.5 border-t-[3px] rounded-t-[3px]" style={{ borderColor: ink }} />
+                  <span className="block text-[11px] leading-[14px] font-semibold tracking-[0.08em] text-ink-muted">{typeLabel(stack.type)} · STACK</span>
+                  <span className="block font-serif font-medium text-base leading-[21px] text-ink">{stack.refs.length} cards</span>
+                </button>
+              )
+            })}
+
+            {stackOpen && (
+              <div className="absolute left-0 bottom-10 z-20 w-72 max-h-[60%] overflow-y-auto bg-card border border-line rounded-[3px] shadow-[0_8px_24px_rgba(29,35,48,0.16)]">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-line sticky top-0 bg-card">
+                  <span className="text-[11px] font-semibold tracking-[0.08em] text-ink-muted">{typeLabel(stackOpen.type)} · {stackOpen.refs.length}</span>
+                  <button type="button" onClick={() => setOpenStack(null)} className="text-xs text-ink-muted hover:text-ink cursor-pointer">Close</button>
+                </div>
+                <ul className="py-1">
+                  {stackOpen.refs.map(r => (
+                    <li key={r.node.id}>
+                      <button type="button" onClick={() => { setOpenStack(null); onFocus(r.node.id) }} className="w-full text-left px-3 py-1.5 font-serif text-[15px] text-ink hover:bg-paper cursor-pointer">
+                        {r.node.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {hidden > 0 && (
               <button

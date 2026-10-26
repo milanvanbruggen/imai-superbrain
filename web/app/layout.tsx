@@ -18,8 +18,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${archivo.variable} ${literata.variable} ${courierPrime.variable} font-sans`}>
+    <html lang="en" suppressHydrationWarning className={`${archivo.variable} ${literata.variable} ${courierPrime.variable}`}>
+      <body className="font-sans">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <ErrorBoundary>
             <SessionProvider>
