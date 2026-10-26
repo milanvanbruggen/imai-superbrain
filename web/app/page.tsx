@@ -13,7 +13,7 @@ import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
 import { DiffPanel } from '@/components/DiffPanel'
 import { markSuggestion } from '@/components/SuggestionsSection'
-import { unconnectedPaths, visibleSuggestions, type Suggestion } from '@/lib/suggestions'
+import { unconnectedPaths, visibleSuggestions, type RejectedCandidate, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
@@ -94,6 +94,7 @@ export default function BrainPage() {
   const [aiSuggestions, setAiSuggestions] = useState<Suggestion[]>([])
   const [suggestionsLastRunAt, setSuggestionsLastRunAt] = useState<string | null>(null)
   const [unlinkedNotes, setUnlinkedNotes] = useState<string[]>([])
+  const [rejectedCandidates, setRejectedCandidates] = useState<RejectedCandidate[]>([])
   const [ownerNote, setOwnerNote] = useState<string | null>(null)
 
   const openSuggestions = useMemo(
@@ -121,6 +122,7 @@ export default function BrainPage() {
         setAiSuggestions(data.suggestions ?? [])
         setSuggestionsLastRunAt(data.lastRunAt ?? null)
         setUnlinkedNotes(data.unlinked ?? [])
+        setRejectedCandidates(data.rejected ?? [])
         setOwnerNote(data.ownerNote ?? null)
       })
       .catch(() => {})
@@ -694,6 +696,7 @@ export default function BrainPage() {
               }}
               aiSuggestions={openSuggestions}
               unlinkedNotes={openUnlinked}
+              rejectedCandidates={rejectedCandidates}
               ownerNote={ownerNote}
               suggestionsLastRunAt={suggestionsLastRunAt}
               onPreviewSuggestedMerge={(note, duplicate, suggestionId) => {

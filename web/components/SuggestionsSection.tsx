@@ -1,13 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { VaultNote } from '@/lib/types'
-import type { ReviewProgress, Suggestion } from '@/lib/suggestions'
+import type { RejectedCandidate, ReviewProgress, Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 interface Props {
   suggestions: Suggestion[]
   /** Unconnected notes the last review found no good match for */
   unlinked: string[]
+  /** Pairs the last review looked at in full and decided not to suggest */
+  rejected: RejectedCandidate[]
   ownerNote: string | null
   lastRunAt: string | null
   notesByPath: Record<string, VaultNote>
@@ -230,11 +232,13 @@ function RunProgress({ progress, startedAt, totalSteps }: { progress: ReviewProg
   )
 }
 
-export function SuggestionsSection({ suggestions, unlinked, ownerNote, lastRunAt, notesByPath, typeColors, onSelect, onPreviewMerge, onChanged }: Props) {
+export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote, lastRunAt, notesByPath, typeColors, onSelect, onPreviewMerge, onChanged }: Props) {
   const toast = useToast()
   const [running, setRunning] = useState<'changed' | 'all' | null>(null)
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
   const [startedAt, setStartedAt] = useState(0)
+  const [showRejected, setShowRejected] = useState(false)
+  const visibleRejected = rejected.filter(r => notesByPath[r.a] && notesByPath[r.b])
 
   async function handleRun(scope: 'changed' | 'all') {
     setRunning(scope)
@@ -300,6 +304,34 @@ export function SuggestionsSection({ suggestions, unlinked, ownerNote, lastRunAt
               onChanged={onChanged}
             />
           ))}
+        </div>
+      )}
+      {visibleRejected.length > 0 && (
+        <div className="mt-4">
+          <button
+            onClick={() => setShowRejected(v => !v)}
+            className="flex items-center gap-1 text-[11px] font-medium text-gray-400 dark:text-gray-600 uppercase tracking-wider px-1 hover:text-gray-600 dark:hover:text-gray-400 transition-colors cursor-pointer"
+          >
+            <span className={`inline-block transition-transform ${showRejected ? 'rotate-90' : ''}`}>›</span>
+            Considered but not suggested ({visibleRejected.length})
+          </button>
+          {showRejected && (
+            <ul className="mt-2 space-y-1.5 px-1">
+              {visibleRejected.map(r => (
+                <li key={`${r.kind}:${r.a}|${r.b}`} className="text-xs leading-relaxed">
+                  <button onClick={() => onSelect(r.a)} className="font-medium text-gray-700 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer">
+                    {notesByPath[r.a].title}
+                  </button>
+                  <span className="text-gray-400 dark:text-gray-600"> ↔ </span>
+                  <button onClick={() => onSelect(r.b)} className="font-medium text-gray-700 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400 cursor-pointer">
+                    {notesByPath[r.b].title}
+                  </button>
+                  <span className="ml-1.5 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">{r.kind}</span>
+                  <p className="text-gray-500 dark:text-gray-400">{r.reason}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {ownerNote ? (

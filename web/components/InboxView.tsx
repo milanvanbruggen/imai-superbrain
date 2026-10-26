@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { VaultNote } from '@/lib/types'
 import { useToast } from '@/components/Toaster'
 import { getDiffStats } from '@/lib/diff'
-import type { Suggestion } from '@/lib/suggestions'
+import type { RejectedCandidate, Suggestion } from '@/lib/suggestions'
 import { SuggestionsSection } from '@/components/SuggestionsSection'
 
 interface Props {
@@ -14,6 +14,7 @@ interface Props {
   onPreviewChanges: (note: VaultNote, duplicate: VaultNote) => void
   aiSuggestions: Suggestion[]
   unlinkedNotes: string[]
+  rejectedCandidates: RejectedCandidate[]
   ownerNote: string | null
   suggestionsLastRunAt: string | null
   onPreviewSuggestedMerge: (note: VaultNote, duplicate: VaultNote, suggestionId: string) => void
@@ -532,7 +533,7 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
 
 export function InboxView({
   notesByPath, onSelect, typeColors, onApproved, onPreviewChanges,
-  aiSuggestions, unlinkedNotes, ownerNote, suggestionsLastRunAt, onPreviewSuggestedMerge, onSuggestionsChanged,
+  aiSuggestions, unlinkedNotes, rejectedCandidates, ownerNote, suggestionsLastRunAt, onPreviewSuggestedMerge, onSuggestionsChanged,
 }: Props) {
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
@@ -571,6 +572,7 @@ export function InboxView({
     <SuggestionsSection
       suggestions={aiSuggestions}
       unlinked={unlinkedNotes}
+      rejected={rejectedCandidates}
       ownerNote={ownerNote}
       lastRunAt={suggestionsLastRunAt}
       notesByPath={notesByPath}
