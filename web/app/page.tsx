@@ -783,6 +783,7 @@ export default function BrainPage() {
 
         {diffPreview ? (
           <DiffPanel
+            key={`${diffPreview.note.path}|${diffPreview.duplicate.path}`}
             note={diffPreview.note}
             duplicate={diffPreview.duplicate}
             typeColors={typeColors}

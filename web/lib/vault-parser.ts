@@ -28,7 +28,9 @@ export function parseNote(path: string, raw: string): VaultNote {
   const re = new RegExp(WIKILINK_RE.source, 'g')
   let match: RegExpExecArray | null
   while ((match = re.exec(contentWithoutComments)) !== null) {
-    wikilinksInBody.add(match[1])
+    // [[Note|shown text]] and [[Note#Heading]] link to Note
+    const target = match[1].split('|')[0].split('#')[0].trim()
+    if (target) wikilinksInBody.add(target)
   }
 
   const relations: TypedRelation[] = Array.isArray(data.relations)

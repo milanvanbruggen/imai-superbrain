@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { VaultNote } from '@/lib/types'
-import type { RejectedCandidate, ReviewProgress, Suggestion } from '@/lib/suggestions'
+import { areLinked, type RejectedCandidate, type ReviewProgress, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 interface Props {
@@ -15,7 +15,8 @@ interface Props {
   notesByPath: Record<string, VaultNote>
   typeColors: Record<string, string>
   onSelect: (id: string) => void
-  onPreviewMerge: (note: VaultNote, duplicate: VaultNote, suggestionId: string) => void
+  /** suggestionId is absent for a merge the review considered but did not suggest */
+  onPreviewMerge: (note: VaultNote, duplicate: VaultNote, suggestionId?: string) => void
   onChanged: () => void
 }
 
@@ -30,6 +31,16 @@ export async function markSuggestion(id: string, status: 'accepted' | 'dismissed
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, status }),
+  })
+  return res.ok
+}
+
+async function addRelation(source: VaultNote, target: VaultNote, relationType: string | null): Promise<boolean> {
+  const encoded = source.path.split('/').map(encodeURIComponent).join('/')
+  const res = await fetch(`/api/vault/note/${encoded}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'add-relation', target: target.stem, relationType }),
   })
   return res.ok
 }
@@ -69,13 +80,7 @@ function SuggestionCard({
   async function handleConnect() {
     setBusy(true)
     try {
-      const encoded = source.path.split('/').map(encodeURIComponent).join('/')
-      const res = await fetch(`/api/vault/note/${encoded}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operation: 'add-relation', target: target.stem, relationType: suggestion.relationType ?? null }),
-      })
-      if (!res.ok) {
+      if (!(await addRelation(source, target, suggestion.relationType ?? null))) {
         toast('Failed to add relation', 'error')
         return
       }
@@ -238,7 +243,26 @@ export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote,
   const [progress, setProgress] = useState<ReviewProgress | null>(null)
   const [startedAt, setStartedAt] = useState(0)
   const [showRejected, setShowRejected] = useState(false)
-  const visibleRejected = rejected.filter(r => notesByPath[r.a] && notesByPath[r.b])
+  const [busyRejected, setBusyRejected] = useState<string | null>(null)
+  // A rejected relation drops off once the two notes are linked after all
+  const visibleRejected = rejected.filter(r =>
+    notesByPath[r.a] && notesByPath[r.b] && !(r.kind === 'relation' && areLinked(notesByPath[r.a], notesByPath[r.b])))
+
+  async function connectRejected(r: RejectedCandidate) {
+    const a = notesByPath[r.a]
+    const b = notesByPath[r.b]
+    setBusyRejected(`${r.kind}:${r.a}|${r.b}`)
+    try {
+      if (!(await addRelation(a, b, null))) {
+        toast('Failed to add relation', 'error')
+        return
+      }
+      toast(`Connected "${a.title}" to "${b.title}"`)
+      onChanged()
+    } finally {
+      setBusyRejected(null)
+    }
+  }
 
   async function handleRun(scope: 'changed' | 'all') {
     setRunning(scope)
@@ -327,6 +351,13 @@ export function SuggestionsSection({ suggestions, unlinked, rejected, ownerNote,
                     {notesByPath[r.b].title}
                   </button>
                   <span className="ml-1.5 text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-600">{r.kind}</span>
+                  <button
+                    onClick={() => (r.kind === 'merge' ? onPreviewMerge(notesByPath[r.a], notesByPath[r.b]) : connectRejected(r))}
+                    disabled={busyRejected === `${r.kind}:${r.a}|${r.b}`}
+                    className="ml-2 text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:text-violet-500 cursor-pointer disabled:opacity-50"
+                  >
+                    {r.kind === 'merge' ? 'Merge anyway' : 'Connect anyway'}
+                  </button>
                   <p className="text-gray-500 dark:text-gray-400">{r.reason}</p>
                 </li>
               ))}

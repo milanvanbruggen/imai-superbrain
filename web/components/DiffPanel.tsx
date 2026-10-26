@@ -5,8 +5,8 @@ import { computeDiff, DiffLine } from '@/lib/diff'
 import { useToast } from '@/components/Toaster'
 
 interface Props {
-  note: VaultNote          // inbox note (source)
-  duplicate: VaultNote     // existing note (target)
+  note: VaultNote          // proposed source: merged away
+  duplicate: VaultNote     // proposed target: stays
   typeColors: Record<string, string>
   width: number
   collapsed: boolean
@@ -52,10 +52,14 @@ function DiffView({ lines }: { lines: DiffLine[] }) {
   )
 }
 
-export function DiffPanel({ note, duplicate, typeColors, width, collapsed, onToggleCollapse, onMerged, onClose }: Props) {
+export function DiffPanel({ note: proposedSource, duplicate: proposedTarget, typeColors, width, collapsed, onToggleCollapse, onMerged, onClose }: Props) {
   const toast = useToast()
   const [merging, setMerging] = useState(false)
   const [confirmMerge, setConfirmMerge] = useState(false)
+  // You choose which note stays: the proposal is only a starting point
+  const [swapped, setSwapped] = useState(false)
+  const note = swapped ? proposedTarget : proposedSource
+  const duplicate = swapped ? proposedSource : proposedTarget
 
   const color = typeColors[duplicate.type] ?? '#94a3b8'
 
@@ -90,7 +94,10 @@ export function DiffPanel({ note, duplicate, typeColors, width, collapsed, onTog
         body: JSON.stringify({ sourcePath: note.path, targetPath: duplicate.path }),
       })
       if (res.ok) {
-        toast(`Merged "${note.title}" into "${duplicate.title}"`)
+        const { relinked = 0, relinkFailed = 0 } = await res.json().catch(() => ({}))
+        const links = relinked > 0 ? ` · links in ${relinked} note${relinked === 1 ? '' : 's'} updated` : ''
+        toast(`Merged "${note.title}" into "${duplicate.title}"${links}`)
+        if (relinkFailed > 0) toast(`${relinkFailed} note${relinkFailed === 1 ? '' : 's'} still link to "${note.title}"`, 'error')
         onMerged()
       } else {
         toast('Failed to merge', 'error')
@@ -182,6 +189,28 @@ export function DiffPanel({ note, duplicate, typeColors, width, collapsed, onTog
             </svg>
           </button>
         </div>
+      </div>
+
+      {/* Direction: which note is merged away and which one stays */}
+      <div className="px-5 py-3 border-b border-slate-100 dark:border-gray-800/60 flex items-center gap-2 text-xs">
+        <span className="min-w-0 text-gray-500 dark:text-gray-400">
+          Merge <span className="font-medium text-gray-900 dark:text-slate-100">{note.title}</span>
+          {' '}into <span className="font-medium text-gray-900 dark:text-slate-100">{duplicate.title}</span>
+          <span className="block text-[11px] text-slate-400 dark:text-gray-600">
+            {note.title} is removed; links to it will point to {duplicate.title}.
+          </span>
+        </span>
+        <button
+          onClick={() => { setSwapped(v => !v); setConfirmMerge(false) }}
+          disabled={merging}
+          title="Swap which note stays"
+          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-gray-700 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-800 cursor-pointer transition-colors disabled:opacity-50"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 4v16M7 4 3 8M7 4l4 4M17 20V4M17 20l-4-4M17 20l4-4"/>
+          </svg>
+          Swap
+        </button>
       </div>
 
       {/* Diff */}

@@ -17,7 +17,7 @@ interface Props {
   rejectedCandidates: RejectedCandidate[]
   ownerNote: string | null
   suggestionsLastRunAt: string | null
-  onPreviewSuggestedMerge: (note: VaultNote, duplicate: VaultNote, suggestionId: string) => void
+  onPreviewSuggestedMerge: (note: VaultNote, duplicate: VaultNote, suggestionId?: string) => void
   onSuggestionsChanged: () => void
 }
 
