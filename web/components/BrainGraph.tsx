@@ -1,13 +1,14 @@
 'use client'
 import dynamic from 'next/dynamic'
 import { useTheme } from 'next-themes'
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import * as THREE from 'three'
+import SpriteText from 'three-spritetext'
+import type { ForceGraphMethods } from 'react-force-graph-3d'
 import { GraphNode, GraphEdge } from '@/lib/types'
 
-const ForceGraph2D = dynamic(
-  () => import('react-force-graph-2d'),
-  { ssr: false }
-)
+// Loaded in the browser only (WebGL); the cast keeps the component's generic node and link types
+const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), { ssr: false }) as unknown as typeof import('react-force-graph-3d').default
 
 interface Props {
   nodes: GraphNode[]
@@ -32,107 +33,76 @@ export const DEFAULT_TYPE_COLORS: Record<string, string> = {
   template: '#C084FC',
 }
 
-const NODE_REL_SIZE = 3.5
-// Padding added beyond each node's visual radius for collision detection.
-// Accounts for label height (~12px below node) + comfortable breathing room.
-const COLLIDE_PADDING = 14
-// Above this node count reduce collision iterations to keep the simulation fast
-const LARGE_GRAPH_THRESHOLD = 80
+// A node with at least this many links always shows its label
+const HUB_DEGREE = 6
+// How far the camera stays from a node it flies to
+const FOCUS_DISTANCE = 90
+const FLY_MS = 900
 
-function truncate(s: string, max = 20): string {
+type Node3D = GraphNode & { color: string; degree: number; x?: number; y?: number; z?: number }
+type Link3D = { source: string | Node3D; target: string | Node3D; typed: boolean }
+
+const idOf = (end: string | Node3D) => (typeof end === 'string' ? end : end.id)
+
+function truncate(s: string, max = 28): string {
   return s.length > max ? s.slice(0, max - 1) + '…' : s
 }
 
-/** Returns a lighter or darker tint of a hex color. ratio > 0 = lighter, < 0 = darker */
-function tint(hex: string, ratio: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  if (ratio > 0) {
-    return `rgb(${Math.round(r + (255 - r) * ratio)},${Math.round(g + (255 - g) * ratio)},${Math.round(b + (255 - b) * ratio)})`
-  } else {
-    const f = 1 + ratio
-    return `rgb(${Math.round(r * f)},${Math.round(g * f)},${Math.round(b * f)})`
-  }
-}
-
-/**
- * Pulls ALL nodes gently toward the origin so the cluster stays centered.
- * Much weaker than isolatedGravity — topology still dominates positioning.
- */
-function createCenterGravity(strength = 0.03) {
-  let simNodes: any[] = []
+/** Pulls every node gently toward the middle, so notes without links don't drift off into space. */
+function centerGravity(strength = 0.02) {
+  let simNodes: { x?: number; y?: number; z?: number; vx?: number; vy?: number; vz?: number }[] = []
   function force() {
-    for (const node of simNodes) {
-      node.vx = (node.vx ?? 0) - (node.x ?? 0) * strength
-      node.vy = (node.vy ?? 0) - (node.y ?? 0) * strength
+    for (const n of simNodes) {
+      n.vx = (n.vx ?? 0) - (n.x ?? 0) * strength
+      n.vy = (n.vy ?? 0) - (n.y ?? 0) * strength
+      n.vz = (n.vz ?? 0) - (n.z ?? 0) * strength
     }
   }
-  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
+  force.initialize = (nodes: typeof simNodes) => { simNodes = nodes }
   return force
 }
 
-/**
- * Size-aware collision force compatible with d3-force simulations.
- *
- * Each node's collision radius is its visual radius (√val × NODE_REL_SIZE)
- * plus a constant padding that reserves space for labels and breathing room.
- * Running multiple iterations per tick converges overlaps that a single pass
- * would leave behind — the same strategy d3.forceCollide uses internally.
- *
- * For large graphs `iterations` is reduced to keep the O(n²) cost acceptable.
- */
-function createCollideForce(padding: number, iterations = 3) {
-  let simNodes: any[] = []
-
-  function force() {
-    for (let iter = 0; iter < iterations; iter++) {
-      for (let i = 0; i < simNodes.length; i++) {
-        const a = simNodes[i]
-        const ra = Math.sqrt(Math.max(a.val ?? 1, 0.01)) * NODE_REL_SIZE + padding
-
-        for (let j = i + 1; j < simNodes.length; j++) {
-          const b = simNodes[j]
-          const rb = Math.sqrt(Math.max(b.val ?? 1, 0.01)) * NODE_REL_SIZE + padding
-          const minDist = ra + rb
-
-          let dx = (b.x ?? 0) - (a.x ?? 0)
-          let dy = (b.y ?? 0) - (a.y ?? 0)
-          // Avoid zero-length vector for exactly-overlapping nodes
-          if (dx === 0 && dy === 0) { dx = (Math.random() - 0.5) * 0.1; dy = (Math.random() - 0.5) * 0.1 }
-
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          if (dist < minDist) {
-            // Proportional push: the deeper the overlap, the harder the push
-            const strength = ((minDist - dist) / dist) * 0.5
-            a.vx = (a.vx ?? 0) - dx * strength
-            a.vy = (a.vy ?? 0) - dy * strength
-            b.vx = (b.vx ?? 0) + dx * strength
-            b.vy = (b.vy ?? 0) + dy * strength
-          }
-        }
-      }
-    }
+/** A sphere of faint points far behind the graph, for depth. */
+function makeStarfield(dark: boolean): THREE.Points {
+  const count = 1200
+  const positions = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    // Uniform on a thick spherical shell
+    const r = 1400 + Math.random() * 1600
+    const theta = Math.random() * Math.PI * 2
+    const phi = Math.acos(2 * Math.random() - 1)
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta)
+    positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta)
+    positions[i * 3 + 2] = r * Math.cos(phi)
   }
-
-  ;(force as any).initialize = (nodes: any[]) => { simNodes = nodes }
-  return force
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  const material = new THREE.PointsMaterial({
+    color: dark ? 0x8fb3ff : 0x64748b,
+    size: 1.4,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: dark ? 0.35 : 0.25,
+    depthWrite: false,
+  })
+  const points = new THREE.Points(geometry, material)
+  points.name = 'starfield'
+  return points
 }
 
 export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes, typeColors }: Props) {
-  const isLargeGraph = nodes.length > LARGE_GRAPH_THRESHOLD
   const { resolvedTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
+  const isDark = resolvedTheme !== 'light'
+  const background = isDark ? '#020617' : '#eef2f7'
   const containerRef = useRef<HTMLDivElement>(null)
-  const graphRef = useRef<any>(null)
+  const graphRef = useRef<ForceGraphMethods<Node3D, Link3D> | undefined>(undefined)
   const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const hoveredIdRef = useRef<string | null>(null)
-  const pointerDownPos = useRef<{ x: number; y: number } | null>(null)
-  const initialZoomDone = useRef(false)
-  const [graphReady, setGraphReady] = useState(false)
-
-  useEffect(() => setMounted(true), [])
+  const [ready, setReady] = useState(false)
+  const fitted = useRef(0)
+  const lastFit = useRef(0)
+  const settled = useRef(false)
+  const bloomRef = useRef<{ enabled: boolean; setSize: (w: number, h: number) => void } | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -147,252 +117,215 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
 
   const degreeById = useMemo(() => {
     const map: Record<string, number> = {}
-    edges.forEach(e => {
+    for (const e of edges) {
       map[e.source] = (map[e.source] ?? 0) + 1
       map[e.target] = (map[e.target] ?? 0) + 1
-    })
+    }
     return map
   }, [edges])
 
-  // Organic physics:
-  // - Charge -60 with distanceMax 120: repels nearby nodes (local spread)
-  //   but doesn't push distant clusters apart — lets topology form clusters
-  // - Link distance 45 pulls connected nodes close so hubs gather their neighbors
-  // - Custom collision prevents overlap
-  // - Universal center gravity (0.03) keeps the cluster from drifting
-  useEffect(() => {
-    // ForceGraph2D loads via dynamic import, so graphRef.current may not be set yet.
-    // Retry until the instance is available (max ~3s).
-    let attempts = 0
-    let timer: ReturnType<typeof setTimeout>
-
-    function applyForces() {
-      const fg = graphRef.current
-      if (!fg) {
-        if (++attempts < 30) timer = setTimeout(applyForces, 100)
-        return
-      }
-
-      // Stronger repulsion + larger range → nodes spread out more before links pull them back.
-      // distanceMax 160 means nodes up to ~5 screen radii apart still push each other away.
-      fg.d3Force('charge')?.strength(-100).distanceMax(160)
-      fg.d3Force('link')?.distance(50).strength(0.9)
-      // Size-aware collision: 3 iterations for small graphs (converges well), 1 for large (O(n²) cost).
-      // Never fully disabled — charge alone doesn't prevent overlap inside dense clusters.
-      fg.d3Force('collide', createCollideForce(COLLIDE_PADDING, isLargeGraph ? 1 : 3))
-      fg.d3Force('centerGravity', null)
-      fg.d3Force('isolatedGravity', null)
-      fg.d3Force('layer', null)
-      fg.d3ReheatSimulation()
-
-      // warmupTicks already positioned nodes before first render — wait two frames
-      // for the canvas to be painted, then zoom to fit.
-      if (!initialZoomDone.current) {
-        initialZoomDone.current = true
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          fg.zoomToFit(400, 60)
-          setTimeout(() => {
-            fg.zoom(fg.zoom() * 0.7, 300)
-            setGraphReady(true)
-          }, 450)
-        }))
-      }
-    }
-
-    applyForces()
-    return () => clearTimeout(timer)
-  }, [size, isLargeGraph])
-
   const neighborsOf = useMemo(() => {
     const map: Record<string, Set<string>> = {}
-    nodes.forEach(n => { map[n.id] = new Set() })
-    edges.forEach(e => {
+    for (const n of nodes) map[n.id] = new Set()
+    for (const e of edges) {
       map[e.source]?.add(e.target)
       map[e.target]?.add(e.source)
-    })
+    }
     return map
   }, [nodes, edges])
 
-  const isDark = !mounted || resolvedTheme === 'dark'
-  const bgColor = isDark ? '#030712' : '#f8fafc'
-  // Subtle edge colors — same as Obsidian (no bright orange distracting from structure)
-  const edgeColor = isDark ? '#2d3748' : '#cbd5e1'
-  const edgeColorFocus = isDark ? '#4b5563' : '#94a3b8'
-  const edgeColorTyped = isDark ? '#374151' : '#b0bec5'
-  const labelColorDim = isDark ? '#9ca3af' : '#6b7280'
-  const labelColorActive = isDark ? '#f3f4f6' : '#1f2937'
-
   const graphData = useMemo(() => ({
-    nodes: nodes.map(n => {
-      const deg = degreeById[n.id] ?? 0
-      return {
-        ...n,
-        color: typeColors[n.type] ?? '#94a3b8',
-        // Degree-proportional size: hub is visibly larger
-        val: deg === 0 ? 0.4 : Math.min(0.6 + deg * 0.15, 3),
-      }
-    }),
-    links: edges.map(e => ({ source: e.source, target: e.target, typed: e.typed })),
+    nodes: nodes.map((n): Node3D => ({ ...n, color: typeColors[n.type] ?? '#94a3b8', degree: degreeById[n.id] ?? 0 })),
+    links: edges.map((e): Link3D => ({ source: e.source, target: e.target, typed: e.typed })),
   }), [nodes, edges, degreeById, typeColors])
 
-  // Center graph on selected node whenever selectedId changes.
-  // graphData.nodes are mutated in-place by the d3 simulation, so they carry current x/y.
+  const focusId = hoveredId ?? selectedId
+  const focusSet = useMemo(() => {
+    if (!focusId) return null
+    return new Set([focusId, ...(neighborsOf[focusId] ?? [])])
+  }, [focusId, neighborsOf])
+
+  const isDimmed = (node: Node3D) =>
+    focusSet ? !focusSet.has(node.id) : activeTypes.size > 0 && !activeTypes.has(node.type)
+
+  // Scene extras, once the graph exists: starfield, bloom, slow auto-rotation
   useEffect(() => {
-    if (!selectedId || !graphRef.current) return
-    const node = graphData.nodes.find(n => n.id === selectedId) as any
-    if (node?.x != null && node?.y != null) {
-      graphRef.current.centerAt(node.x, node.y, 400)
+    if (!size) return
+    let cancelled = false
+    let attempts = 0
+    let timer: ReturnType<typeof setTimeout>
+
+    async function setup() {
+      const fg = graphRef.current
+      if (!fg) {
+        if (++attempts < 50) timer = setTimeout(setup, 100)
+        return
+      }
+      const scene = fg.scene()
+      scene.getObjectByName('starfield')?.removeFromParent()
+      scene.add(makeStarfield(isDark))
+      // The background belongs to the scene, not the renderer's clear colour: the bloom pass resets
+      // the clear colour in the wrong colour space, which turned the background a washed-out blue
+      scene.background = new THREE.Color(background)
+
+      if (!bloomRef.current) {
+        const [{ UnrealBloomPass }, { OutputPass }] = await Promise.all([
+          import('three/examples/jsm/postprocessing/UnrealBloomPass.js'),
+          import('three/examples/jsm/postprocessing/OutputPass.js'),
+        ])
+        if (cancelled) return
+        // Only bright things glow (threshold), so the background and the faint stars stay dark
+        const bloom = new UnrealBloomPass(new THREE.Vector2(size!.width, size!.height), 0.8, 0.4, 0.35)
+        fg.postProcessingComposer().addPass(bloom)
+        // Converts the composed image to the screen's colour space once, as the last step
+        fg.postProcessingComposer().addPass(new OutputPass())
+        bloomRef.current = bloom
+      }
+      // Bloom washes out on a light background, so it only glows in the dark
+      bloomRef.current.enabled = isDark
+
+      const controls = fg.controls() as { autoRotate?: boolean; autoRotateSpeed?: number }
+      controls.autoRotateSpeed = 0.35
+
+      // More room between nodes than the default, so the cloud reads as a structure, not a knot
+      fg.d3Force('charge')?.strength(-90)
+      fg.d3Force('link')?.distance(36)
+      fg.d3Force('centerGravity', centerGravity(0.012))
     }
+    setup()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [size, isDark, background])
+
+  useEffect(() => {
+    if (size) bloomRef.current?.setSize(size.width, size.height)
+  }, [size])
+
+  // Drift slowly while nothing is selected; hold still while you look at a note
+  useEffect(() => {
+    const controls = graphRef.current?.controls() as { autoRotate?: boolean } | undefined
+    if (controls) controls.autoRotate = !selectedId
+  }, [selectedId, ready])
+
+  // Fly to the selected note
+  useEffect(() => {
+    const fg = graphRef.current
+    if (!selectedId || !fg) return
+    const node = graphData.nodes.find(n => n.id === selectedId)
+    if (node?.x == null || node.y == null || node.z == null) return
+    const dist = Math.hypot(node.x, node.y, node.z) || 1
+    const ratio = 1 + FOCUS_DISTANCE / dist
+    fg.cameraPosition(
+      { x: node.x * ratio, y: node.y * ratio, z: node.z * ratio },
+      { x: node.x, y: node.y, z: node.z },
+      FLY_MS,
+    )
   }, [selectedId, graphData])
 
-  const xCursor = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='3' y1='3' x2='17' y2='17' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='17' y1='3' x2='3' y2='17' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3Cline x1='3' y1='3' x2='17' y2='17' stroke='%23374151' stroke-width='1.5' stroke-linecap='round'/%3E%3Cline x1='17' y1='3' x2='3' y2='17' stroke='%23374151' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 10 10, crosshair`
-
-  const focusId = hoveredId ?? selectedId
-  const focusNeighbors: Set<string> = focusId ? (neighborsOf[focusId] ?? new Set()) : new Set()
-
-  function isNodeDimmed(nodeId: string, nodeType: string): boolean {
-    if (focusId !== null) return nodeId !== focusId && !focusNeighbors.has(nodeId)
-    if (activeTypes.size === 0) return false
-    return !activeTypes.has(nodeType)
-  }
+  const labelColor = isDark ? '#e2e8f0' : '#1e293b'
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-full"
-      style={{
-        opacity: graphReady ? 1 : 0,
-        transform: graphReady ? 'scale(1)' : 'scale(0.96)',
-        transition: 'opacity 0.5s ease, transform 0.5s ease',
-        cursor: hoveredId && hoveredId !== selectedId ? 'pointer'
-          : !hoveredId && selectedId ? xCursor
-          : 'default',
-      }}
-      onPointerDown={e => { pointerDownPos.current = { x: e.clientX, y: e.clientY } }}
-      onPointerUp={e => {
-        const down = pointerDownPos.current
-        pointerDownPos.current = null
-        if (!down) return
-        const dx = e.clientX - down.x
-        const dy = e.clientY - down.y
-        if (Math.sqrt(dx * dx + dy * dy) < 12) {
-          // Small movement = click: select hovered node or deselect (background)
-          onSelectNode(hoveredIdRef.current)
-        }
-      }}
+      className="w-full h-full transition-opacity duration-700 ease-out"
+      style={{ opacity: ready ? 1 : 0, cursor: hoveredId ? 'pointer' : 'grab', background }}
     >
       {size && (
-        <ForceGraph2D
+        <ForceGraph3D
           ref={graphRef}
           graphData={graphData}
-          nodeLabel=""
-          nodeRelSize={NODE_REL_SIZE}
-          linkDirectionalArrowLength={0}
-          d3AlphaDecay={isLargeGraph ? 0.05 : 0.03}
-          d3VelocityDecay={isLargeGraph ? 0.6 : 0.55}
-          warmupTicks={isLargeGraph ? 300 : 150}
-          cooldownTicks={isLargeGraph ? 100 : 300}
-          onNodeHover={(node: any) => {
-            const id = node?.id ?? null
-            setHoveredId(id)
-            hoveredIdRef.current = id
-          }}
-          backgroundColor={bgColor}
-          nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const nodeId = node.id as string
-            const nodeType = node.type as string
-            const dimmed = isNodeDimmed(nodeId, nodeType)
-            const isSelected = nodeId === selectedId
-            const isHovered = nodeId === hoveredId
-            const isFocused = nodeId === focusId || focusNeighbors.has(nodeId)
-            const r = Math.sqrt(node.val as number) * NODE_REL_SIZE
-            const x = node.x as number
-            const y = node.y as number
-
-            const color = node.color as string
-            const alpha = dimmed ? 0.08 : 1
-
-            // Selection / hover ring
-            if (isSelected || isHovered) {
-              ctx.globalAlpha = alpha * 0.2
-              ctx.beginPath()
-              ctx.arc(x, y, r + 3.5, 0, 2 * Math.PI)
-              ctx.fillStyle = color
-              ctx.fill()
-            }
-
-            // Sphere: radial gradient from highlight to base colour to dark edge
-            ctx.globalAlpha = alpha
-            ctx.beginPath()
-            ctx.arc(x, y, r, 0, 2 * Math.PI)
-            if (isFinite(x) && isFinite(y) && isFinite(r) && r > 0) {
-              const grad = ctx.createRadialGradient(
-                x - r * 0.25, y - r * 0.25, r * 0.05,
-                x, y, r
-              )
-              grad.addColorStop(0,   tint(color, 0.18))
-              grad.addColorStop(0.5, color)
-              grad.addColorStop(1,   tint(color, -0.12))
-              ctx.fillStyle = grad
-            } else {
-              ctx.fillStyle = color
-            }
-            ctx.fill()
-
-            // Label — show always when zoomed in, or for focused cluster
-            const showLabel = isFocused || globalScale > 0.9
-            if (showLabel) {
-              const label = truncate((node.title as string) ?? nodeId)
-              const fontSize = Math.min(10, Math.max(3, 9 / globalScale))
-              ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-              ctx.textAlign = 'center'
-              ctx.textBaseline = 'top'
-              ctx.globalAlpha = dimmed ? 0.08 : isFocused ? 1 : 0.75
-              ctx.fillStyle = isFocused ? labelColorActive : labelColorDim
-              ctx.fillText(label, x, y + r + 1.5)
-            }
-
-            ctx.globalAlpha = 1
-          }}
-          nodeCanvasObjectMode={() => 'replace'}
-          linkCanvasObject={(link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const src = link.source as any
-            const tgt = link.target as any
-            if (src?.x == null || tgt?.x == null) return
-
-            const srcId: string = src?.id ?? src
-            const tgtId: string = tgt?.id ?? tgt
-            const srcDimmed = isNodeDimmed(srcId, src?.type ?? '')
-            const tgtDimmed = isNodeDimmed(tgtId, tgt?.type ?? '')
-
-            // Compute edge color (same logic as before)
-            let color: string
-            if (focusId !== null) {
-              if (srcDimmed && tgtDimmed) color = isDark ? '#1a202c' : '#f8fafc'
-              else {
-                const base = (link.typed as boolean) ? edgeColorTyped : edgeColor
-                color = srcDimmed || tgtDimmed ? base + '55' : edgeColorFocus
-              }
-            } else if (activeTypes.size > 0 && (srcDimmed || tgtDimmed)) {
-              color = isDark ? '#1e2533' : '#f1f5f9'
-            } else {
-              color = (link.typed as boolean) ? edgeColorTyped : edgeColor
-            }
-
-            const isPerson2Person = src?.type === 'person' && tgt?.type === 'person'
-
-            ctx.beginPath()
-            ctx.moveTo(src.x, src.y)
-            ctx.lineTo(tgt.x, tgt.y)
-            ctx.strokeStyle = color
-            ctx.lineWidth = 0.8 / globalScale
-            ctx.setLineDash(isPerson2Person ? [4 / globalScale, 4 / globalScale] : [])
-            ctx.stroke()
-            ctx.setLineDash([])
-          }}
-          linkCanvasObjectMode={() => 'replace'}
           width={size.width}
           height={size.height}
+          backgroundColor={background}
+          showNavInfo={false}
+          controlType="orbit"
+          warmupTicks={80}
+          cooldownTicks={120}
+          d3AlphaDecay={0.03}
+          d3VelocityDecay={0.4}
+          onEngineTick={() => {
+            // Keep the graph framed while the first layout unfolds (a few seconds), then leave the camera be
+            if (settled.current) return
+            const now = performance.now()
+            if (!fitted.current) fitted.current = now
+            if (now - lastFit.current < 900 || now - fitted.current > 5000) return
+            lastFit.current = now
+            if (!selectedId) graphRef.current?.zoomToFit(700, 30)
+            setReady(true)
+          }}
+          onEngineStop={() => {
+            // Frame the settled layout once; after that the camera is yours
+            if (settled.current) return
+            settled.current = true
+            if (!selectedId) graphRef.current?.zoomToFit(600, 30)
+          }}
+          nodeLabel={() => ''}
+          nodeThreeObject={(node: Node3D) => {
+            const dimmed = isDimmed(node)
+            const selected = node.id === selectedId
+            const radius = 2.6 + Math.min(node.degree, 20) * 0.45
+            const group = new THREE.Group()
+
+            const core = new THREE.Mesh(
+              new THREE.SphereGeometry(radius, 20, 14),
+              new THREE.MeshBasicMaterial({
+                color: node.color,
+                transparent: true,
+                opacity: dimmed ? 0.12 : 0.9,
+              }),
+            )
+            group.add(core)
+
+            // A soft halo around the selected note; the bloom turns it into a glow
+            if (selected) {
+              const halo = new THREE.Mesh(
+                new THREE.SphereGeometry(radius * 2.2, 16, 12),
+                new THREE.MeshBasicMaterial({ color: node.color, transparent: true, opacity: 0.2, depthWrite: false }),
+              )
+              group.add(halo)
+            }
+
+            // A ring marks the selected note
+            if (selected) {
+              const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(radius * 2.6, 0.35, 8, 48),
+                new THREE.MeshBasicMaterial({ color: isDark ? 0xffffff : 0x0f766e, transparent: true, opacity: 0.85 }),
+              )
+              group.add(ring)
+            }
+
+            const showLabel = !dimmed && (node.degree >= HUB_DEGREE || (focusSet?.has(node.id) ?? false))
+            if (showLabel) {
+              const label = new SpriteText(truncate(node.title), selected ? 5 : 3.6, labelColor)
+              label.fontFace = 'Geist, -apple-system, BlinkMacSystemFont, sans-serif'
+              label.fontWeight = selected ? '600' : '500'
+              label.material.depthWrite = false
+              label.position.set(0, radius * 2 + 4, 0)
+              group.add(label)
+            }
+            return group
+          }}
+          linkColor={(link: Link3D) => {
+            const s = idOf(link.source)
+            const t = idOf(link.target)
+            const lit = focusSet ? focusSet.has(s) && focusSet.has(t) && (s === focusId || t === focusId) : true
+            if (!lit) return isDark ? '#0f172a' : '#e2e8f0'
+            if (focusSet) return isDark ? '#a5f3fc' : '#0e7490'
+            return link.typed ? (isDark ? '#0ea5e9' : '#0e7490') : (isDark ? '#1e3a5f' : '#94a3b8')
+          }}
+          linkOpacity={isDark ? 0.3 : 0.45}
+          linkWidth={(link: Link3D) => (focusId && (idOf(link.source) === focusId || idOf(link.target) === focusId) ? 0.8 : 0)}
+          // Light travels along the links: a little everywhere, more around the note you look at
+          linkDirectionalParticles={(link: Link3D) =>
+            focusId ? (idOf(link.source) === focusId || idOf(link.target) === focusId ? 4 : 0) : 1}
+          linkDirectionalParticleSpeed={(link: Link3D) => (focusId ? 0.008 : 0.003) + (link.typed ? 0.002 : 0)}
+          linkDirectionalParticleWidth={(link: Link3D) => (focusId ? 1.6 : 0.9) + (link.typed ? 0.3 : 0)}
+          linkDirectionalParticleColor={(link: Link3D) => {
+            const src = typeof link.source === 'string' ? undefined : link.source
+            return src?.color ?? '#7dd3fc'
+          }}
+          onNodeHover={(node: Node3D | null) => setHoveredId(node?.id ?? null)}
+          onNodeClick={(node: Node3D) => onSelectNode(node.id)}
+          onBackgroundClick={() => onSelectNode(null)}
         />
       )}
     </div>
