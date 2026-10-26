@@ -7,6 +7,8 @@ import { buildGraph } from '@/lib/vault-parser'
 import { getCachedGraph, computeVaultHash, setCachedGraph } from '@/lib/graph-cache'
 import { verifyToken } from '@/lib/mcp-jwt'
 import { getStemFromPath } from '@/lib/note-utils'
+import { fileSuggestion } from '@/lib/suggestion-review'
+import { RELATION_TYPES } from '@/lib/suggestions'
 
 async function getAuthInfo(req: Request): Promise<{ token: string; clientId: string } | null> {
   const auth = req.headers.get('authorization') ?? ''
@@ -274,6 +276,38 @@ function createMcpServer() {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ linked, backlinks }, null, 2) }],
       }
+    }
+  )
+
+  // suggest_merge / suggest_relation — file a suggestion into the Superbrain Inbox for the owner to approve
+  const suggestionResult = (result: Awaited<ReturnType<typeof fileSuggestion>>) => ({
+    content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+  })
+
+  server.tool(
+    'suggest_merge',
+    'Propose merging two notes that describe the same thing. This does NOT change the vault: it adds a suggestion to the Superbrain Inbox, where the owner reviews the merge and approves or dismisses it. On approval the source note is appended to the target note and then deleted. Read both notes with read_note first. Only suggest a merge when they really are the same person, organisation, project or idea; when they are different kinds of things that belong together (for example a company and the area of responsibility around it), use suggest_relation instead.',
+    {
+      source: z.string().describe('Path of the note that gets merged away and deleted, e.g. areas/DDZ.md'),
+      target: z.string().describe('Path of the note that remains, usually the more complete one'),
+      reason: z.string().describe('One or two sentences the owner reads in the Inbox, in the language of the notes'),
+    },
+    async ({ source, target, reason }) => {
+      return suggestionResult(await fileSuggestion(getVaultClient(), { kind: 'merge', source, target, reason }))
+    }
+  )
+
+  server.tool(
+    'suggest_relation',
+    'Propose connecting two notes with a typed relation. This does NOT change the vault: it adds a suggestion to the Superbrain Inbox, where the owner connects or dismisses it. On approval the relation is added to the frontmatter of the source note. Read both notes with read_note first.',
+    {
+      source: z.string().describe('Path of the note that gets the relation in its frontmatter'),
+      target: z.string().describe('Path of the note it links to'),
+      relationType: z.enum(RELATION_TYPES).describe('part_of: source is part of target; inspired_by: source was inspired by target; works_with: people, organisations or projects that work together or belong together'),
+      reason: z.string().describe('One or two sentences the owner reads in the Inbox, in the language of the notes'),
+    },
+    async ({ source, target, relationType, reason }) => {
+      return suggestionResult(await fileSuggestion(getVaultClient(), { kind: 'relation', source, target, relationType, reason }))
     }
   )
 

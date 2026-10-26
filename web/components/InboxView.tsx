@@ -13,6 +13,8 @@ interface Props {
   onApproved: () => void
   onPreviewChanges: (note: VaultNote, duplicate: VaultNote) => void
   aiSuggestions: Suggestion[]
+  unlinkedNotes: string[]
+  ownerNote: string | null
   suggestionsLastRunAt: string | null
   onPreviewSuggestedMerge: (note: VaultNote, duplicate: VaultNote, suggestionId: string) => void
   onSuggestionsChanged: () => void
@@ -530,7 +532,7 @@ function DaySection({ day, todayStr, added, updated, allNotes, typeColors, onSel
 
 export function InboxView({
   notesByPath, onSelect, typeColors, onApproved, onPreviewChanges,
-  aiSuggestions, suggestionsLastRunAt, onPreviewSuggestedMerge, onSuggestionsChanged,
+  aiSuggestions, unlinkedNotes, ownerNote, suggestionsLastRunAt, onPreviewSuggestedMerge, onSuggestionsChanged,
 }: Props) {
   const today = new Date()
   const todayStr = today.toISOString().slice(0, 10)
@@ -568,6 +570,8 @@ export function InboxView({
   const suggestionsSection = (
     <SuggestionsSection
       suggestions={aiSuggestions}
+      unlinked={unlinkedNotes}
+      ownerNote={ownerNote}
       lastRunAt={suggestionsLastRunAt}
       notesByPath={notesByPath}
       typeColors={typeColors}
