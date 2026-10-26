@@ -28,6 +28,14 @@ export interface Suggestion {
   origin?: 'review' | 'chat'
 }
 
+/** A candidate pair Claude looked at in full during the last run and decided not to suggest */
+export interface RejectedCandidate {
+  kind: SuggestionKind
+  a: string
+  b: string
+  reason: string
+}
+
 /** Live progress of a review run, streamed to the Inbox while a manual scan runs. */
 export type ReviewProgress =
   | { phase: 'reading'; done: number; total: number }
@@ -44,6 +52,8 @@ export interface SuggestionStore {
   suggestions: Suggestion[]
   /** Notes without any link for which the last run found no good match — shown for manual review */
   unlinked?: string[]
+  /** Candidates the last run that looked for candidates considered and rejected, with Claude's reason */
+  rejected?: RejectedCandidate[]
 }
 
 /** True when either note already links to the other, via a frontmatter relation or a body wikilink. */

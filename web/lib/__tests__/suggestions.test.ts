@@ -98,13 +98,15 @@ describe('generateSuggestions', () => {
       ] },
     )
 
-    const drafts = await generateSuggestions(client, {
+    const { drafts, rejected } = await generateSuggestions(client, {
       notes, focusPaths: new Set([janDup.path, idea.path]), blockedKeys: new Set(),
     })
 
     expect(drafts).toEqual([
       { kind: 'merge', source: janDup.path, target: jan.path, reason: 'Same person', confidence: 0.9 },
     ])
+    // The low-confidence candidate is kept as a rejection with Claude's reason
+    expect(rejected).toEqual([{ kind: 'relation', a: idea.path, b: superbrain.path, reason: 'Feature idea' }])
     // Stage 2 only sees the two valid candidates
     const stage2 = parse.mock.calls[1][0].messages[0].content as string
     expect(stage2).toContain(`1. merge: ${jan.path} ↔ ${janDup.path}`)
@@ -118,7 +120,7 @@ describe('generateSuggestions', () => {
       { kind: 'relation', a: idea.path, b: superbrain.path },
     ] })
 
-    const drafts = await generateSuggestions(client, {
+    const { drafts } = await generateSuggestions(client, {
       notes,
       focusPaths: new Set([janDup.path]),
       blockedKeys: new Set([pairKey('merge', janDup.path, jan.path)]),
@@ -133,7 +135,7 @@ describe('generateSuggestions', () => {
       { candidates: [{ kind: 'relation', a: idea.path, b: superbrain.path }] },
       { decisions: [{ candidate: 1, accept: true, source: idea.path, target: jan.path, relationType: 'works_with', reason: 'r', confidence: 0.9 }] },
     )
-    const drafts = await generateSuggestions(client, { notes, focusPaths: null, blockedKeys: new Set() })
+    const { drafts } = await generateSuggestions(client, { notes, focusPaths: null, blockedKeys: new Set() })
     expect(drafts).toEqual([])
   })
 
@@ -163,7 +165,7 @@ describe('generateSuggestions', () => {
     const { client, parse } = fakeAnthropic({ candidates }, accept(5), accept(2))
     const events: unknown[] = []
 
-    const drafts = await generateSuggestions(
+    const { drafts } = await generateSuggestions(
       client, { notes: people, focusPaths: null, blockedKeys: new Set() }, e => events.push(e),
     )
 
@@ -183,7 +185,8 @@ describe('generateSuggestions', () => {
 
   it('does not call Claude when nothing changed', async () => {
     const { client, parse } = fakeAnthropic()
-    expect(await generateSuggestions(client, { notes, focusPaths: new Set(), blockedKeys: new Set() })).toEqual([])
+    expect(await generateSuggestions(client, { notes, focusPaths: new Set(), blockedKeys: new Set() }))
+      .toEqual({ drafts: [], rejected: [], scanned: false })
     expect(parse).not.toHaveBeenCalled()
   })
 
@@ -205,8 +208,14 @@ describe('runSuggestionReview', () => {
   it('stores suggestions and only re-reviews changed notes next time', async () => {
     const vault = memoryVault({ ...raw })
     const first = fakeAnthropic(
-      { candidates: [{ kind: 'relation', a: idea.path, b: superbrain.path }] },
-      { decisions: [{ candidate: 1, accept: true, source: idea.path, target: superbrain.path, relationType: 'part_of', reason: 'Feature', confidence: 0.8 }] },
+      { candidates: [
+        { kind: 'relation', a: idea.path, b: superbrain.path },
+        { kind: 'merge', a: idea.path, b: superbrain.path },
+      ] },
+      { decisions: [
+        { candidate: 1, accept: true, source: idea.path, target: superbrain.path, relationType: 'part_of', reason: 'Feature', confidence: 0.8 },
+        { candidate: 2, accept: false, source: idea.path, target: superbrain.path, relationType: 'none', reason: 'Een idee binnen het project, geen dubbel', confidence: 0.1 },
+      ] },
     )
     const events: { phase: string }[] = []
     const result = await runSuggestionReview(vault.client, first.client, { onProgress: e => events.push(e) })
@@ -217,12 +226,14 @@ describe('runSuggestionReview', () => {
     const stored = JSON.parse(vault.files[SUGGESTIONS_PATH])
     expect(stored.suggestions[0]).toMatchObject({ kind: 'relation', source: idea.path, target: superbrain.path, relationType: 'part_of', status: 'pending' })
     expect(Object.keys(stored.seen)).toHaveLength(3)
+    expect(stored.rejected).toEqual([{ kind: 'merge', a: idea.path, b: superbrain.path, reason: 'Een idee binnen het project, geen dubbel' }])
 
     // Nothing changed → no focus notes → Claude is not called
     const second = fakeAnthropic()
     const again = await runSuggestionReview(vault.client, second.client)
     expect(again).toMatchObject({ focusNotes: 0, added: 0, pending: 1 })
     expect(second.parse).not.toHaveBeenCalled()
+    expect(JSON.parse(vault.files[SUGGESTIONS_PATH]).rejected).toHaveLength(1) // kept: nothing was scanned
 
     // A full scan reviews everything, but the open pair is not suggested twice
     const full = fakeAnthropic({ candidates: [{ kind: 'relation', a: superbrain.path, b: idea.path }] })

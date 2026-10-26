@@ -3,7 +3,8 @@ import { jsonSchemaOutputFormat } from '@anthropic-ai/sdk/helpers/json-schema'
 import type { VaultNote } from './types'
 import { mapWithConcurrency } from './concurrency'
 import {
-  RELATION_TYPES, areLinked, pairKey, type RelationType, type ReviewProgress, type SuggestionKind,
+  RELATION_TYPES, areLinked, pairKey,
+  type RejectedCandidate, type RelationType, type ReviewProgress, type SuggestionKind,
 } from './suggestions'
 
 export const SUGGESTION_MODEL = 'claude-opus-5-5'
@@ -162,12 +163,12 @@ export async function generateSuggestions(
   anthropic: Anthropic,
   input: ReviewInput,
   onProgress?: (progress: ReviewProgress) => void,
-): Promise<SuggestionDraft[]> {
+): Promise<{ drafts: SuggestionDraft[]; rejected: RejectedCandidate[]; scanned: boolean }> {
   const notes = reviewableNotes(input.notes)
   const byPath = new Map(notes.map(n => [n.path, n]))
   const isFocus = (path: string) => input.focusPaths === null || input.focusPaths.has(path)
   const fullScan = input.focusPaths === null
-  if (notes.length < 2 || !notes.some(n => isFocus(n.path))) return []
+  if (notes.length < 2 || !notes.some(n => isFocus(n.path))) return { drafts: [], rejected: [], scanned: false }
 
   // Stage 1 — scan a compact index of the whole vault for candidate pairs
   const index = notes.map(n => indexLine(n, !fullScan && isFocus(n.path))).join('\n')
@@ -205,7 +206,7 @@ ${index}
     seen.add(key)
     return true
   }).slice(0, MAX_CANDIDATES)
-  if (valid.length === 0) return []
+  if (valid.length === 0) return { drafts: [], rejected: [], scanned: true }
 
   // Stage 2 — read the involved notes in full and decide per candidate, in parallel batches
   const batches: Candidate[][] = []
@@ -213,19 +214,23 @@ ${index}
   let verified = 0
   onProgress?.({ phase: 'verifying', done: 0, total: valid.length })
   const results = await mapWithConcurrency(batches, VERIFY_CONCURRENCY, async batch => {
-    const drafts = await verifyBatch(anthropic, batch, byPath)
+    const result = await verifyBatch(anthropic, batch, byPath)
     verified += batch.length
     onProgress?.({ phase: 'verifying', done: verified, total: valid.length })
-    return drafts
+    return result
   })
-  return results.flat()
+  return {
+    drafts: results.flatMap(r => r.drafts),
+    rejected: results.flatMap(r => r.rejected),
+    scanned: true,
+  }
 }
 
 async function verifyBatch(
   anthropic: Anthropic,
   batch: Candidate[],
   byPath: Map<string, VaultNote>,
-): Promise<SuggestionDraft[]> {
+): Promise<{ drafts: SuggestionDraft[]; rejected: RejectedCandidate[] }> {
   const involved = [...new Set(batch.flatMap(c => [c.a, c.b]))].map(p => byPath.get(p)!)
   const list = batch.map((c, i) => `${i + 1}. ${c.kind}: ${c.a} ↔ ${c.b}`).join('\n')
   const { decisions } = await ask<{ decisions: {
@@ -247,7 +252,7 @@ Judge each candidate below with the full notes above. Give one decision per cand
 - merge: set target to the note that should remain (the more complete or canonical one) and source to the note merged into it. relationType is "none".
 - relation: set source to the note that should hold the relation and target to the note it links to. Pick relationType: "part_of" when source is part of target, "inspired_by" when source was inspired by target, otherwise "works_with" for people, organisations or projects that work together or belong together.
 - If a merge candidate is really just related, reject it rather than changing its kind.
-- reason: one short sentence the owner will read, in the language the notes are written in.
+- reason: one short sentence the owner will read, in the language the notes are written in. For an accepted candidate say why; for a rejected one say why not.
 - confidence: 0 to 1, how sure you are the owner would approve.
 
 <candidates>
@@ -257,9 +262,14 @@ ${list}
   })
 
   const drafts: SuggestionDraft[] = []
+  const rejected: RejectedCandidate[] = []
   for (const d of decisions) {
     const c = batch[d.candidate - 1]
-    if (!c || !d.accept || d.confidence < MIN_CONFIDENCE) continue
+    if (!c) continue
+    if (!d.accept || d.confidence < MIN_CONFIDENCE) {
+      rejected.push({ kind: c.kind, a: c.a, b: c.b, reason: d.reason.trim() })
+      continue
+    }
     // source/target must be the candidate pair, in either order
     const pair = new Set([c.a, c.b])
     if (!pair.has(d.source) || !pair.has(d.target) || d.source === d.target) continue
@@ -273,7 +283,7 @@ ${list}
       confidence: Math.min(1, Math.max(0, d.confidence)),
     })
   }
-  return drafts
+  return { drafts, rejected }
 }
 
 export interface OrphanInput {

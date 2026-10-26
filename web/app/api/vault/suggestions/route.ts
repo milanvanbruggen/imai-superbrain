@@ -17,6 +17,7 @@ export async function GET() {
       lastRunAt: store.lastRunAt,
       suggestions: store.suggestions.filter(s => s.status === 'pending'),
       unlinked: store.unlinked ?? [],
+      rejected: store.rejected ?? [],
       ownerNote: prefs.ownerNote ?? null,
     })
   })

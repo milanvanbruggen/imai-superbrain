@@ -57,7 +57,10 @@ export async function runSuggestionReview(
   })
   const blockedKeys = new Set(existing.map(s => pairKey(s.kind, s.source, s.target)))
 
-  const drafts = await generateSuggestions(anthropic, { notes, focusPaths: fullScan ? null : changedPaths, blockedKeys }, onProgress)
+  const review = await generateSuggestions(anthropic, { notes, focusPaths: fullScan ? null : changedPaths, blockedKeys }, onProgress)
+  const drafts = review.drafts
+  // Keep the previous run's rejections when nothing was scanned this time
+  const rejected = review.scanned ? review.rejected : (store.rejected ?? [])
 
   // Unconnected notes: try to link each one to the owner's note or a note directly connected to it
   const owner = prefs.ownerNote ? byPath.get(prefs.ownerNote) : undefined
@@ -105,7 +108,7 @@ export async function runSuggestionReview(
 
   await writeSuggestionStore(
     client,
-    { version: 1, lastRunAt: now, seen: Object.fromEntries(tree.map(f => [f.path, f.sha])), suggestions, unlinked },
+    { version: 1, lastRunAt: now, seen: Object.fromEntries(tree.map(f => [f.path, f.sha])), suggestions, unlinked, rejected },
     latest.sha,
     `brain: AI review — ${added.length} new suggestion${added.length === 1 ? '' : 's'}`,
   )
