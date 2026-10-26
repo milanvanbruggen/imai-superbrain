@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { getVaultClient, VaultClient } from '@/lib/vault-client'
 import { buildGraph } from '@/lib/vault-parser'
 import { getCachedGraph, computeVaultHash, setCachedGraph } from '@/lib/graph-cache'
-import { verifyToken } from '@/lib/mcp-jwt'
+import { getIssuer, verifyToken } from '@/lib/mcp-jwt'
 import { getStemFromPath } from '@/lib/note-utils'
 import { fileSuggestion } from '@/lib/suggestion-review'
 import { RELATION_TYPES } from '@/lib/suggestions'
@@ -332,9 +332,11 @@ function createMcpServer() {
 async function handleMcpRequest(req: NextRequest): Promise<Response> {
   const authInfo = await getAuthInfo(req)
   if (!authInfo) {
+    // Point the client at the resource metadata, where it finds out how to sign in (MCP authorization spec)
+    const metadata = `${getIssuer()}/.well-known/oauth-protected-resource${new URL(req.url).pathname}`
     return NextResponse.json({ error: 'Unauthorized' }, {
       status: 401,
-      headers: { 'WWW-Authenticate': 'Bearer' },
+      headers: { 'WWW-Authenticate': `Bearer resource_metadata="${metadata}"` },
     })
   }
 
