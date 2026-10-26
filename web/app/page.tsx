@@ -12,6 +12,8 @@ import { SetupWizard } from '@/components/SetupWizard'
 import { HistoryModal } from '@/components/HistoryModal'
 import { InboxView } from '@/components/InboxView'
 import { DiffPanel } from '@/components/DiffPanel'
+import { markSuggestion } from '@/components/SuggestionsSection'
+import { visibleSuggestions, type Suggestion } from '@/lib/suggestions'
 import { useToast } from '@/components/Toaster'
 
 function McpStatus() {
@@ -88,12 +90,30 @@ export default function BrainPage() {
   const [showInboxOnly, setShowInboxOnly] = useState(false)
   const [showInboxReminder, setShowInboxReminder] = useState(false)
   const inboxReminderChecked = useRef(false)
-  const [diffPreview, setDiffPreview] = useState<{ note: VaultNote; duplicate: VaultNote } | null>(null)
+  const [diffPreview, setDiffPreview] = useState<{ note: VaultNote; duplicate: VaultNote; suggestionId?: string } | null>(null)
+  const [aiSuggestions, setAiSuggestions] = useState<Suggestion[]>([])
+  const [suggestionsLastRunAt, setSuggestionsLastRunAt] = useState<string | null>(null)
+
+  const openSuggestions = useMemo(
+    () => (graph ? visibleSuggestions(aiSuggestions, graph.notesByPath) : []),
+    [graph, aiSuggestions]
+  )
 
   const inboxCount = useMemo(
-    () => graph?.nodes.filter(n => n.inbox).length ?? 0,
-    [graph]
+    () => (graph?.nodes.filter(n => n.inbox).length ?? 0) + openSuggestions.length,
+    [graph, openSuggestions]
   )
+
+  function loadSuggestions() {
+    fetch('/api/vault/suggestions')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data) return
+        setAiSuggestions(data.suggestions ?? [])
+        setSuggestionsLastRunAt(data.lastRunAt ?? null)
+      })
+      .catch(() => {})
+  }
 
   // Panel resize & collapse
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH)
@@ -288,6 +308,7 @@ export default function BrainPage() {
 
   useEffect(() => {
     loadGraph()
+    loadSuggestions()
     fetch('/api/vault/config')
       .then(r => r.json().catch(() => null))
       .then(c => {
@@ -660,6 +681,14 @@ export default function BrainPage() {
                 setPanelCollapsed(false)
                 setPanelWidth(prevWidthRef.current)
               }}
+              aiSuggestions={openSuggestions}
+              suggestionsLastRunAt={suggestionsLastRunAt}
+              onPreviewSuggestedMerge={(note, duplicate, suggestionId) => {
+                setDiffPreview({ note, duplicate, suggestionId })
+                setPanelCollapsed(false)
+                setPanelWidth(prevWidthRef.current)
+              }}
+              onSuggestionsChanged={() => { loadSuggestions(); silentLoadGraph() }}
             />
           ) : (
             <>
@@ -744,7 +773,14 @@ export default function BrainPage() {
             width={panelWidth}
             collapsed={panelCollapsed}
             onToggleCollapse={togglePanel}
-            onMerged={() => { setDiffPreview(null); silentLoadGraph() }}
+            onMerged={async () => {
+              if (diffPreview.suggestionId) {
+                await markSuggestion(diffPreview.suggestionId, 'accepted')
+                loadSuggestions()
+              }
+              setDiffPreview(null)
+              silentLoadGraph()
+            }}
             onClose={() => setDiffPreview(null)}
           />
         ) : (
