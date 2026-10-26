@@ -33,8 +33,8 @@ export const DEFAULT_TYPE_COLORS: Record<string, string> = {
   template: '#C084FC',
 }
 
-// A node with at least this many links always shows its label
-const HUB_DEGREE = 6
+// The best-connected notes keep their label at rest; everything else is labelled on focus
+const LABELLED_HUBS = 8
 // How far the camera stays from a node it flies to
 const FOCUS_DISTANCE = 90
 const FLY_MS = 900
@@ -139,6 +139,13 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
     links: edges.map((e): Link3D => ({ source: e.source, target: e.target, typed: e.typed })),
   }), [nodes, edges, degreeById, typeColors])
 
+  const topHubs = useMemo(() => new Set(
+    [...nodes].filter(n => (degreeById[n.id] ?? 0) >= 3)
+      .sort((a, b) => (degreeById[b.id] ?? 0) - (degreeById[a.id] ?? 0))
+      .slice(0, LABELLED_HUBS)
+      .map(n => n.id),
+  ), [nodes, degreeById])
+
   const focusId = hoveredId ?? selectedId
   const focusSet = useMemo(() => {
     if (!focusId) return null
@@ -174,8 +181,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           import('three/examples/jsm/postprocessing/OutputPass.js'),
         ])
         if (cancelled) return
-        // Only bright things glow (threshold), so the background and the faint stars stay dark
-        const bloom = new UnrealBloomPass(new THREE.Vector2(size!.width, size!.height), 0.8, 0.4, 0.35)
+        // A subtle glow on the brightest things only (high threshold): nodes keep their shape,
+        // and the background, stars and labels stay crisp
+        const bloom = new UnrealBloomPass(new THREE.Vector2(size!.width, size!.height), 0.5, 0.3, 0.4)
         fg.postProcessingComposer().addPass(bloom)
         // Converts the composed image to the screen's colour space once, as the last step
         fg.postProcessingComposer().addPass(new OutputPass())
@@ -188,9 +196,9 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
       controls.autoRotateSpeed = 0.35
 
       // More room between nodes than the default, so the cloud reads as a structure, not a knot
-      fg.d3Force('charge')?.strength(-90)
-      fg.d3Force('link')?.distance(36)
-      fg.d3Force('centerGravity', centerGravity(0.012))
+      fg.d3Force('charge')?.strength(-140)
+      fg.d3Force('link')?.distance(48)
+      fg.d3Force('centerGravity', centerGravity(0.006))
     }
     setup()
     return () => { cancelled = true; clearTimeout(timer) }
@@ -222,6 +230,8 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
   }, [selectedId, graphData])
 
   const labelColor = isDark ? '#e2e8f0' : '#1e293b'
+  // Below the bloom threshold, so labels don't glow into each other
+  const labelColorSoft = isDark ? '#94a3b8' : '#475569'
 
   return (
     <div
@@ -262,15 +272,17 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
           nodeThreeObject={(node: Node3D) => {
             const dimmed = isDimmed(node)
             const selected = node.id === selectedId
-            const radius = 2.6 + Math.min(node.degree, 20) * 0.45
+            // Grows with the square root of the links, so hubs stand out without swallowing their neighbours
+            const radius = 1.6 + Math.sqrt(Math.min(node.degree, 40)) * 0.9
             const group = new THREE.Group()
 
             const core = new THREE.Mesh(
               new THREE.SphereGeometry(radius, 20, 14),
               new THREE.MeshBasicMaterial({
                 color: node.color,
-                transparent: true,
-                opacity: dimmed ? 0.12 : 0.9,
+                // Solid unless dimmed: overlapping see-through spheres add up to a white blur
+                transparent: dimmed,
+                opacity: dimmed ? 0.12 : 1,
               }),
             )
             group.add(core)
@@ -293,9 +305,10 @@ export function BrainGraph({ nodes, edges, selectedId, onSelectNode, activeTypes
               group.add(ring)
             }
 
-            const showLabel = !dimmed && (node.degree >= HUB_DEGREE || (focusSet?.has(node.id) ?? false))
+            const focused = focusSet?.has(node.id) ?? false
+            const showLabel = !dimmed && (focusSet ? focused : topHubs.has(node.id))
             if (showLabel) {
-              const label = new SpriteText(truncate(node.title), selected ? 5 : 3.6, labelColor)
+              const label = new SpriteText(truncate(node.title), selected ? 4.5 : 3, selected || node.id === focusId ? labelColor : labelColorSoft)
               label.fontFace = 'Geist, -apple-system, BlinkMacSystemFont, sans-serif'
               label.fontWeight = selected ? '600' : '500'
               label.material.depthWrite = false
