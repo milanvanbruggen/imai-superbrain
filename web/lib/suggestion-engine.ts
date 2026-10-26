@@ -185,7 +185,7 @@ export async function generateSuggestions(
       role: 'user',
       content: `Below is an index of every note in the vault, one per line. ${scope}
 
-Find candidate merges and missing relations. Skip pairs that already link to each other. Return at most ${MAX_CANDIDATES} candidates, best first; return an empty list when nothing stands out. A later step reads both notes in full before anything is shown, so include pairs you are fairly but not fully sure about.
+Find candidate merges and missing relations. Notes can describe the same thing under different titles or types, for example an abbreviation and the full name. For relations, skip pairs that already link to each other; for merges, a link between the two notes is no reason to skip them. Return at most ${MAX_CANDIDATES} candidates, best first; return an empty list when nothing stands out. A later step reads both notes in full before anything is shown, so include pairs you are fairly but not fully sure about.
 
 <index>
 ${index}

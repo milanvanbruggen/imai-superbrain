@@ -143,6 +143,8 @@ describe('generateSuggestions', () => {
     const prompt = incremental.parse.mock.calls[0][0].messages[0].content as string
     expect(prompt).toContain(`FOCUS | ${idea.path}`)
     expect(prompt).toContain('Every candidate must involve at least one FOCUS note')
+    // Linked notes can still be duplicates: only relations skip already-linked pairs
+    expect(prompt).toContain('for merges, a link between the two notes is no reason to skip them')
 
     const full = fakeAnthropic({ candidates: [] })
     await generateSuggestions(full.client, { notes, focusPaths: null, blockedKeys: new Set() })
